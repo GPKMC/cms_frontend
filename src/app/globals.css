@@ -26,3 +26,40 @@ body {
 } */
 
 @import "tailwindcss";
+@theme  {
+  --color-primary : #2E3094;
+  --color-secondary : #e0ec83;
+}
+
+/* globals.css */
+
+@keyframes color-slide {
+  0% {
+    background-position: 0% 100%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.hover-slide {
+  /* Use primary and secondary colors in gradient */
+  background: linear-gradient(
+    270deg,
+    var(--color-primary),
+    var(--color-secondary),
+    var(--color-primary)
+  );
+  background-size: 600% 600%;
+  transition: background-position 0.3s ease;
+  color: white; /* for contrast */
+}
+
+.hover-slide:hover {
+  animation: color-slide 3s ease infinite;
+}
+
+
