@@ -42,15 +42,18 @@ export default function Sidebar() {
       <aside className=" fixed top-24 h-screen bg-[#F5F5F5] z-50 text-[#2E3094] group  transition-all duration-300 w-20 hover:w-64 overflow-hidden overflow-y-auto">
         <ul className="space-y-3 px-2">
           {sidebarItems.map((item) => {
-            const isActive = pathname === item.page;
+            const isActive = item.page === "/admin"
+              ? pathname === "/admin"
+              : pathname.startsWith(item.page || "");
+
+
 
             return (
               <li key={item.id}>
                 <Link
                   href={item.page || ""}
-                  className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${
-                    isActive ? "bg-[#2E3094] text-[#F5F5F5]" : "hover:bg-[#e0ec83]"
-                  }`}
+                  className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${isActive ? "bg-[#2E3094] text-[#F5F5F5]" : "hover:bg-[#e0ec83]"
+                    }`}
                 >
                   <div className="text-xl">{item.icon}</div>
                   <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">

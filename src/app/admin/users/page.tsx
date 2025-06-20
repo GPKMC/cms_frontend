@@ -1,8 +1,10 @@
+import UserList from "./userlist";
+
 const Usermanagement =()=>{
     return(
-        <h1>
-            this is Usermanagement page btw
-        </h1>
+       <div>
+        <UserList/>
+       </div>
     )
 }
 export default Usermanagement;

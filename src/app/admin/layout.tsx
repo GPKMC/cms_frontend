@@ -10,7 +10,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       <Navbar />
       <div className="flex min-h-screen">
         <Sidebar />
-        <main className="flex-grow border-2 relative top-24 border-amber-100 ml-24">
+        <main className="flex-grow border-2 relative top-24 border-amber-100 ml-24 mr-4">
           {children} {/* Content shifted right so it's never hidden */}
         </main>
       </div>
