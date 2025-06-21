@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { SidebarItems } from "../types/type.sidebar";
 import {
   FaUser,
@@ -11,13 +11,11 @@ import {
   FaCalendarAlt,
   FaBullhorn,
   FaFileAlt,
-  FaCogs,
   FaSignOutAlt,
 } from "react-icons/fa";
 import { BsFillPeopleFill } from "react-icons/bs";
 import { MdAssignment } from "react-icons/md";
 import { Home } from "lucide-react";
-import Image from "next/image";
 
 const sidebarItems: SidebarItems = [
   { id: 1, label: "Home", icon: <Home />, page: "/admin" },
@@ -30,41 +28,57 @@ const sidebarItems: SidebarItems = [
   { id: 9, label: "Assignment Monitoring", icon: <MdAssignment />, page: "/admin/assignments" },
   { id: 10, label: "Announcements", icon: <FaBullhorn />, page: "/admin/announcements" },
   { id: 11, label: "Reports & Analytics", icon: <FaFileAlt />, page: "/admin/reports" },
-  { id: 13, label: "Logout", icon: <FaSignOutAlt />, page: "/admin/logout" },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    localStorage.removeItem("token"); // Clear the token
+    router.push("/admin_login"); // Redirect to login
+  };
 
   return (
-    <div>
+    <aside className="fixed top-24 h-screen bg-[#F5F5F5] z-50 text-[#2E3094] group transition-all duration-300 w-20 hover:w-64 overflow-hidden overflow-y-auto">
+      <ul className="space-y-3 px-2">
+        {sidebarItems.map((item) => {
+          const isActive = item.page === "/admin"
+            ? pathname === "/admin"
+            : pathname.startsWith(item.page || "");
 
-      <aside className=" fixed top-24 h-screen bg-[#F5F5F5] z-50 text-[#2E3094] group  transition-all duration-300 w-20 hover:w-64 overflow-hidden overflow-y-auto">
-        <ul className="space-y-3 px-2">
-          {sidebarItems.map((item) => {
-            const isActive = item.page === "/admin"
-              ? pathname === "/admin"
-              : pathname.startsWith(item.page || "");
+          return (
+            <li key={item.id}>
+              <Link
+                href={item.page || ""}
+                className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${
+                  isActive ? "bg-[#2E3094] text-[#F5F5F5]" : "hover:bg-[#e0ec83]"
+                }`}
+              >
+                <div className="text-xl">{item.icon}</div>
+                <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                  {item.label}
+                </span>
+              </Link>
+            </li>
+          );
+        })}
 
-
-
-            return (
-              <li key={item.id}>
-                <Link
-                  href={item.page || ""}
-                  className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${isActive ? "bg-[#2E3094] text-[#F5F5F5]" : "hover:bg-[#e0ec83]"
-                    }`}
-                >
-                  <div className="text-xl">{item.icon}</div>
-                  <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    {item.label}
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </aside>
-    </div>
+        {/* LOGOUT BUTTON */}
+        <li>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 p-2 rounded w-full text-left transition-colors hover:bg-red-500 hover:text-white"
+          >
+            <div className="text-xl">
+              <FaSignOutAlt />
+            </div>
+            <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              Logout
+            </span>
+          </button>
+        </li>
+      </ul>
+    </aside>
   );
 }
