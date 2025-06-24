@@ -6,6 +6,7 @@ import { SidebarItems } from "../types/type.sidebar";
 import {
   FaUser,
   FaBook,
+  FaGraduationCap,
   FaClipboardList,
   FaChalkboardTeacher,
   FaCalendarAlt,
@@ -19,6 +20,7 @@ import { Home } from "lucide-react";
 
 const sidebarItems: SidebarItems = [
   { id: 1, label: "Home", icon: <Home />, page: "/admin" },
+  { id: 2, label: "Faculty Management", icon: <FaGraduationCap />, page: "/admin/faculty" },
   { id: 3, label: "User Management", icon: <FaUser />, page: "/admin/users" },
   { id: 4, label: "Batch Management", icon: <BsFillPeopleFill />, page: "/admin/batch" },
   { id: 5, label: "Course Management", icon: <FaBook />, page: "/admin/courses" },
