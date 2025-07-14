@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { Batch } from "../types/type.batch";
-import { Eye, Pencil, Trash2 } from "lucide-react";
+import { Eye, Pencil, Trash2, Download, Printer } from "lucide-react";
 import BatchDetails from "./batchdetails";
 import { useRouter } from "next/navigation";
+import { saveAs } from "file-saver";
+import EditBatchForm from "./editbatch";
 
 const MIN_LIMIT = 20;
 
@@ -20,19 +22,28 @@ const BatchList = () => {
     const [search, setSearch] = useState<string>("");
     const [filterBy, setFilterBy] = useState<string>("all");
     const [error, setError] = useState<string>("");
-
-     const router = useRouter();
+    const [editingBatch, setEditingBatch] = useState<string | null>(null);
+   const [refreshKey, setRefreshKey] = useState(0); 
+ 
+    const router = useRouter();
     const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
     const url = `${baseUrl}/batch-api/batch`;
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const headers: HeadersInit = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+    };
 
-    // Reset input, search, and error on filter change
     useEffect(() => {
         setInputValue("");
         setSearch("");
         setError("");
     }, [filterBy]);
 
-    // If error exists, clear batches and totalCount and stop loading
+   const triggerRefresh = () => {
+  setRefreshKey(prev => prev + 1);
+};
+
     useEffect(() => {
         if (error) {
             setBatches([]);
@@ -41,9 +52,8 @@ const BatchList = () => {
             return;
         }
         fetchBatches(limit, search);
-    }, [limit, search, filterBy, error]);
+    }, [limit, search, filterBy, error,refreshKey]);
 
-    // Auto-reset search when clearing input in 'all' filter mode
     useEffect(() => {
         if (filterBy === "all" && inputValue.trim() === "" && search) {
             setSearch("");
@@ -63,6 +73,12 @@ const BatchList = () => {
                 case "year":
                     queryParams.append("facultyType", "yearly");
                     break;
+                case "bachelor":
+                    queryParams.append("programLevel", "bachelor");
+                    break;
+                case "master":
+                    queryParams.append("programLevel", "master");
+                    break;
                 case "completed":
                     queryParams.append("isCompleted", "true");
                     break;
@@ -73,7 +89,10 @@ const BatchList = () => {
 
             if (searchTerm) queryParams.append("search", searchTerm);
 
-            const response = await fetch(`${url}?${queryParams.toString()}`);
+            const response = await fetch(`${url}?${queryParams.toString()}`, {
+                method: "GET",
+                headers,
+            });
             const data = await response.json();
 
             if (data.success) {
@@ -91,6 +110,90 @@ const BatchList = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const exportCSV = () => {
+        const headers = [
+            "Batch",
+            "Faculty",
+            "Faculty Type",
+            "Program Level",
+            "Start Year",
+            "End Year",
+            "Current",
+            "Total",
+            "Created",
+            "Updated",
+            "Completed"
+        ];
+
+        const rows = batches.map(b => [
+            b.batchname,
+            `${b.faculty.name} (${b.faculty.code})`,
+            b.faculty.type,
+            b.faculty.programLevel,
+            b.startYear,
+            b.endYear ?? "",
+            b.currentSemesterOrYear,
+            b.faculty.totalSemestersOrYears,
+            new Date(b.createdAt).toLocaleDateString(),
+            new Date(b.updatedAt).toLocaleDateString(),
+            b.isCompleted ? "Yes" : "No"
+        ]);
+
+        const csv = [headers, ...rows].map(e => e.join(",")).join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        saveAs(blob, `batches-${filterBy}.csv`);
+    };
+
+    const printData = () => {
+        const printWindow = window.open("", "", "width=900,height=700");
+        const rows = batches.map(b => `
+            <tr>
+                <td>${b.batchname}</td>
+                <td>${b.faculty.name} (${b.faculty.code})</td>
+                <td>${b.faculty.type}</td>
+                <td>${b.faculty.programLevel}</td>
+                <td>${b.startYear}</td>
+                <td>${b.endYear ?? ""}</td>
+                <td>${b.currentSemesterOrYear}</td>
+                <td>${b.faculty.totalSemestersOrYears}</td>
+                <td>${new Date(b.createdAt).toLocaleDateString()}</td>
+                <td>${new Date(b.updatedAt).toLocaleDateString()}</td>
+                <td>${b.isCompleted ? "Yes" : "No"}</td>
+            </tr>
+        `).join("");
+
+        printWindow?.document.write(`
+            <html>
+                <head><title>Print Batches</title></head>
+                <body>
+                    <h1>Batch List - Filter: ${filterBy}</h1>
+                    <table border="1" cellpadding="5" cellspacing="0">
+                        <thead>
+                            <tr>
+                                <th>Batch</th>
+                                <th>Faculty</th>
+                                <th>Faculty Type</th>
+                                <th>Program Level</th>
+                                <th>Start Year</th>
+                                <th>End Year</th>
+                                <th>Current</th>
+                                <th>Total</th>
+                                <th>Created</th>
+                                <th>Updated</th>
+                                <th>Completed</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rows}
+                        </tbody>
+                    </table>
+                </body>
+            </html>
+        `);
+        printWindow?.document.close();
+        printWindow?.print();
     };
 
     const handleView = (batch: Batch) => {
@@ -111,7 +214,7 @@ const BatchList = () => {
     const handleDelete = async () => {
         if (!selectedBatch) return;
         try {
-            const res = await fetch(`${url}/${selectedBatch._id}`, { method: "DELETE" });
+            const res = await fetch(`${url}/${selectedBatch._id}`, { method: "DELETE", headers, });
             const data = await res.json();
             if (data.success) {
                 setBatches((prev) => prev.filter((b) => b._id !== selectedBatch._id));
@@ -129,7 +232,7 @@ const BatchList = () => {
 
     const cancelSearch = () => {
         setInputValue("");
-        setSearch(""); // triggers refetch
+        setSearch("");
         setError("");
     };
 
@@ -174,9 +277,12 @@ const BatchList = () => {
                         <option value="all">All</option>
                         <option value="semester">Semester</option>
                         <option value="year">Yearly</option>
+                        <option value="bachelor">Bachelor</option> {/* ✅ Add this */}
+                        <option value="master">Master</option>     {/* ✅ And this */}
                         <option value="completed">Completed</option>
                         <option value="notCompleted">Not Completed</option>
                     </select>
+
 
                     {/* Search Input + Buttons */}
                     <div className="relative flex-grow flex items-center max-w-md w-full gap-2">
@@ -211,10 +317,24 @@ const BatchList = () => {
                         )}
                     </div>
                 </div>
-                <div>
+                <div className="flex gap-2">
+
                     <button
-    
-                          onClick={() => router.push("/admin/batch/batchform")}
+                        onClick={exportCSV}
+                        className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                    >
+                        <Download size={16} /> Export CSV
+                    </button>
+                    <button
+                        onClick={printData}
+                        className="flex items-center gap-2 bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-800"
+                    >
+                        <Printer size={16} /> Print
+                    </button>
+
+                    <button
+
+                        onClick={() => router.push("/admin/batch/batchform")}
                         disabled={loading}
                         className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
                         type="button"
@@ -239,6 +359,7 @@ const BatchList = () => {
                                     <th className="text-left px-4 py-2 border">Batch</th>
                                     <th className="text-left px-4 py-2 border">Faculty</th>
                                     <th className="text-left px-4 py-2 border">Faculty Type</th>
+                                    <th className="text-left px-4 py-2 border">Program Level</th>
                                     <th className="text-left px-4 py-2 border">Start Year</th>
                                     <th className="text-left px-4 py-2 border">End Year</th>
                                     <th className="text-left px-4 py-2 border">Current Sem/Year</th>
@@ -258,6 +379,7 @@ const BatchList = () => {
                                             {batch.faculty.name} ({batch.faculty.code})
                                         </td>
                                         <td className="px-4 py-2 border">{batch.faculty.type}</td>
+                                        <td className="px-4 py-2 border">{batch.faculty.programLevel}</td>
                                         <td className="px-4 py-2 border">{batch.startYear}</td>
                                         <td className="px-4 py-2 border">{batch.endYear || "—"}</td>
                                         <td className="px-4 py-2 border">
@@ -273,16 +395,21 @@ const BatchList = () => {
                                         <td className="px-4 py-2 border">{new Date(batch.updatedAt).toLocaleDateString()}</td>
                                         <td className="px-4 py-2 border">{batch.isCompleted ? "Yes" : "No"}</td>
                                         <td className="px-4 py-5 border">
-                                               <div className="flex items-center gap-2">
-                                         <Eye
-                                                className="p-1 bg-blue-500 text-white rounded hover:bg-blue-600 cursor-pointer"
-                                                onClick={() => handleView(batch)}
-                                   />
-                                            <Pencil className="p-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 cursor-pointer" />
-                                            <Trash2
-                                                className="p-1 bg-red-500 text-white rounded hover:bg-red-600 cursor-pointer"
-                                                onClick={() => confirmDelete(batch)}
-                                            />
+                                            <div className="flex items-center gap-2">
+                                                <Eye
+                                                    className="p-1 bg-blue-500 text-white rounded hover:bg-blue-600 cursor-pointer"
+                                                    onClick={() => handleView(batch)}
+                                                />
+                                                {/* <Pencil className="p-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 cursor-pointer" /> */}
+                                                <Pencil
+                                                    className="p-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 cursor-pointer"
+                                                    onClick={() => setEditingBatch(batch._id)}
+                                                />
+
+                                                <Trash2
+                                                    className="p-1 bg-red-500 text-white rounded hover:bg-red-600 cursor-pointer"
+                                                    onClick={() => confirmDelete(batch)}
+                                                />
                                             </div>
                                         </td>
                                     </tr>
@@ -368,6 +495,10 @@ const BatchList = () => {
             )}
 
             {isDetailsOpen && selectedBatch && <BatchDetails batch={selectedBatch} onClose={closeDetails} />}
+            {editingBatch && (
+                <EditBatchForm id={editingBatch} onClose={() => setEditingBatch(null)} onUpdateSuccess={triggerRefresh} />
+            )}
+
         </div>
     );
 };

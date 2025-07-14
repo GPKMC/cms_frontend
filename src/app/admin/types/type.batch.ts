@@ -12,10 +12,3 @@ export type Batch = {
   createdAt: string;
   updatedAt: string;
 }
-export type BatchInput = {
-  facultyCode: Faculty["code"];
-  startYear: number;
-  endYear?: number;
-  isCompleted: boolean;
-  currentSemesterOrYear: number;
-};
