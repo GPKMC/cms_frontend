@@ -23,11 +23,16 @@ const BatchList = () => {
     const [filterBy, setFilterBy] = useState<string>("all");
     const [error, setError] = useState<string>("");
     const [editingBatch, setEditingBatch] = useState<string | null>(null);
-   const [refreshKey, setRefreshKey] = useState(0); 
- 
+    const [refreshKey, setRefreshKey] = useState(0);
+
+    // NEW: For dynamic faculty code filter
+    const [facultyCode, setFacultyCode] = useState<string>("");
+    const [facultyOptions, setFacultyOptions] = useState<{ name: string, code: string }[]>([]);
+
     const router = useRouter();
     const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
     const url = `${baseUrl}/batch-api/batch`;
+    const facultyUrl = `${baseUrl}/faculty-api/facultycode`;
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const headers: HeadersInit = {
         "Content-Type": "application/json",
@@ -38,11 +43,13 @@ const BatchList = () => {
         setInputValue("");
         setSearch("");
         setError("");
+        // Clear faculty code when filter changes
+        setFacultyCode("");
     }, [filterBy]);
 
-   const triggerRefresh = () => {
-  setRefreshKey(prev => prev + 1);
-};
+    const triggerRefresh = () => {
+        setRefreshKey(prev => prev + 1);
+    };
 
     useEffect(() => {
         if (error) {
@@ -52,13 +59,42 @@ const BatchList = () => {
             return;
         }
         fetchBatches(limit, search);
-    }, [limit, search, filterBy, error,refreshKey]);
+    }, [limit, search, filterBy, facultyCode, error, refreshKey]);
 
     useEffect(() => {
         if (filterBy === "all" && inputValue.trim() === "" && search) {
             setSearch("");
         }
     }, [inputValue, filterBy, search]);
+
+    // Fetch faculties for programLevel = bachelor/master for code dropdown
+    useEffect(() => {
+    if (filterBy === "bachelor" || filterBy === "master") {
+        const fetchFaculties = async () => {
+            try {
+                const res = await fetch(`${facultyUrl}?programLevel=${filterBy}`, {
+                    method: "GET",
+                    headers, // now headers is stable
+                });
+                const data = await res.json();
+                if (Array.isArray(data)) {
+                    setFacultyOptions(data.map((fac: any) => ({ name: fac.name, code: fac.code })));
+                } else if (data.success && Array.isArray(data.faculties)) {
+                    setFacultyOptions(data.faculties.map((fac: any) => ({ name: fac.name, code: fac.code })));
+                } else {
+                    setFacultyOptions([]);
+                }
+            } catch {
+                setFacultyOptions([]);
+            }
+        };
+        fetchFaculties();
+    } else {
+        setFacultyOptions([]);
+        setFacultyCode("");
+    }
+}, [filterBy, facultyUrl, token]); // <-- use token instead of headers
+
 
     const fetchBatches = async (fetchLimit: number, searchTerm = "") => {
         setLoading(true);
@@ -86,6 +122,10 @@ const BatchList = () => {
                     queryParams.append("isCompleted", "false");
                     break;
             }
+            // Add faculty code if selected
+            if ((filterBy === "bachelor" || filterBy === "master") && facultyCode) {
+                queryParams.append("facultyCode", facultyCode);
+            }
 
             if (searchTerm) queryParams.append("search", searchTerm);
 
@@ -99,12 +139,10 @@ const BatchList = () => {
                 setBatches(data.batches);
                 setTotalCount(data.totalCount ?? data.batches.length);
             } else {
-                console.error("Error:", data.message);
                 setBatches([]);
                 setTotalCount(0);
             }
         } catch (err) {
-            console.error("Fetch error:", err);
             setBatches([]);
             setTotalCount(0);
         } finally {
@@ -225,7 +263,6 @@ const BatchList = () => {
                 alert("Failed to delete: " + data.message);
             }
         } catch (err) {
-            console.error("Delete error:", err);
             alert("Something went wrong.");
         }
     };
@@ -267,7 +304,7 @@ const BatchList = () => {
 
             {/* Filter + Search Controls */}
             <div className="flex flex-row justify-between gap-2 mb-4 w-full">
-                {/* Filter dropdown */}
+                {/* Filter dropdowns */}
                 <div className="flex items-center gap-2">
                     <select
                         value={filterBy}
@@ -277,13 +314,24 @@ const BatchList = () => {
                         <option value="all">All</option>
                         <option value="semester">Semester</option>
                         <option value="year">Yearly</option>
-                        <option value="bachelor">Bachelor</option> {/* ✅ Add this */}
-                        <option value="master">Master</option>     {/* ✅ And this */}
+                        <option value="bachelor">Bachelor</option>
+                        <option value="master">Master</option>
                         <option value="completed">Completed</option>
                         <option value="notCompleted">Not Completed</option>
                     </select>
-
-
+                    {/* Faculty code select only if Bachelor/Master */}
+                    {(filterBy === "bachelor" || filterBy === "master") && (
+                        <select
+                            value={facultyCode}
+                            onChange={e => setFacultyCode(e.target.value)}
+                            className="px-3 py-2 border rounded"
+                        >
+                            <option value="">All Faculties</option>
+                            {facultyOptions.map((fac) => (
+                                <option key={fac.code} value={fac.code}>{fac.code} ({fac.name})</option>
+                            ))}
+                        </select>
+                    )}
                     {/* Search Input + Buttons */}
                     <div className="relative flex-grow flex items-center max-w-md w-full gap-2">
                         <input
@@ -296,7 +344,6 @@ const BatchList = () => {
                                 if (e.key === "Enter") onSearchClick();
                             }}
                         />
-
                         <button
                             onClick={onSearchClick}
                             disabled={loading}
@@ -318,7 +365,6 @@ const BatchList = () => {
                     </div>
                 </div>
                 <div className="flex gap-2">
-
                     <button
                         onClick={exportCSV}
                         className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
@@ -331,9 +377,7 @@ const BatchList = () => {
                     >
                         <Printer size={16} /> Print
                     </button>
-
                     <button
-
                         onClick={() => router.push("/admin/batch/batchform")}
                         disabled={loading}
                         className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
@@ -400,12 +444,10 @@ const BatchList = () => {
                                                     className="p-1 bg-blue-500 text-white rounded hover:bg-blue-600 cursor-pointer"
                                                     onClick={() => handleView(batch)}
                                                 />
-                                                {/* <Pencil className="p-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 cursor-pointer" /> */}
                                                 <Pencil
                                                     className="p-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 cursor-pointer"
                                                     onClick={() => setEditingBatch(batch._id)}
                                                 />
-
                                                 <Trash2
                                                     className="p-1 bg-red-500 text-white rounded hover:bg-red-600 cursor-pointer"
                                                     onClick={() => confirmDelete(batch)}
