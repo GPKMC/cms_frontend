@@ -27,7 +27,7 @@ const CreateBatchWithFaculty = () => {
   });
 
   const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
-  const facultyUrl = `${baseUrl}/faculty-api/faculties`;
+  const facultyUrl = `${baseUrl}/faculty-api/facultycode`;
   const batchPostUrl = `${baseUrl}/batch-api/batch`;
 
   const showToast = (message: string, type: 'success' | 'error') => {

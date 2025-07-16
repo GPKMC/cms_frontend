@@ -25,7 +25,7 @@ const sidebarItems: SidebarItems = [
   { id: 4, label: "Batch Management", icon: <BsFillPeopleFill />, page: "/admin/batch" },
   { id: 5, label: "Course Management", icon: <FaBook />, page: "/admin/courses" },
   { id: 6, label: "Subject Management", icon: <FaClipboardList />, page: "/admin/subjects" },
-  { id: 7, label: "Semester Management", icon: <FaChalkboardTeacher />, page: "/admin/semesters" },
+  { id: 7, label: "Semester Management", icon: <FaChalkboardTeacher />, page: "/admin/semOryear" },
   { id: 8, label: "Schedule Management", icon: <FaCalendarAlt />, page: "/admin/schedule" },
   { id: 9, label: "Assignment Monitoring", icon: <MdAssignment />, page: "/admin/assignments" },
   { id: 10, label: "Announcements", icon: <FaBullhorn />, page: "/admin/announcements" },
