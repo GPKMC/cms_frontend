@@ -6,20 +6,24 @@ import { X } from "lucide-react";
 
 type Faculty = {
   code: string;
+  name?: string;
+  type?: string;
+  programLevel?: string;
 };
 
-type Batch = {
-  batchname: string;
+type Course = {
+  _id: string;
+  name: string;
+  code: string;
 };
 
 type SemesterDetail = {
   _id: string;
-  semesterName?: string;  // optional now
-  name?: string;          // fallback option
+  name?: string;
+  semesterName?: string;
   faculty: Faculty | null;
-  batch: Batch | null;
   description?: string;
-  courses: string[];
+  courses: Course[];      // from backend populated
   startDate?: string;
   endDate?: string;
   status: string;
@@ -44,14 +48,23 @@ export default function SemesterOrYearDetailsModal({ id, onClose }: Props) {
   const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
   const url = `${baseUrl}/sem-api/semesterOrYear`;
 
+  // Get token from localStorage
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const axiosConfig = token
+    ? {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    : undefined;
+
   useEffect(() => {
     async function fetchDetails() {
       setLoading(true);
       setError(null);
       try {
-        const res = await axios.get(`${url}/${id}`);
+        const res = await axios.get(`${url}/${id}`, axiosConfig);
         if (res.data.success) {
-          console.log("Details fetched:", res.data.semester); // Debug log
           setDetails(res.data.semester);
         } else {
           setError("Failed to fetch details");
@@ -62,8 +75,10 @@ export default function SemesterOrYearDetailsModal({ id, onClose }: Props) {
         setLoading(false);
       }
     }
-    fetchDetails();
-  }, [id]);
+    if (token) fetchDetails();
+    else setError("Unauthorized: Please login.");
+    // eslint-disable-next-line
+  }, [id, token]);
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return "-";
@@ -78,13 +93,10 @@ export default function SemesterOrYearDetailsModal({ id, onClose }: Props) {
   return (
     <div className="fixed inset-0 bg-transparent bg-opacity-30 backdrop-blur-md flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-xl w-full p-8 relative overflow-auto max-h-[80vh] transition-transform duration-300 ease-in-out transform hover:scale-[1.02]">
-        {/* Header with batchname, semesterName/name, and close button */}
+        {/* Header */}
         <div className="flex items-center justify-between mb-6 border-b border-gray-200 pb-3">
           <h2 className="text-xl font-semibold text-gray-900">
-           
-            {(details?.semesterName || details?.name)
-              ? ` ${details.semesterName || details.name}`
-              : ""}
+            {(details?.semesterName || details?.name) ?? ""}
           </h2>
           <button
             className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full p-1 transition-colors"
@@ -107,11 +119,11 @@ export default function SemesterOrYearDetailsModal({ id, onClose }: Props) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6 text-gray-800 text-base leading-relaxed">
             <div>
               <h4 className="font-semibold mb-1 text-gray-700 uppercase tracking-wide">Faculty</h4>
-              <p className="text-gray-900">{details.faculty?.code || "-"}</p>
+              <p className="text-gray-900">{details.faculty?.code || "-"} {details.faculty?.name && <>({details.faculty.name})</>}</p>
             </div>
             <div>
-              <h4 className="font-semibold mb-1 text-gray-700 uppercase tracking-wide">Batch</h4>
-              <p className="text-gray-900">{details.batch?.batchname || "-"}</p>
+              <h4 className="font-semibold mb-1 text-gray-700 uppercase tracking-wide">Type</h4>
+              <p className="text-gray-900">{details.faculty?.type || "-"}</p>
             </div>
             <div className="md:col-span-2">
               <h4 className="font-semibold mb-1 text-gray-700 uppercase tracking-wide">Description</h4>
@@ -119,25 +131,15 @@ export default function SemesterOrYearDetailsModal({ id, onClose }: Props) {
             </div>
             <div className="md:col-span-2">
               <h4 className="font-semibold mb-1 text-gray-700 uppercase tracking-wide">Courses</h4>
-              <p className="text-gray-900">{details.courses.length > 0 ? details.courses.join(", ") : "-"}</p>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-1 text-gray-700 uppercase tracking-wide">Start Date</h4>
-              <p className="text-gray-900">{formatDate(details.startDate)}</p>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-1 text-gray-700 uppercase tracking-wide">End Date</h4>
-              <p className="text-gray-900">{formatDate(details.endDate)}</p>
-            </div>
-            <div className="md:col-span-2">
-              <h4 className="font-semibold mb-1 text-gray-700 uppercase tracking-wide">Status</h4>
-              <span
-                className={`inline-block px-4 py-1 rounded-full text-sm font-semibold tracking-wide uppercase ${
-                  statusColors[details.status] || "bg-gray-200 text-gray-700"
-                }`}
-              >
-                {details.status.replace("_", " ")}
-              </span>
+              <ul className="text-gray-900 list-disc ml-6">
+                {details.courses.length > 0
+                  ? details.courses.map((c) => (
+                      <li key={c._id}>
+                        {c.code} - {c.name}
+                      </li>
+                    ))
+                  : <li>-</li>}
+              </ul>
             </div>
           </div>
         )}

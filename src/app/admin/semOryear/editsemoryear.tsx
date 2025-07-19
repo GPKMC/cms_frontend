@@ -1,44 +1,32 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, FormEvent } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { X } from "lucide-react";
 
-type FacultyType = "semester" | "yearly";
-
-interface Faculty {
-  _id: string;
+type Faculty = {
   code: string;
-  name: string;
-  type: FacultyType;
-  totalSemestersOrYears: number;
-}
+  name?: string;
+  type?: string;
+  programLevel?: string;
+  _id?: string;
+};
 
-interface Batch {
-  _id: string;
-  batchname: string;
-  faculty: string;
-  startYear?: number;
-}
-
-interface SemesterOrYear {
+type Course = {
   _id: string;
   name: string;
-  slug: string;
+  code: string;
+};
+
+type SemesterDetail = {
+  _id: string;
+  name?: string;
+  semesterName?: string;
+  faculty: Faculty | null;
   description?: string;
-  faculty: Faculty;
-  batch: Batch;
+  courses: Course[];
   semesterNumber?: number;
   yearNumber?: number;
-  startDate?: string;
-  endDate?: string;
-  status: "not_started" | "ongoing" | "completed";
-  courses: string[];
-}
-
-type Toast = {
-  id: string;
-  message: string;
-  type: "success" | "error";
 };
 
 interface Props {
@@ -48,277 +36,201 @@ interface Props {
 }
 
 export default function SemesterOrYearEditForm({ id, onClose, onUpdateSuccess }: Props) {
-  const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
-  const getUrl = `${baseUrl}/sem-api/semesterOrYear/${id}`;
-  const patchUrl = `${baseUrl}/sem-api/semesterOrYear/${id}`;
-
-  // State for form fields
-  const [faculty, setFaculty] = useState<Faculty | null>(null);
-  const [batch, setBatch] = useState<Batch | null>(null);
-  const [description, setDescription] = useState("");
+  const [details, setDetails] = useState<SemesterDetail | null>(null);
+  const [desc, setDesc] = useState("");
   const [semesterNumber, setSemesterNumber] = useState<number | "">("");
   const [yearNumber, setYearNumber] = useState<number | "">("");
-  const [startDate, setStartDate] = useState("");
-  const [status, setStatus] = useState<SemesterOrYear["status"]>("not_started");
-  const [courses, setCourses] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(true);
+  const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+  const url = `${baseUrl}/sem-api/semesterOrYear`;
 
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  // Auth
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const axiosConfig = token
+    ? { headers: { Authorization: `Bearer ${token}` } }
+    : undefined;
 
-  // Toast helper
-  const addToast = useCallback((message: string, type: "success" | "error") => {
-    const id = Math.random().toString(36).substring(2, 9);
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((toast) => toast.id !== id));
-    }, 10000);
-  }, []);
+  // Load semester/year details
+  useEffect(() => {
+    if (!token) return setError("Unauthorized: Please login.");
 
-  // Fetch existing data on mount
-useEffect(() => {
-  setFetching(true);
-  axios.get(getUrl)
-    .then((res) => {
-      // Try to find data in possible places
-      const data = res.data.semesterOrYear || res.data.semester || res.data;
-      if (data && Object.keys(data).length > 0) {
-        setFaculty(data.faculty);
-        setBatch(data.batch);
-        setDescription(data.description || "");
-        setSemesterNumber(data.semesterNumber ?? "");
-        setYearNumber(data.yearNumber ?? "");
-        setStartDate(data.startDate ? data.startDate.split("T")[0] : "");
-        setStatus(data.status || "not_started");
-        setCourses(data.courses || []);
-      } else {
-        console.error("API returned failure or empty data:", res.data);
-        addToast("Failed to load semester/year data", "error");
+    async function fetchDetails() {
+      setError(null);
+      try {
+        const res = await axios.get(`${url}/${id}`, axiosConfig);
+        if (res.data.success) {
+          setDetails(res.data.semester);
+          setDesc(res.data.semester.description || "");
+          setSemesterNumber(res.data.semester.semesterNumber ?? "");
+          setYearNumber(res.data.semester.yearNumber ?? "");
+        } else setError("Failed to fetch details");
+      } catch {
+        setError("Error fetching details");
       }
-    })
-    .catch((err) => {
-      console.error("Error fetching semester/year data:", err);
-      addToast("Error fetching semester/year data", "error");
-    })
-    .finally(() => setFetching(false));
-}, [getUrl, addToast]);
+    }
+    fetchDetails();
+    // eslint-disable-next-line
+  }, [id, token]);
 
-
-  if (fetching) return <div className="p-6 text-center">Loading data...</div>;
-
-  // Handle form submission
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!faculty) {
-      addToast("Faculty info missing", "error");
-      return;
-    }
-
-    if (
-      faculty.type === "semester" &&
-      (semesterNumber === "" || semesterNumber < 1 || semesterNumber > faculty.totalSemestersOrYears)
-    ) {
-      addToast(`Semester number must be between 1 and ${faculty.totalSemestersOrYears}`, "error");
-      return;
-    }
-
-    if (
-      faculty.type === "yearly" &&
-      (yearNumber === "" || yearNumber < 1 || yearNumber > faculty.totalSemestersOrYears)
-    ) {
-      addToast(`Year number must be between 1 and ${faculty.totalSemestersOrYears}`, "error");
-      return;
-    }
-
-    setLoading(true);
-
+    if (!details) return;
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
     try {
       const payload: any = {
-        description,
-        startDate: startDate || undefined,
-        status,
-        courses,
+        description: desc,
       };
-
-      if (faculty.type === "semester") {
-        payload.semesterNumber = semesterNumber;
-        payload.yearNumber = undefined;
-      } else {
-        payload.yearNumber = yearNumber;
-        payload.semesterNumber = undefined;
-      }
-
-      const res = await axios.patch(patchUrl, payload);
-
+      if (details.faculty?.type === "semester") payload.semesterNumber = semesterNumber;
+      if (details.faculty?.type === "yearly") payload.yearNumber = yearNumber;
+      const res = await axios.patch(`${url}/${id}`, payload, axiosConfig);
       if (res.data.success) {
-        addToast("Semester/Year updated successfully", "success");
+        setSuccess("Updated successfully!");
         if (onUpdateSuccess) onUpdateSuccess();
-        else onClose();
+        setTimeout(onClose, 1500);
       } else {
-        addToast(res.data.message || "Failed to update", "error");
+        setError(res.data.message || "Update failed.");
       }
-    } catch (error: any) {
-      addToast(error?.response?.data?.message || "Failed to update", "error");
+    } catch (err: any) {
+      setError(err?.response?.data?.message || "Failed to update.");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  return (
-  <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-[9999] p-4">
-    <div className="bg-white rounded-lg p-6 max-w-lg w-full relative max-h-[90vh] overflow-auto">
-      {/* Toasts */}
-      <div className="fixed top-4 right-4 flex flex-col gap-2 z-50">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={`max-w-xs px-4 py-2 rounded shadow text-white ${
-              t.type === "success" ? "bg-green-600" : "bg-red-600"
-            }`}
+  if (!details) {
+    return (
+      <div className="fixed inset-0 bg-transparent bg-opacity-30 backdrop-blur-md flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-xl w-full p-8 relative">
+          <p className="text-center text-gray-600 text-lg font-medium">
+            {error || "Loading..."}
+          </p>
+          <button
+            className="absolute top-4 right-4 text-gray-600 hover:text-gray-900"
+            onClick={onClose}
+            aria-label="Close"
           >
-            {t.message}
-          </div>
-        ))}
+            <X size={24} />
+          </button>
+        </div>
       </div>
+    );
+  }
 
-      {/* Close button */}
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 text-gray-600 hover:text-gray-900 font-bold text-xl"
-        aria-label="Close"
-        type="button"
-      >
-        &times;
-      </button>
+  return (
+    <div className="fixed inset-0 bg-transparent bg-opacity-30 backdrop-blur-md flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-xl w-full p-8 relative">
+        <div className="flex items-center justify-between mb-6 border-b border-gray-200 pb-3">
+          <h2 className="text-xl font-semibold text-gray-900">
+            Edit: {details.semesterName || details.name || ""}
+          </h2>
+          <button
+            className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full p-1"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <X size={24} />
+          </button>
+        </div>
 
-      <h2 className="text-xl font-bold mb-4 text-center">Edit Semester / Year</h2>
+        {error && (
+          <p className="mb-4 text-red-600 font-semibold text-lg">{error}</p>
+        )}
+        {success && (
+          <p className="mb-4 text-green-600 font-semibold text-lg">{success}</p>
+        )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Row 1: Faculty & Batch side by side */}
-        <div className="grid grid-cols-2 gap-4">
+        <form className="space-y-4" onSubmit={handleSave}>
           <div>
             <label className="block font-medium mb-1">Faculty</label>
-            <input
-              type="text"
-              readOnly
-              value={faculty?.code || ""}
-              className="w-full px-3 py-2 border rounded bg-gray-100 cursor-not-allowed"
-            />
-          </div>
-          <div>
-            <label className="block font-medium mb-1">Batch</label>
-            <input
-              type="text"
-              readOnly
-              value={batch?.batchname || ""}
-              className="w-full px-3 py-2 border rounded bg-gray-100 cursor-not-allowed"
-            />
-          </div>
-        </div>
-
-        {/* Row 2: Start Date, Status, Semester/Year Number */}
-        <div className="grid grid-cols-3 gap-4 items-end">
-          <div>
-            <label className="block font-medium mb-1">Start Date</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-3 py-2 border rounded"
-            />
+            <div className="px-3 py-2 rounded bg-gray-100 text-gray-900 border">
+              {details.faculty?.code} {details.faculty?.name && `(${details.faculty.name})`} [{details.faculty?.type}]
+            </div>
           </div>
 
+          {details.faculty?.type === "semester" && (
+            <div>
+              <label className="block font-medium mb-1">
+                Semester Number <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={8}
+                className="w-full px-3 py-2 border rounded"
+                value={semesterNumber}
+                onChange={e => setSemesterNumber(Number(e.target.value))}
+                required
+              />
+            </div>
+          )}
+
+          {details.faculty?.type === "yearly" && (
+            <div>
+              <label className="block font-medium mb-1">
+                Year Number <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={4}
+                className="w-full px-3 py-2 border rounded"
+                value={yearNumber}
+                onChange={e => setYearNumber(Number(e.target.value))}
+                required
+              />
+            </div>
+          )}
+
           <div>
-            <label className="block font-medium mb-1">Status</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as SemesterOrYear["status"])}
+            <label className="block font-medium mb-1">Description</label>
+            <textarea
               className="w-full px-3 py-2 border rounded"
+              rows={2}
+              value={desc}
+              onChange={e => setDesc(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block font-medium mb-1">Courses</label>
+            <ul className="text-gray-900 list-disc ml-6">
+              {details.courses && details.courses.length > 0
+                ? details.courses.map(c => (
+                    <li key={c._id}>
+                      {c.code} - {c.name}
+                    </li>
+                  ))
+                : <li>-</li>}
+            </ul>
+            <div className="text-xs text-gray-500 mt-1">
+              (Courses are managed automatically; you cannot edit them here.)
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button
+              type="submit"
+              className="flex-1 py-2 px-4 bg-blue-600 text-white rounded font-semibold hover:bg-blue-700 disabled:opacity-50"
+              disabled={saving}
             >
-              <option value="not_started">Not Started</option>
-              <option value="ongoing">Ongoing</option>
-              <option value="completed">Completed</option>
-            </select>
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+            <button
+              type="button"
+              className="flex-1 py-2 px-4 border border-gray-400 rounded font-semibold hover:bg-gray-100"
+              onClick={onClose}
+              disabled={saving}
+            >
+              Cancel
+            </button>
           </div>
-
-          <div>
-            {(faculty?.type === "semester") && (
-              <>
-                <label className="block font-medium mb-1">Semester Number</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={faculty.totalSemestersOrYears}
-                  value={semesterNumber}
-                  onChange={(e) => setSemesterNumber(Number(e.target.value))}
-                  className="w-full px-3 py-2 border rounded"
-                  required
-                />
-              </>
-            )}
-            {(faculty?.type === "yearly") && (
-              <>
-                <label className="block font-medium mb-1">Year Number</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={faculty.totalSemestersOrYears}
-                  value={yearNumber}
-                  onChange={(e) => setYearNumber(Number(e.target.value))}
-                  className="w-full px-3 py-2 border rounded"
-                  required
-                />
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Description */}
-        <div>
-          <label className="block font-medium mb-1">Description</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full px-3 py-2 border rounded"
-            rows={3}
-          />
-        </div>
-
-        {/* Courses */}
-        <div>
-          <label className="block font-medium mb-1">Courses (comma separated IDs)</label>
-          <input
-            type="text"
-            value={courses.join(",")}
-            onChange={(e) => setCourses(e.target.value.split(",").map((s) => s.trim()))}
-            className="w-full px-3 py-2 border rounded"
-            placeholder="courseId1,courseId2,..."
-          />
-        </div>
-
-        {/* Buttons */}
-        <div className="flex justify-between mt-6">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={loading}
-            className="px-4 py-2 border rounded bg-gray-200 hover:bg-gray-300"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-          >
-            {loading ? "Updating..." : "Update"}
-          </button>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
-  </div>
-);
-
+  );
 }

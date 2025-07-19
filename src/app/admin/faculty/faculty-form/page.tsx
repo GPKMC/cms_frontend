@@ -17,7 +17,7 @@ export default function AddFacultyPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setForm({ ...form, [name]: name === 'numberOfSemestersOrYears' ? parseInt(value) : value });
+    setForm({ ...form, [name]: name === 'totalSemestersOrYears' ? parseInt(value) : value });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -86,7 +86,7 @@ export default function AddFacultyPage() {
 
         <input
           type="number"
-          name="numberOfSemestersOrYears"
+          name="totalSemestersOrYears"
           value={form.totalSemestersOrYears}
           onChange={handleChange}
           required

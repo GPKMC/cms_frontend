@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Batch } from "../types/type.batch";
-import { Eye, Pencil, Trash2, Download, Printer } from "lucide-react";
+import { Eye, Pencil, Trash2, Download, Printer, Calendar } from "lucide-react";
 import BatchDetails from "./batchdetails";
 import { useRouter } from "next/navigation";
 import { saveAs } from "file-saver";
@@ -27,16 +27,21 @@ const BatchList = () => {
 
     // NEW: For dynamic faculty code filter
     const [facultyCode, setFacultyCode] = useState<string>("");
-    const [facultyOptions, setFacultyOptions] = useState<{ name: string, code: string }[]>([]);
+    const [facultyOptions, setFacultyOptions] = useState<{ name: string; code: string }[]>([]);
 
     const router = useRouter();
     const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
     const url = `${baseUrl}/batch-api/batch`;
     const facultyUrl = `${baseUrl}/faculty-api/facultycode`;
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    const headers: HeadersInit = {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
+
+    // Helper to get headers with auth token
+    const getAuthHeaders = () => {
+        if (typeof window === "undefined") return { "Content-Type": "application/json" };
+        const token = localStorage.getItem("token");
+        return {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        };
     };
 
     useEffect(() => {
@@ -48,7 +53,7 @@ const BatchList = () => {
     }, [filterBy]);
 
     const triggerRefresh = () => {
-        setRefreshKey(prev => prev + 1);
+        setRefreshKey((prev) => prev + 1);
     };
 
     useEffect(() => {
@@ -59,6 +64,7 @@ const BatchList = () => {
             return;
         }
         fetchBatches(limit, search);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [limit, search, filterBy, facultyCode, error, refreshKey]);
 
     useEffect(() => {
@@ -69,32 +75,32 @@ const BatchList = () => {
 
     // Fetch faculties for programLevel = bachelor/master for code dropdown
     useEffect(() => {
-    if (filterBy === "bachelor" || filterBy === "master") {
-        const fetchFaculties = async () => {
-            try {
-                const res = await fetch(`${facultyUrl}?programLevel=${filterBy}`, {
-                    method: "GET",
-                    headers, // now headers is stable
-                });
-                const data = await res.json();
-                if (Array.isArray(data)) {
-                    setFacultyOptions(data.map((fac: any) => ({ name: fac.name, code: fac.code })));
-                } else if (data.success && Array.isArray(data.faculties)) {
-                    setFacultyOptions(data.faculties.map((fac: any) => ({ name: fac.name, code: fac.code })));
-                } else {
+        if (filterBy === "bachelor" || filterBy === "master") {
+            const fetchFaculties = async () => {
+                try {
+                    const res = await fetch(`${facultyUrl}?programLevel=${filterBy}`, {
+                        method: "GET",
+                        headers: getAuthHeaders(),
+                    });
+                    const data = await res.json();
+                    if (Array.isArray(data)) {
+                        setFacultyOptions(data.map((fac: any) => ({ name: fac.name, code: fac.code })));
+                    } else if (data.success && Array.isArray(data.faculties)) {
+                        setFacultyOptions(data.faculties.map((fac: any) => ({ name: fac.name, code: fac.code })));
+                    } else {
+                        setFacultyOptions([]);
+                    }
+                } catch {
                     setFacultyOptions([]);
                 }
-            } catch {
-                setFacultyOptions([]);
-            }
-        };
-        fetchFaculties();
-    } else {
-        setFacultyOptions([]);
-        setFacultyCode("");
-    }
-}, [filterBy, facultyUrl, token]); // <-- use token instead of headers
-
+            };
+            fetchFaculties();
+        } else {
+            setFacultyOptions([]);
+            setFacultyCode("");
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filterBy]);
 
     const fetchBatches = async (fetchLimit: number, searchTerm = "") => {
         setLoading(true);
@@ -131,7 +137,7 @@ const BatchList = () => {
 
             const response = await fetch(`${url}?${queryParams.toString()}`, {
                 method: "GET",
-                headers,
+                headers: getAuthHeaders(),
             });
             const data = await response.json();
 
@@ -162,10 +168,10 @@ const BatchList = () => {
             "Total",
             "Created",
             "Updated",
-            "Completed"
+            "Completed",
         ];
 
-        const rows = batches.map(b => [
+        const rows = batches.map((b) => [
             b.batchname,
             `${b.faculty.name} (${b.faculty.code})`,
             b.faculty.type,
@@ -176,60 +182,64 @@ const BatchList = () => {
             b.faculty.totalSemestersOrYears,
             new Date(b.createdAt).toLocaleDateString(),
             new Date(b.updatedAt).toLocaleDateString(),
-            b.isCompleted ? "Yes" : "No"
+            b.isCompleted ? "Yes" : "No",
         ]);
 
-        const csv = [headers, ...rows].map(e => e.join(",")).join("\n");
+        const csv = [headers, ...rows].map((e) => e.join(",")).join("\n");
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
         saveAs(blob, `batches-${filterBy}.csv`);
     };
 
     const printData = () => {
         const printWindow = window.open("", "", "width=900,height=700");
-        const rows = batches.map(b => `
-            <tr>
-                <td>${b.batchname}</td>
-                <td>${b.faculty.name} (${b.faculty.code})</td>
-                <td>${b.faculty.type}</td>
-                <td>${b.faculty.programLevel}</td>
-                <td>${b.startYear}</td>
-                <td>${b.endYear ?? ""}</td>
-                <td>${b.currentSemesterOrYear}</td>
-                <td>${b.faculty.totalSemestersOrYears}</td>
-                <td>${new Date(b.createdAt).toLocaleDateString()}</td>
-                <td>${new Date(b.updatedAt).toLocaleDateString()}</td>
-                <td>${b.isCompleted ? "Yes" : "No"}</td>
-            </tr>
-        `).join("");
+        const rows = batches
+            .map(
+                (b) => `
+          <tr>
+              <td>${b.batchname}</td>
+              <td>${b.faculty.name} (${b.faculty.code})</td>
+              <td>${b.faculty.type}</td>
+              <td>${b.faculty.programLevel}</td>
+              <td>${b.startYear}</td>
+              <td>${b.endYear ?? ""}</td>
+              <td>${b.currentSemesterOrYear}</td>
+              <td>${b.faculty.totalSemestersOrYears}</td>
+              <td>${new Date(b.createdAt).toLocaleDateString()}</td>
+              <td>${new Date(b.updatedAt).toLocaleDateString()}</td>
+              <td>${b.isCompleted ? "Yes" : "No"}</td>
+          </tr>
+      `
+            )
+            .join("");
 
         printWindow?.document.write(`
-            <html>
-                <head><title>Print Batches</title></head>
-                <body>
-                    <h1>Batch List - Filter: ${filterBy}</h1>
-                    <table border="1" cellpadding="5" cellspacing="0">
-                        <thead>
-                            <tr>
-                                <th>Batch</th>
-                                <th>Faculty</th>
-                                <th>Faculty Type</th>
-                                <th>Program Level</th>
-                                <th>Start Year</th>
-                                <th>End Year</th>
-                                <th>Current</th>
-                                <th>Total</th>
-                                <th>Created</th>
-                                <th>Updated</th>
-                                <th>Completed</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${rows}
-                        </tbody>
-                    </table>
-                </body>
-            </html>
-        `);
+          <html>
+              <head><title>Print Batches</title></head>
+              <body>
+                  <h1>Batch List - Filter: ${filterBy}</h1>
+                  <table border="1" cellpadding="5" cellspacing="0">
+                      <thead>
+                          <tr>
+                              <th>Batch</th>
+                              <th>Faculty</th>
+                              <th>Faculty Type</th>
+                              <th>Program Level</th>
+                              <th>Start Year</th>
+                              <th>End Year</th>
+                              <th>Current</th>
+                              <th>Total</th>
+                              <th>Created</th>
+                              <th>Updated</th>
+                              <th>Completed</th>
+                          </tr>
+                      </thead>
+                      <tbody>
+                          ${rows}
+                      </tbody>
+                  </table>
+              </body>
+          </html>
+      `);
         printWindow?.document.close();
         printWindow?.print();
     };
@@ -252,7 +262,10 @@ const BatchList = () => {
     const handleDelete = async () => {
         if (!selectedBatch) return;
         try {
-            const res = await fetch(`${url}/${selectedBatch._id}`, { method: "DELETE", headers, });
+            const res = await fetch(`${url}/${selectedBatch._id}`, {
+                method: "DELETE",
+                headers: getAuthHeaders(),
+            });
             const data = await res.json();
             if (data.success) {
                 setBatches((prev) => prev.filter((b) => b._id !== selectedBatch._id));
@@ -323,12 +336,14 @@ const BatchList = () => {
                     {(filterBy === "bachelor" || filterBy === "master") && (
                         <select
                             value={facultyCode}
-                            onChange={e => setFacultyCode(e.target.value)}
+                            onChange={(e) => setFacultyCode(e.target.value)}
                             className="px-3 py-2 border rounded"
                         >
                             <option value="">All Faculties</option>
                             {facultyOptions.map((fac) => (
-                                <option key={fac.code} value={fac.code}>{fac.code} ({fac.name})</option>
+                                <option key={fac.code} value={fac.code}>
+                                    {fac.code} ({fac.name})
+                                </option>
                             ))}
                         </select>
                     )}
@@ -452,6 +467,11 @@ const BatchList = () => {
                                                     className="p-1 bg-red-500 text-white rounded hover:bg-red-600 cursor-pointer"
                                                     onClick={() => confirmDelete(batch)}
                                                 />
+                                                <Calendar
+                                                    className="p-1 bg-indigo-500 text-white rounded hover:bg-indigo-600 cursor-pointer"
+                                                    onClick={() => router.push(`/admin/batch/${batch.slug}/periods`)}
+                                                   
+                                                />
                                             </div>
                                         </td>
                                     </tr>
@@ -540,7 +560,6 @@ const BatchList = () => {
             {editingBatch && (
                 <EditBatchForm id={editingBatch} onClose={() => setEditingBatch(null)} onUpdateSuccess={triggerRefresh} />
             )}
-
         </div>
     );
 };

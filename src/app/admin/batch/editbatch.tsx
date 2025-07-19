@@ -23,17 +23,29 @@ const EditBatchForm = ({ id, onClose, onUpdateSuccess }: EditBatchProps) => {
 
   const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
   const url = `${baseUrl}/batch-api/batch/${id}`;
+
+  // Get token safely (only in browser)
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
   useEffect(() => {
     const fetchBatch = async () => {
+      if (!token) {
+        setError('Unauthorized: Please login.');
+        setLoading(false);
+        return;
+      }
       try {
         const res = await fetch(url, {
           headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            Authorization: `Bearer ${token}`,
           },
         });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.message || 'Failed to fetch batch');
+        }
 
         const data = await res.json();
         setBatch(data.batch);
@@ -43,16 +55,16 @@ const EditBatchForm = ({ id, onClose, onUpdateSuccess }: EditBatchProps) => {
           currentSemesterOrYear: data.batch.currentSemesterOrYear,
           isCompleted: data.batch.isCompleted,
         });
-      } catch (error) {
-        console.error('Failed to load batch');
-        setError('Failed to load batch');
+      } catch (error: any) {
+        console.error('Failed to load batch', error);
+        setError(error.message || 'Failed to load batch');
       } finally {
         setLoading(false);
       }
     };
 
     fetchBatch();
-  }, [url]);
+  }, [url, token]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -67,18 +79,23 @@ const EditBatchForm = ({ id, onClose, onUpdateSuccess }: EditBatchProps) => {
     setError(null);
     setSuccess(null);
 
+    if (!token) {
+      setError('Unauthorized: Please login.');
+      return;
+    }
+
     try {
       const res = await fetch(url, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(formData),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
+      if (!res.ok) throw new Error(data.message || 'Failed to update batch.');
 
       setSuccess('✅ Batch updated successfully!');
       onUpdateSuccess?.();
@@ -88,10 +105,10 @@ const EditBatchForm = ({ id, onClose, onUpdateSuccess }: EditBatchProps) => {
     }
   };
 
-  if (loading || !batch) return <div>Loading...</div>;
+  if (loading) return <div>Loading...</div>;
+  if (!batch) return <div>{error || 'Batch not found.'}</div>;
 
-  const label =
-    batch.faculty.type === 'semester' ? 'Current Semester' : 'Current Year';
+  const label = batch.faculty.type === 'semester' ? 'Current Semester' : 'Current Year';
   const maxTotal = batch.faculty.totalSemestersOrYears;
 
   return (
@@ -213,7 +230,7 @@ const EditBatchForm = ({ id, onClose, onUpdateSuccess }: EditBatchProps) => {
               name="isCompleted"
               checked={formData.isCompleted}
               onChange={handleChange}
-              className='w-6 h-6'
+              className="w-6 h-6"
             />
             <label>Completed</label>
           </div>

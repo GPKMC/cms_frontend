@@ -17,6 +17,7 @@ const CreateBatchWithFaculty = () => {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<'back' | 'cancel' | null>(null);
+  const [loadingFaculties, setLoadingFaculties] = useState(false);
 
   const [formData, setFormData] = useState({
     facultyCode: '',
@@ -30,34 +31,50 @@ const CreateBatchWithFaculty = () => {
   const facultyUrl = `${baseUrl}/faculty-api/facultycode`;
   const batchPostUrl = `${baseUrl}/batch-api/batch`;
 
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 20000);
   };
 
   useEffect(() => {
+    if (!token) {
+      setError('Unauthorized: Please login.');
+      return;
+    }
     const fetchFaculties = async () => {
-      const token = localStorage.getItem('token');
+      setLoadingFaculties(true);
       try {
         const res = await fetch(facultyUrl, {
           headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            Authorization: `Bearer ${token}`,
           },
         });
 
         if (!res.ok) throw new Error('Failed to fetch faculties');
 
         const data = await res.json();
-        setFaculties(Array.isArray(data) ? data : []);
+        // Data could be array or { success, faculties }
+        if (Array.isArray(data)) {
+          setFaculties(data);
+        } else if (data.success && Array.isArray(data.faculties)) {
+          setFaculties(data.faculties);
+        } else {
+          setFaculties([]);
+          setError('No faculties data found');
+        }
       } catch (err: any) {
         console.error(err);
-        setError('Failed to load faculties.');
+        setError(err.message || 'Failed to load faculties.');
+      } finally {
+        setLoadingFaculties(false);
       }
     };
 
     fetchFaculties();
-  }, []);
+  }, [facultyUrl, token]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -109,20 +126,24 @@ const CreateBatchWithFaculty = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const token = localStorage.getItem('token');
+
+    if (!token) {
+      showToast('Unauthorized: Please login.', 'error');
+      return;
+    }
 
     try {
       const res = await fetch(batchPostUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(formData),
       });
 
       const result = await res.json();
-      if (!res.ok) throw new Error(result.message);
+      if (!res.ok) throw new Error(result.message || 'Batch creation failed.');
 
       showToast('✅ Batch created successfully!', 'success');
       resetForm();
@@ -144,7 +165,7 @@ const CreateBatchWithFaculty = () => {
 
   const hasUnsavedChanges = () =>
     formData.facultyCode ||
-    formData.endYear ||
+    formData.endYear !== undefined ||
     formData.currentSemesterOrYear !== 1 ||
     formData.isCompleted;
 
@@ -181,149 +202,150 @@ const CreateBatchWithFaculty = () => {
       {/* Back Button */}
       <button
         onClick={handleBack}
-        className="absolute  border-2 bg-primary px-4 py-2 rounded top-4 left-4 text-white hover:underline"
+        className="absolute border-2 bg-primary px-4 py-2 rounded top-4 left-4 text-white hover:underline"
       >
         Back
       </button>
-    <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded shadow relative">
-      {/* Back Button */}
-    
+      <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded shadow relative">
+        <h2 className="text-xl font-semibold text-center mb-4">Create Batch</h2>
 
-      <h2 className="text-xl font-semibold text-center mb-4">Create Batch</h2>
-
-      {toast && (
-        <div
-          className={`fixed top-24 right-4 px-4 py-2 rounded text-white z-50 shadow-lg ${
-            toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
-
-      {error && <p className="text-red-500 mb-4">{error}</p>}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block mb-1">Faculty Code</label>
-          <select
-            name="facultyCode"
-            value={formData.facultyCode}
-            onChange={handleChange}
-            className="w-full border p-2 rounded"
-            required
+        {toast && (
+          <div
+            className={`fixed top-24 right-4 px-4 py-2 rounded text-white z-50 shadow-lg ${
+              toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+            }`}
           >
-            <option value="">Select faculty code</option>
-            {faculties.map((f) => (
-              <option key={f._id} value={f.code}>
-                {f.code}
-              </option>
-            ))}
-          </select>
-        </div>
+            {toast.message}
+          </div>
+        )}
 
-        <div>
-          <label className="block mb-1">Program Level</label>
-          <input
-            type="text"
-            value={programLevel}
-            readOnly
-            className="w-full border p-2 rounded bg-gray-100 cursor-not-allowed"
-          />
-        </div>
+        {error && <p className="text-red-500 mb-4">{error}</p>}
 
-        <div>
-          <label className="block mb-1">Start Year</label>
-          <input
-            type="number"
-            name="startYear"
-            value={formData.startYear}
-            onChange={handleChange}
-            className="w-full border p-2 rounded"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block mb-1">End Year</label>
-          <input
-            type="number"
-            name="endYear"
-            value={formData.endYear ?? ''}
-            onChange={handleChange}
-            className="w-full border p-2 rounded"
-          />
-        </div>
-
-        <div>
-          <label className="block mb-1">Current Semester/Year</label>
-          <input
-            type="number"
-            name="currentSemesterOrYear"
-            value={formData.currentSemesterOrYear}
-            onChange={handleChange}
-            className="w-full border p-2 rounded"
-            required
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            name="isCompleted"
-            checked={formData.isCompleted}
-            onChange={handleChange}
-          />
-          <label>Is Completed</label>
-        </div>
-
-        <div className="flex gap-2">
-          <button
-            type="submit"
-            className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
-          >
-            Create Batch
-          </button>
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="w-full bg-gray-400 text-white py-2 rounded hover:bg-gray-500"
-          >
-            Cancel
-          </button>
-        </div>
-      </form>
-
-      {/* Confirmation Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded shadow-xl w-full max-w-sm">
-            <h3 className="text-lg font-semibold mb-4">
-              {modalType === 'cancel' ? 'Cancel Form?' : 'Go Back?'}
-            </h3>
-            <p className="mb-4">
-              {modalType === 'cancel'
-                ? 'This will clear all form data. Are you sure?'
-                : 'Any unsaved changes will be lost. Are you sure you want to go back?'}
-            </p>
-            <div className="flex justify-end gap-4">
-              <button
-                onClick={() => setShowModal(false)}
-                className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+        {loadingFaculties ? (
+          <p className="mb-4 text-gray-600">Loading faculties...</p>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block mb-1">Faculty Code</label>
+              <select
+                name="facultyCode"
+                value={formData.facultyCode}
+                onChange={handleChange}
+                className="w-full border p-2 rounded"
+                required
               >
-                No
+                <option value="">Select faculty code</option>
+                {faculties.map((f) => (
+                  <option key={f._id} value={f.code}>
+                    {f.code}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block mb-1">Program Level</label>
+              <input
+                type="text"
+                value={programLevel}
+                readOnly
+                className="w-full border p-2 rounded bg-gray-100 cursor-not-allowed"
+              />
+            </div>
+
+            <div>
+              <label className="block mb-1">Start Year</label>
+              <input
+                type="number"
+                name="startYear"
+                value={formData.startYear}
+                onChange={handleChange}
+                className="w-full border p-2 rounded"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block mb-1">End Year</label>
+              <input
+                type="number"
+                name="endYear"
+                value={formData.endYear ?? ''}
+                onChange={handleChange}
+                className="w-full border p-2 rounded"
+              />
+            </div>
+
+            <div>
+              <label className="block mb-1">Current Semester/Year</label>
+              <input
+                type="number"
+                name="currentSemesterOrYear"
+                value={formData.currentSemesterOrYear}
+                onChange={handleChange}
+                className="w-full border p-2 rounded"
+                required
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="isCompleted"
+                checked={formData.isCompleted}
+                onChange={handleChange}
+              />
+              <label>Is Completed</label>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+              >
+                Create Batch
               </button>
               <button
-                onClick={confirmModal}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                type="button"
+                onClick={handleCancel}
+                className="w-full bg-gray-400 text-white py-2 rounded hover:bg-gray-500"
               >
-                Yes
+                Cancel
               </button>
             </div>
+          </form>
+        )}
+
+        {/* Confirmation Modal */}
+        {showModal && (
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded shadow-xl w-full max-w-sm">
+              <h3 className="text-lg font-semibold mb-4">
+                {modalType === 'cancel' ? 'Cancel Form?' : 'Go Back?'}
+              </h3>
+              <p className="mb-4">
+                {modalType === 'cancel'
+                  ? 'This will clear all form data. Are you sure?'
+                  : 'Any unsaved changes will be lost. Are you sure you want to go back?'}
+              </p>
+              <div className="flex justify-end gap-4">
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+                >
+                  No
+                </button>
+                <button
+                  onClick={confirmModal}
+                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                >
+                  Yes
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
     </div>
   );
 };
