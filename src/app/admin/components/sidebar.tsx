@@ -23,7 +23,7 @@ const sidebarItems: SidebarItems = [
   { id: 2, label: "Faculty Management", icon: <FaGraduationCap />, page: "/admin/faculty" },
   { id: 3, label: "User Management", icon: <FaUser />, page: "/admin/users" },
   { id: 4, label: "Batch Management", icon: <BsFillPeopleFill />, page: "/admin/batch" },
-  { id: 5, label: "Course Management", icon: <FaBook />, page: "/admin/courses" },
+  { id: 5, label: "Course Management", icon: <FaBook />, page: "/admin/course" },
   { id: 6, label: "Subject Management", icon: <FaClipboardList />, page: "/admin/subjects" },
   { id: 7, label: "Semester Management", icon: <FaChalkboardTeacher />, page: "/admin/semOryear" },
   { id: 8, label: "Schedule Management", icon: <FaCalendarAlt />, page: "/admin/schedule" },
