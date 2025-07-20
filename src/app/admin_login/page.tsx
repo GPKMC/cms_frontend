@@ -45,7 +45,7 @@ export default function AdminLoginForm() {
       } else {
         setSuccess("Login successful");
         if (data.token) {
-          localStorage.setItem("token", data.token);
+          localStorage.setItem("token_admin", data.token);
         }
         window.location.href = "/admin";
       }

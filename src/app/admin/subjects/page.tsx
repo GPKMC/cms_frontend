@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2, Eye, Pencil } from "lucide-react";
+import CourseInstanceViewModal from "./details";
+import CourseInstanceEditModal from "./editform";
 import { CourseInstance } from "../types/type.courseInstance";
 
 const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
@@ -11,40 +13,49 @@ export default function CourseInstanceList() {
   const [instances, setInstances] = useState<CourseInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [viewId, setViewId] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
   const router = useRouter();
 
   function getAuthHeaders() {
     if (typeof window === "undefined") return { "Content-Type": "application/json" };
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("token_admin");
     return {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
   }
 
-  useEffect(() => {
-    async function fetchInstances() {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(`${baseUrl}/course-api/courseInstance`, {
-          headers: getAuthHeaders(),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to fetch");
-        setInstances(data.instances || []);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
+  // Fetch list function - called on mount and refresh
+  async function fetchInstances() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${baseUrl}/course-api/courseInstance`, {
+        headers: getAuthHeaders(),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to fetch");
+      setInstances(data.instances || []);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
+  }
+
+  useEffect(() => {
     fetchInstances();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Refresh list after update or delete
+  const refreshList = () => {
+    fetchInstances();
+  };
+
   async function handleDelete(id: string) {
-    if (!window.confirm("Are you sure you want to delete this course instance?")) return;
     try {
       const res = await fetch(`${baseUrl}/course-api/courseInstance/${id}`, {
         method: "DELETE",
@@ -53,14 +64,17 @@ export default function CourseInstanceList() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Delete failed");
       setInstances((prev) => prev.filter((inst) => inst._id !== id));
+      setDeleteId(null); // close modal after delete
     } catch (err: any) {
       alert(err.message || "Failed to delete.");
+      setDeleteId(null);
     }
   }
 
   return (
     <div className="p-4">
       <h1 className="text-2xl font-semibold mb-6">Course Instances</h1>
+
       <div className="mb-4 flex gap-4">
         <button
           className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
@@ -69,8 +83,10 @@ export default function CourseInstanceList() {
           Add Course Instance
         </button>
       </div>
+
       {loading && <div className="text-gray-500">Loading...</div>}
       {error && <div className="text-red-600">{error}</div>}
+
       {!loading && !error && (
         <div className="overflow-x-auto border border-gray-300 rounded-lg">
           <table className="min-w-full bg-white shadow rounded-lg overflow-hidden border">
@@ -100,14 +116,16 @@ export default function CourseInstanceList() {
               )}
               {instances.map((instance) => (
                 <tr key={instance._id} className="hover:bg-gray-50">
-                <td className="px-4 py-2 border">{instance.batch?.batchname}</td>
+                  <td className="px-4 py-2 border">{instance.batch?.batchname}</td>
                   <td className="px-4 py-2 border">{instance.course?.name}</td>
                   <td className="px-4 py-2 border capitalize">
-                    <span className={`px-2 py-1 rounded text-xs font-bold ${
-                      instance.course?.type === "compulsory"
-                        ? "bg-green-100 text-green-700"
-                        : "bg-yellow-100 text-yellow-700"
-                    }`}>
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-bold ${
+                        instance.course?.type === "compulsory"
+                          ? "bg-green-100 text-green-700"
+                          : "bg-yellow-100 text-yellow-700"
+                      }`}
+                    >
                       {instance.course?.type}
                     </span>
                   </td>
@@ -137,20 +155,34 @@ export default function CourseInstanceList() {
                   </td>
                   <td className="px-4 py-2 border text-center">
                     {instance.isActive ? (
-                      <span className="bg-green-200 text-green-900 px-2 py-1 rounded text-xs font-bold">Yes</span>
+                      <span className="bg-green-200 text-green-900 px-2 py-1 rounded text-xs font-bold">
+                        Yes
+                      </span>
                     ) : (
-                      <span className="bg-gray-200 text-gray-500 px-2 py-1 rounded text-xs font-bold">No</span>
+                      <span className="bg-gray-200 text-gray-500 px-2 py-1 rounded text-xs font-bold">
+                        No
+                      </span>
                     )}
                   </td>
-                  <td className="px-4 py-2 border">{instance.createdAt ? new Date(instance.createdAt).toLocaleDateString() : ""}</td>
-                  <td className="px-4 py-2 border">{instance.updatedAt ? new Date(instance.updatedAt).toLocaleDateString() : ""}</td>
+                  <td className="px-4 py-2 border">
+                    {instance.createdAt ? new Date(instance.createdAt).toLocaleDateString() : ""}
+                  </td>
+                  <td className="px-4 py-2 border">
+                    {instance.updatedAt ? new Date(instance.updatedAt).toLocaleDateString() : ""}
+                  </td>
                   <td className="px-4 py-2 border text-center">
                     <div className="flex items-center gap-2 justify-center">
-                      <Eye className="p-1 bg-blue-500 text-white rounded hover:bg-blue-600 cursor-pointer" />
-                      <Pencil className="p-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 cursor-pointer" />
+                      <Eye
+                        className="p-1 bg-blue-500 text-white rounded hover:bg-blue-600 cursor-pointer"
+                        onClick={() => setViewId(instance._id)}
+                      />
+                      <Pencil
+                        className="p-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 cursor-pointer"
+                        onClick={() => setEditId(instance._id)}
+                      />
                       <Trash2
                         className="p-1 bg-red-500 text-white rounded hover:bg-red-600 cursor-pointer"
-                        onClick={() => handleDelete(instance._id)}
+                        onClick={() => setDeleteId(instance._id)}
                       />
                     </div>
                   </td>
@@ -160,6 +192,71 @@ export default function CourseInstanceList() {
           </table>
         </div>
       )}
+
+      {/* Delete confirmation modal */}
+      {deleteId && (
+        <ConfirmModal
+          title="Confirm Delete"
+          message="Are you sure you want to delete this course instance?"
+          onConfirm={() => handleDelete(deleteId)}
+          onCancel={() => setDeleteId(null)}
+        />
+      )}
+
+      {/* View modal */}
+      {viewId && (
+        <CourseInstanceViewModal
+          instanceId={viewId}
+          onClose={() => setViewId(null)}
+        />
+      )}
+
+      {/* Edit modal */}
+      {editId && (
+        <CourseInstanceEditModal
+          instanceId={editId}
+          onClose={() => setEditId(null)}
+          onUpdated={() => {
+            setEditId(null);
+            refreshList();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ConfirmModal({
+  title,
+  message,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur">
+      <div className="bg-white p-6 rounded shadow-lg max-w-sm w-full">
+        <h3 className="text-lg font-semibold mb-4">{title}</h3>
+        <p className="mb-6">{message}</p>
+        <div className="flex justify-end space-x-4">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 border rounded hover:bg-gray-100"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

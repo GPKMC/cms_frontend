@@ -4,7 +4,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "./components/sidebar";
 import Navbar from "./components/navbar";
-import { UserProvider, useUser } from "./userContext";
+import { UserProvider, useUser } from "./adminContext";
 
 function AuthChecker({ children }: { children: ReactNode }) {
   const { user, setUser } = useUser();
@@ -12,7 +12,7 @@ function AuthChecker({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("token_admin");
     if (!token) {
       router.push("/admin_login");
       return;
@@ -29,7 +29,7 @@ function AuthChecker({ children }: { children: ReactNode }) {
         const data = await res.json();
         setUser(data.user);
       } catch {
-        localStorage.removeItem("token");
+        localStorage.removeItem("token_admin");
         router.push("/admin_login");
       } finally {
         setCheckingAuth(false);

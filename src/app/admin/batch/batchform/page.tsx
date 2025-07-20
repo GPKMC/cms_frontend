@@ -31,7 +31,7 @@ const CreateBatchWithFaculty = () => {
   const facultyUrl = `${baseUrl}/faculty-api/facultycode`;
   const batchPostUrl = `${baseUrl}/batch-api/batch`;
 
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token_admin') : null;
 
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type });

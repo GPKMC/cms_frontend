@@ -38,7 +38,7 @@ export default function BatchPeriodsPage() {
   const [editError, setEditError] = useState<string | null>(null);
 
   const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
+  const token = typeof window !== "undefined" ? localStorage.getItem("token_admin") : "";
  const router = useRouter();
   // Fetch batch info by slug
   useEffect(() => {

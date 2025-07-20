@@ -49,7 +49,7 @@ export default function SemesterOrYearDetailsModal({ id, onClose }: Props) {
   const url = `${baseUrl}/sem-api/semesterOrYear`;
 
   // Get token from localStorage
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const token = typeof window !== "undefined" ? localStorage.getItem("token_admin") : null;
   const axiosConfig = token
     ? {
         headers: {

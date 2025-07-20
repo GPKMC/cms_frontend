@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useUser } from "../userContext";
+import { useUser } from "../adminContext";
  // Adjust this import to your file location
 
 export default function Navbar() {

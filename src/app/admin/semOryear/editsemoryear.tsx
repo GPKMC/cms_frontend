@@ -48,7 +48,7 @@ export default function SemesterOrYearEditForm({ id, onClose, onUpdateSuccess }:
   const url = `${baseUrl}/sem-api/semesterOrYear`;
 
   // Auth
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const token = typeof window !== "undefined" ? localStorage.getItem("token_admin") : null;
   const axiosConfig = token
     ? { headers: { Authorization: `Bearer ${token}` } }
     : undefined;

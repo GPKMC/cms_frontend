@@ -25,7 +25,7 @@ export default function BatchPeriodForm({ batchId, facultyId, open, onClose, onS
   const [formLoading, setFormLoading] = useState(false);
 
   const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
+  const token = typeof window !== "undefined" ? localStorage.getItem("token_admin") : "";
 
   // Fetch batch info by batchId
   useEffect(() => {
