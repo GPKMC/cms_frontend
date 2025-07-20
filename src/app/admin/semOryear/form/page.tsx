@@ -40,7 +40,7 @@ export default function SemesterOrYearForm() {
   const router = useRouter();
 
   // Get token from localStorage
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const token = typeof window !== "undefined" ? localStorage.getItem("token_admin") : null;
 
   const axiosConfig = token
     ? {

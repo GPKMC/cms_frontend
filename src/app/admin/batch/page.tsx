@@ -37,7 +37,7 @@ const BatchList = () => {
     // Helper to get headers with auth token
     const getAuthHeaders = () => {
         if (typeof window === "undefined") return { "Content-Type": "application/json" };
-        const token = localStorage.getItem("token");
+        const token = localStorage.getItem("token_admin");
         return {
             "Content-Type": "application/json",
             ...(token ? { Authorization: `Bearer ${token}` } : {}),

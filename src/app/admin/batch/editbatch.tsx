@@ -25,7 +25,7 @@ const EditBatchForm = ({ id, onClose, onUpdateSuccess }: EditBatchProps) => {
   const url = `${baseUrl}/batch-api/batch/${id}`;
 
   // Get token safely (only in browser)
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token_admin') : null;
 
   useEffect(() => {
     const fetchBatch = async () => {

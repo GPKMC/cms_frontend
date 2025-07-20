@@ -35,7 +35,7 @@ export default function BatchPeriodEditForm({
   const [formLoading, setFormLoading] = useState(false);
 
   const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
+  const token = typeof window !== "undefined" ? localStorage.getItem("token_admin") : "";
 
   // Load initial data into form when modal opens or initialData changes
   useEffect(() => {

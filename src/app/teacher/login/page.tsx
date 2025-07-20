@@ -50,9 +50,9 @@ export default function TeacherLogin() {
         if (data.token) {
           // Remember me logic
           if (remember) {
-            localStorage.setItem("token", data.token);       // persists after browser close
+            localStorage.setItem("token_teacher", data.token);       // persists after browser close
           } else {
-            sessionStorage.setItem("token", data.token);     // session-only, gone after close
+            sessionStorage.setItem("token_teacher", data.token);     // session-only, gone after close
           }
         }
         window.location.href = "/teacher/dashboard";

@@ -90,7 +90,7 @@ export default function SemesterOrYearList() {
   const router = useRouter();
 
   // Get token once for all calls
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const token = typeof window !== "undefined" ? localStorage.getItem("token_admin") : null;
 
   const axiosConfig = token
     ? {

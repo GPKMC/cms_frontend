@@ -2,7 +2,7 @@
 
 import React, { ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { UserProvider, useUser } from "./context";        // UserProvider/context as you have
+import { UserProvider, useUser } from "./teacherContext";        // UserProvider/context as you have
 import Navbarteacher from "./components/navbar";
 import SidebarTeacher from "./components/sidebar";
 
@@ -15,7 +15,7 @@ function AuthChecker({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Look for token in both localStorage and sessionStorage
     const token = typeof window !== "undefined"
-      ? localStorage.getItem("token") || sessionStorage.getItem("token")
+      ? localStorage.getItem("token_teacher") || sessionStorage.getItem("token_teacher")
       : null;
 
     if (!token) {
@@ -23,25 +23,27 @@ function AuthChecker({ children }: { children: ReactNode }) {
       return;
     }
 
-    async function fetchUser() {
-      try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL}/userAuth/me`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        if (!res.ok) throw new Error("Unauthorized");
-        const data = await res.json();
-        setUser(data.user);
-      } catch {
-        localStorage.removeItem("token");
-        sessionStorage.removeItem("token");
-        router.push("/teacher/login");
-      } finally {
-        setCheckingAuth(false);
+   async function fetchUser() {
+  try {
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_BACKEND_URL}/userAuth/me`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
       }
-    }
+    );
+    if (!res.ok) throw new Error("Unauthorized");
+    const data = await res.json();
+    setUser(data.user);
+    console.log("Logged in user:", data.user); // ✅ Logs user details
+  } catch {
+    localStorage.removeItem("token_teacher");
+    sessionStorage.removeItem("token_teacher");
+    router.push("/teacher/login");
+  } finally {
+    setCheckingAuth(false);
+  }
+}
+
 
     fetchUser();
   }, [router, setUser]);

@@ -1,82 +1,160 @@
 "use client";
 
-import { useState } from "react";
-import { Trash2, Plus, XCircle } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Trash2, Plus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+
+type Faculty = {
+  _id: string;
+  name: string;
+  code: string;
+};
+
+type Batch = {
+  _id: string;
+  batchname: string;
+  faculty: string; // faculty _id
+};
+
+type UserRow = {
+  username: string;
+  email: string;
+  password: string;
+  role: "student" | "teacher" | "admin" | "superadmin";
+  faculty?: string;
+  batch?: string;
+};
 
 const roles = ["student", "teacher", "admin", "superadmin"] as const;
 
-const BulkUserForm = () => {
-  const [users, setUsers] = useState([{ username: "", email: "", password: "", role: "student" }]);
-  const [errors, setErrors] = useState<any[]>([{ username: "", email: "", password: "", role: "" }]);
+const BulkUserForm: React.FC = () => {
+  const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+  const [users, setUsers] = useState<UserRow[]>([
+    { username: "", email: "", password: "", role: "student" },
+  ]);
+  const [errors, setErrors] = useState<any[]>([
+    { username: "", email: "", password: "", role: "", faculty: "", batch: "" },
+  ]);
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [numberOfRows, setNumberOfRows] = useState(1);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [showCancelModal, setShowCancelModal] = useState(false);
 
-  const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
-  const token = process.env.NEXT_PUBLIC_TOKEN || "";
+  const [faculties, setFaculties] = useState<Faculty[]>([]);
+  const [batches, setBatches] = useState<Batch[]>([]);
 
+  // Toast helper
   const showToast = (type: "success" | "error", message: string) => {
     setToast({ type, message });
     setTimeout(() => setToast(null), 4000);
   };
 
-  const handleChange = (index: number, field: string, value: string) => {
+  // Fetch faculties on mount with authorization
+  useEffect(() => {
+    const fetchFaculties = async () => {
+      try {
+        const token = localStorage.getItem("token_admin");
+        if (!token) {
+          showToast("error", "Please login to fetch faculties.");
+          return;
+        }
+        const res = await fetch(`${baseUrl}/faculty-api/faculties`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error("Failed to fetch faculties");
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setFaculties(data);
+        } else if (Array.isArray(data.faculties)) {
+          setFaculties(data.faculties);
+        } else {
+          setFaculties([]);
+          console.error("Unexpected faculties response", data);
+        }
+      } catch (err) {
+        setFaculties([]);
+        showToast("error", "Error fetching faculties");
+      }
+    };
+    fetchFaculties();
+  }, [baseUrl]);
+
+  // Fetch batches for a given faculty with authorization
+  const fetchBatches = async (facultyId: string) => {
+    try {
+      const token = localStorage.getItem("token_admin");
+      if (!token) {
+        showToast("error", "Please login to fetch batches.");
+        return;
+      }
+      const res = await fetch(`${baseUrl}/batch-api/batchcode?faculty=${facultyId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to fetch batches");
+      const data = await res.json();
+      // Backend returns { success: true, batches: [...] }
+      if (data && Array.isArray(data.batches)) {
+        setBatches(data.batches);
+      } else {
+        setBatches([]);
+      }
+    } catch {
+      setBatches([]);
+      showToast("error", "Error fetching batches");
+    }
+  };
+
+  // Handle input changes
+  const handleChange = (index: number, field: keyof UserRow, value: string) => {
     const updated = [...users];
     updated[index] = { ...updated[index], [field]: value };
+
+    if (field === "faculty") {
+      updated[index].batch = ""; // reset batch if faculty changes
+      fetchBatches(value);
+    }
+
+    if (field === "role" && value !== "student") {
+      updated[index].faculty = undefined;
+      updated[index].batch = undefined;
+    }
+if (field === "batch") {
+    console.log(`Row ${index} selected batch:`, value);
+  }
     setUsers(updated);
 
     const updatedErrors = [...errors];
     updatedErrors[index] = { ...updatedErrors[index], [field]: "" };
+    if (field === "faculty") updatedErrors[index].batch = "";
     setErrors(updatedErrors);
   };
 
+  // Add new blank row
   const addRow = () => {
     setUsers((prev) => [...prev, { username: "", email: "", password: "", role: "student" }]);
-    setErrors((prev) => [...prev, { username: "", email: "", password: "", role: "" }]);
+    setErrors((prev) => [...prev, { username: "", email: "", password: "", role: "", faculty: "", batch: "" }]);
   };
 
-  const addMultipleRows = () => {
-    if (numberOfRows < 1 || numberOfRows > 100) return;
-    const newRows = Array.from({ length: numberOfRows }, () => ({
-      username: "",
-      email: "",
-      password: "",
-      role: "student",
-    }));
-    const newErrors = Array.from({ length: numberOfRows }, () => ({
-      username: "",
-      email: "",
-      password: "",
-      role: "",
-    }));
-    setUsers((prev) => [...prev, ...newRows]);
-    setErrors((prev) => [...prev, ...newErrors]);
-  };
-
+  // Remove a row by index
   const removeRow = (index: number) => {
     setUsers((prev) => prev.filter((_, i) => i !== index));
     setErrors((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleCancelConfirm = () => {
-    setUsers([{ username: "", email: "", password: "", role: "student" }]);
-    setErrors([{ username: "", email: "", password: "", role: "" }]);
-    setFile(null);
-    setNumberOfRows(1);
-    setShowCancelModal(false);
-  };
-
+  // Submit bulk users
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setErrors(users.map(() => ({ username: "", email: "", password: "", role: "" })));
+    setErrors(users.map(() => ({ username: "", email: "", password: "", role: "", faculty: "", batch: "" })));
 
     try {
-      let response;
+      const token = localStorage.getItem("token_admin");
+      if (!token) {
+        showToast("error", "Authorization token missing. Please login again.");
+        setLoading(false);
+        return;
+      }
 
+      let response;
       if (file) {
         const formData = new FormData();
         formData.append("file", file);
@@ -86,30 +164,41 @@ const BulkUserForm = () => {
           body: formData,
         });
       } else {
+        const sendUsers = users.map(({ username, email, password, role, faculty, batch }) => ({
+          username,
+          email,
+          password,
+          role,
+          faculty,
+          batch,
+        }));
+
         response = await fetch(`${baseUrl}/user-api/users/bulk`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ users }),
+          body: JSON.stringify({ users: sendUsers }),
         });
       }
 
       const data = await response.json();
 
       if (!response.ok) {
-        if (data.field) {
+        if (data.field && data.message) {
           const updatedErrors = [...errors];
           updatedErrors[0] = { ...updatedErrors[0], [data.field]: data.message };
           setErrors(updatedErrors);
           showToast("error", data.message);
         } else {
-          showToast("error", data.message || "Error");
+          showToast("error", data.message || "Submission failed");
         }
       } else {
-        showToast("success", data.message || "Success");
-        handleCancelConfirm();
+        showToast("success", data.message || "Users created successfully");
+        setUsers([{ username: "", email: "", password: "", role: "student" }]);
+        setErrors([{ username: "", email: "", password: "", role: "", faculty: "", batch: "" }]);
+        setFile(null);
       }
     } catch (error) {
       showToast("error", "Something went wrong");
@@ -120,7 +209,7 @@ const BulkUserForm = () => {
 
   return (
     <div className="relative">
-      {/* ✅ Toast Notification */}
+      {/* Toast notification */}
       <AnimatePresence>
         {toast && (
           <motion.div
@@ -136,11 +225,10 @@ const BulkUserForm = () => {
         )}
       </AnimatePresence>
 
-      {/* Main Form */}
       <div className="max-w-6xl mx-auto p-6 bg-white rounded-lg shadow-md">
         <h2 className="text-3xl font-bold mb-6 text-gray-800">Bulk User Creation</h2>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           {/* CSV Upload */}
           <div className="border border-gray-300 rounded-md p-4 bg-gray-50 mb-4">
             <label className="block font-medium text-gray-700 mb-1">Upload CSV File (optional):</label>
@@ -152,41 +240,32 @@ const BulkUserForm = () => {
             />
           </div>
 
-          {/* Row Controls */}
-          <div className="flex items-center gap-4 mb-4">
+          {/* Add Row button */}
+          <div className="mb-4">
             <button
               type="button"
               onClick={addRow}
               className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm"
+              title="Add Row"
             >
-              <Plus className="w-4 h-4" /> Add 1 Row
+              <Plus className="w-4 h-4" />
+              Add Row
             </button>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                value={numberOfRows}
-                min={1}
-                max={100}
-                onChange={(e) => setNumberOfRows(Number(e.target.value))}
-                className="w-20 border rounded px-2 py-1 text-sm"
-              />
-              <button
-                type="button"
-                onClick={addMultipleRows}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md text-sm"
-              >
-                Add Multiple Rows
-              </button>
-            </div>
           </div>
 
-          {/* Manual Input Rows */}
+          {/* Rows */}
           <div className="space-y-3">
             {users.map((user, index) => (
-              <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-2 bg-gray-50 p-3 rounded-md relative">
+              <div
+                key={index}
+                className="grid grid-cols-1 md:grid-cols-6 gap-2 bg-gray-50 p-3 rounded-md relative"
+              >
+                {/* Username */}
                 <div>
-                  <label htmlFor={`username-${index}`} className="block text-xs font-medium text-gray-600 mb-1">
+                  <label
+                    htmlFor={`username-${index}`}
+                    className="block text-xs font-medium text-gray-600 mb-1"
+                  >
                     Username
                   </label>
                   <input
@@ -197,11 +276,17 @@ const BulkUserForm = () => {
                     className="border rounded px-3 py-2 text-sm w-full"
                     required={!file}
                   />
-                  {errors[index]?.username && <span className="text-red-500 text-xs">{errors[index].username}</span>}
+                  {errors[index]?.username && (
+                    <span className="text-red-500 text-xs">{errors[index].username}</span>
+                  )}
                 </div>
 
+                {/* Email */}
                 <div>
-                  <label htmlFor={`email-${index}`} className="block text-xs font-medium text-gray-600 mb-1">
+                  <label
+                    htmlFor={`email-${index}`}
+                    className="block text-xs font-medium text-gray-600 mb-1"
+                  >
                     Email
                   </label>
                   <input
@@ -212,11 +297,17 @@ const BulkUserForm = () => {
                     className="border rounded px-3 py-2 text-sm w-full"
                     required={!file}
                   />
-                  {errors[index]?.email && <span className="text-red-500 text-xs">{errors[index].email}</span>}
+                  {errors[index]?.email && (
+                    <span className="text-red-500 text-xs">{errors[index].email}</span>
+                  )}
                 </div>
 
+                {/* Password */}
                 <div>
-                  <label htmlFor={`password-${index}`} className="block text-xs font-medium text-gray-600 mb-1">
+                  <label
+                    htmlFor={`password-${index}`}
+                    className="block text-xs font-medium text-gray-600 mb-1"
+                  >
                     Password
                   </label>
                   <input
@@ -227,11 +318,17 @@ const BulkUserForm = () => {
                     className="border rounded px-3 py-2 text-sm w-full"
                     required={!file}
                   />
-                  {errors[index]?.password && <span className="text-red-500 text-xs">{errors[index].password}</span>}
+                  {errors[index]?.password && (
+                    <span className="text-red-500 text-xs">{errors[index].password}</span>
+                  )}
                 </div>
 
+                {/* Role */}
                 <div>
-                  <label htmlFor={`role-${index}`} className="block text-xs font-medium text-gray-600 mb-1">
+                  <label
+                    htmlFor={`role-${index}`}
+                    className="block text-xs font-medium text-gray-600 mb-1"
+                  >
                     Role
                   </label>
                   <select
@@ -248,6 +345,65 @@ const BulkUserForm = () => {
                   </select>
                 </div>
 
+                {/* Faculty & Batch for students */}
+                {user.role === "student" && (
+                  <>
+                    <div>
+                      <label
+                        htmlFor={`faculty-${index}`}
+                        className="block text-xs font-medium text-gray-600 mb-1"
+                      >
+                        Faculty
+                      </label>
+                      <select
+                        id={`faculty-${index}`}
+                        value={user.faculty || ""}
+                        onChange={(e) => handleChange(index, "faculty", e.target.value)}
+                        className="border rounded px-3 py-2 text-sm w-full"
+                      >
+                        <option value="">Select Faculty</option>
+                        {faculties.map((fac) => (
+                          <option key={fac._id} value={fac._id}>
+                            {fac.name}
+                          </option>
+                        ))}
+                      </select>
+                      {errors[index]?.faculty && (
+                        <span className="text-red-500 text-xs">{errors[index].faculty}</span>
+                      )}
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor={`batch-${index}`}
+                        className="block text-xs font-medium text-gray-600 mb-1"
+                      >
+                        Batch
+                      </label>
+                      <select
+                        id={`batch-${index}`}
+                        value={user.batch || ""}
+                        onChange={(e) => handleChange(index, "batch", e.target.value)}
+                        className="border rounded px-3 py-2 text-sm w-full"
+                        disabled={!user.faculty}
+                      >
+                        <option value="">Select Batch</option>
+                        {batches
+                          .filter((b) => b.faculty === user.faculty)
+                          .map((batch) => (
+                            <option key={batch._id} value={batch._id}>
+                              {batch.batchname}
+                            </option>
+                          ))}
+                      </select>
+                      {errors[index]?.batch && (
+                        <span className="text-red-500 text-xs">{errors[index].batch}</span>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {/* Remove row button */}
                 <div className="flex items-center justify-center pt-5">
                   {users.length > 1 && (
                     <button
@@ -264,7 +420,7 @@ const BulkUserForm = () => {
             ))}
           </div>
 
-          {/* Actions */}
+          {/* Action buttons */}
           <div className="flex gap-4 mt-6">
             <button
               type="submit"
@@ -273,10 +429,13 @@ const BulkUserForm = () => {
             >
               {loading ? "Submitting..." : "Submit"}
             </button>
-
             <button
               type="button"
-              onClick={() => setShowCancelModal(true)}
+              onClick={() => {
+                setUsers([{ username: "", email: "", password: "", role: "student" }]);
+                setErrors([{ username: "", email: "", password: "", role: "", faculty: "", batch: "" }]);
+                setFile(null);
+              }}
               className="w-full bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 rounded-md"
             >
               Cancel
@@ -284,30 +443,6 @@ const BulkUserForm = () => {
           </div>
         </form>
       </div>
-
-      {/* Cancel Confirmation Modal */}
-      {showCancelModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
-            <h3 className="text-lg font-semibold mb-4">Confirm Cancel</h3>
-            <p className="mb-6 text-gray-600">Are you sure you want to clear all inputs?</p>
-            <div className="flex justify-end gap-4">
-              <button
-                onClick={() => setShowCancelModal(false)}
-                className="px-4 py-2 rounded-md bg-gray-300 hover:bg-gray-400"
-              >
-                No
-              </button>
-              <button
-                onClick={handleCancelConfirm}
-                className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700"
-              >
-                Yes, Clear
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

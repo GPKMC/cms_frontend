@@ -15,7 +15,7 @@ import { Home, Users } from "lucide-react";
 
 const sidebarTeacherItems = [
   { id: 1, label: "Home", icon: <Home />, page: "/teacher/dashboard" },
-  { id: 2, label: "My Classes", icon: <FaBookOpen />, page: "/teacher/dashboard/classes" },
+  { id: 2, label: "My Classes", icon: <FaBookOpen />, page: "/teacher/dashboard/class" },
   { id: 3, label: "Assignments", icon: <FaClipboardList />, page: "/teacher/dashboard/assignments" },
   { id: 4, label: "Attendance", icon: <FaCalendarCheck />, page: "/teacher/dashboard/attendance" },
   { id: 5, label: "Grades", icon: <FaStar />, page: "/teacher/dashboard/grades" },
@@ -36,8 +36,8 @@ export default function SidebarTeacher() {
     <aside className="fixed top-24 h-screen bg-[#F5F5F5] z-50 text-[#2E3094] group transition-all duration-300 w-20 hover:w-64 overflow-hidden overflow-y-auto">
       <ul className="space-y-3 px-2">
         {sidebarTeacherItems.map((item) => {
-          const isActive = item.page === "/teacher"
-            ? pathname === "/teacher"
+          const isActive = item.page === "/teacher/dashboard"
+            ? pathname === "/teacher/dashboard"
             : pathname.startsWith(item.page || "");
 
           return (
