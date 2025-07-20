@@ -3,6 +3,7 @@
 import { useRouter, useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import CourseBanner from "../../components/banner";
+import AnnouncementForm from "./announcementForm";
 
 
 interface CourseInstanceDetail {
@@ -89,7 +90,9 @@ export default function CourseInstanceDetailPage() {
   studentCount={data.studentCount}
   showImage={false} // Set true if you want to show the image
 />
-
+<div>
+   <AnnouncementForm courseInstanceId={String(id)} />
+</div>
 
     </div>
   );
