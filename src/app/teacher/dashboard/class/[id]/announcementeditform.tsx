@@ -13,12 +13,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import RecipientsPanel from "./viewers";
 import toast, { Toaster } from 'react-hot-toast';
 
-interface AnnouncementFormProps {
-  courseInstanceId: string;
-  courseName: string;
-  onSuccess?: () => void;
-}
-
 interface User {
   _id: string;
   username?: string;
@@ -26,7 +20,7 @@ interface User {
   email?: string;
 }
 
-// Main modal wrapper
+// Modal wrapper
 const Modal = ({
   isOpen,
   onClose,
@@ -64,30 +58,62 @@ const getYouTubeVideoId = (url: string): string | null => {
   return null;
 };
 
-export default function AnnouncementForm({
+function hasChanged(a: any[], b: any[]) {
+  return JSON.stringify(a) !== JSON.stringify(b);
+}
+
+interface EditAnnouncementModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  announcementId: string;
+  courseInstanceId: string;
+  onSuccess?: () => void;
+}
+
+export default function EditAnnouncementModal({
+  isOpen,
+  onClose,
+  announcementId,
   courseInstanceId,
-  courseName,
   onSuccess,
-}: AnnouncementFormProps) {
-  // State
-  const [images, setImages] = useState<File[]>([]);
-  const [docs, setDocs] = useState<File[]>([]);
-  const [videos, setVideos] = useState<string[]>([]);
-  const [links, setLinks] = useState<string[]>([]);
+}: EditAnnouncementModalProps) {
+  // States
   const [message, setMessage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
+  // Recipients
   const [showRecipients, setShowRecipients] = useState(false);
+  const [students, setStudents] = useState<User[]>([]);
+  const [visibleTo, setVisibleTo] = useState<string[]>([]);
+  const [editorStateVersion, setEditorStateVersion] = useState(0);
+
+  // File/link/video states (current)
+  const [content, setContent] = useState("");
+  const [images, setImages] = useState<string[]>([]);
+  const [imagesToAdd, setImagesToAdd] = useState<File[]>([]);
+  const [imagesToRemove, setImagesToRemove] = useState<string[]>([]);
+  const [docs, setDocs] = useState<string[]>([]);
+  const [docsToAdd, setDocsToAdd] = useState<File[]>([]);
+  const [docsToRemove, setDocsToRemove] = useState<string[]>([]);
+  const [videos, setVideos] = useState<string[]>([]);
+  const [links, setLinks] = useState<string[]>([]);
+
+  // Originals for change detection
+  const [originalImages, setOriginalImages] = useState<string[]>([]);
+  const [originalDocs, setOriginalDocs] = useState<string[]>([]);
+  const [originalVideos, setOriginalVideos] = useState<string[]>([]);
+  const [originalLinks, setOriginalLinks] = useState<string[]>([]);
+  const [originalVisibleTo, setOriginalVisibleTo] = useState<string[]>([]);
+
+  // UI
   const [modalType, setModalType] = useState<"none" | "link" | "youtube" | "preview">("none");
   const [previewContent, setPreviewContent] = useState<React.ReactNode>(null);
   const [linkInput, setLinkInput] = useState("");
   const [linkError, setLinkError] = useState("");
   const [youtubeInput, setYoutubeInput] = useState("");
   const [youtubeError, setYoutubeError] = useState("");
-  const [students, setStudents] = useState<User[]>([]);
-  const [visibleTo, setVisibleTo] = useState<string[]>([]);
-  const [editorStateVersion, setEditorStateVersion] = useState(0);
+const [fetchedContent, setFetchedContent] = useState("");
 
   const { user } = useUser();
   const role = user?.role || "student";
@@ -103,7 +129,60 @@ export default function AnnouncementForm({
     },
     editable: true,
     immediatelyRender: false,
+    onUpdate: ({ editor }) => setContent(editor.getHTML()),
   });
+useEffect(() => {
+  if (editor && fetchedContent !== "") {
+    editor.commands.setContent(fetchedContent);
+  }
+}, [editor, fetchedContent]);
+  // Fetch data
+  useEffect(() => {
+    setMounted(true);
+    if (!isOpen) return;
+    setLoading(true);
+
+    // 1. Fetch students for recipients
+    if (role === "teacher") {
+      const token = localStorage.getItem("token_teacher") || sessionStorage.getItem("token_teacher");
+      fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/course-api/courseInstance/${courseInstanceId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((res) => res.json())
+        .then((data) => setStudents(data.instance?.students || []))
+        .catch(console.error);
+    }
+
+    // 2. Fetch announcement
+    const token = localStorage.getItem("token_teacher") || sessionStorage.getItem("token_teacher");
+    fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/announcement-routes/${announcementId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (!data.announcement) throw new Error("Announcement not found");
+        const ann = data.announcement;
+        // setContent(ann.content || "");
+        setImages(ann.images || []);
+        setOriginalImages(ann.images || []);
+        setDocs(ann.documents || []);
+        setOriginalDocs(ann.documents || []);
+        setLinks(ann.links || []);
+        setOriginalLinks(ann.links || []);
+        setVideos(ann.youtubeLinks || []);
+        setOriginalVideos(ann.youtubeLinks || []);
+        setVisibleTo(Array.isArray(ann.visibleTo) ? ann.visibleTo : []);
+        setOriginalVisibleTo(Array.isArray(ann.visibleTo) ? ann.visibleTo : []);
+        // setTimeout(() => {
+        //   editor?.commands.setContent(ann.content || "");
+        // }, 0);
+        setFetchedContent(ann.content || "");
+
+      })
+      .catch(err => toast.error("Failed to load announcement"))
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line
+  }, [isOpen, announcementId]);
 
   useEffect(() => {
     if (!editor) return;
@@ -116,22 +195,9 @@ export default function AnnouncementForm({
     };
   }, [editor]);
 
-  useEffect(() => {
-    setMounted(true);
-    if (role === "teacher") {
-      const token = localStorage.getItem("token_teacher") || sessionStorage.getItem("token_teacher");
-      fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/course-api/courseInstance/${courseInstanceId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then((res) => res.json())
-        .then((data) => setStudents(data.instance?.students || []))
-        .catch(console.error);
-    }
-  }, [courseInstanceId, role]);
-
   const isAllSelected = students.length > 0 && visibleTo.length === students.length;
 
-  // FORM SUBMIT
+  // PATCH submit with only changed fields
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editor) return;
@@ -141,39 +207,43 @@ export default function AnnouncementForm({
       const token = localStorage.getItem("token_teacher") || sessionStorage.getItem("token_teacher");
       const formData = new FormData();
       formData.append("content", editor.getHTML());
-      formData.append("courseInstance", courseInstanceId);
-      if (videos.length) formData.append("videos", JSON.stringify(videos));
-      if (links.length) formData.append("links", JSON.stringify(links));
-      images.forEach((f) => formData.append("attachments", f));
-      docs.forEach((f) => formData.append("attachments", f));
+
+      if (hasChanged(links, originalLinks)) {
+        formData.append("links", JSON.stringify(links));
+      }
+      if (hasChanged(videos, originalVideos)) {
+        formData.append("videos", JSON.stringify(videos));
+      }
+      imagesToAdd.forEach(f => formData.append("attachments", f));
+      docsToAdd.forEach(f => formData.append("attachments", f));
+      if (imagesToRemove.length > 0) {
+        formData.append("imagesToRemove", JSON.stringify(imagesToRemove));
+      }
+      if (docsToRemove.length > 0) {
+        formData.append("docsToRemove", JSON.stringify(docsToRemove));
+      }
       if (role === "teacher") {
-        formData.append(
-          "visibleTo",
-          isAllSelected ? JSON.stringify([]) : JSON.stringify(visibleTo)
-        );
+        if (hasChanged(visibleTo, originalVisibleTo)) {
+          formData.append(
+            "visibleTo",
+            isAllSelected ? JSON.stringify([]) : JSON.stringify(visibleTo)
+          );
+        }
       }
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/announcement-routes/course-announcement`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/announcement-routes/${announcementId}`,
         {
-          method: "POST",
+          method: "PATCH",
           headers: { Authorization: `Bearer ${token}` },
           body: formData,
         }
       );
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed to post");
-      editor.commands.clearContent();
-      setImages([]);
-      setDocs([]);
-      setVideos([]);
-      setLinks([]);
-      setVisibleTo([]);
-      setMessage("✅ Posted successfully!");
-      setTimeout(() => {
-        onSuccess?.();
-      }, 2000);
-      toast.success("✅ Posted successfully!");
+      if (!res.ok) throw new Error(json.error || "Failed to update");
+      toast.success("✅ Announcement updated!");
+      setMessage("✅ Announcement updated!");
       onSuccess?.();
+      onClose();
     } catch (err: any) {
       setMessage(`❌ ${err.message}`);
       toast.error(`❌ ${err.message}`);
@@ -185,18 +255,15 @@ export default function AnnouncementForm({
   if (!mounted) return null;
 
   return (
-    <Modal isOpen={true} onClose={() => onSuccess?.()}>
+    <Modal isOpen={isOpen} onClose={onClose}>
       <form
         onSubmit={handleSubmit}
         className="flex flex-col h-[80vh] bg-white max-h-[80vh] w-full overflow-hidden"
       >
-        {/* SCROLLABLE BODY */}
         <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
           <Toaster position="top-right" />
-          {/* Course name and Recipients */}
           <div>
             <div className="flex items-center gap-2 mb-4 relative">
-              <div className="p-2 border rounded bg-gray-100 text-sm text-gray-700">{courseName}</div>
               {role === "teacher" && students.length > 0 && (
                 <div className="relative">
                   <div className="flex items-center gap-2">
@@ -227,147 +294,103 @@ export default function AnnouncementForm({
               )}
             </AnimatePresence>
           </div>
-
-          {/* Rich-text editor */}
+          {/* Editor */}
           <div className="border-2 rounded-lg bg-gray-50 focus-within:border-blue-300">
             <div className="p-3 pb-0">
               <div className="text-sm text-gray-600 mb-2">
-                Announce something to your class
+                Edit your announcement
               </div>
               <EditorContent editor={editor} />
             </div>
             <div className="flex gap-2 p-3 pt-2 border-t bg-white rounded-b-lg">
-              <button
-                type="button"
+              <button type="button"
                 onClick={() => editor?.chain().focus().toggleBold().run()}
                 className={`px-3 py-1 rounded text-sm font-bold transition
                   ${editor?.isActive("bold")
                     ? "bg-blue-600 text-white border border-blue-700 shadow font-extrabold scale-95"
-                    : "hover:bg-blue-100 hover:text-blue-700"}`}
-              >
-                B
-              </button>
-              <button
-                type="button"
+                    : "hover:bg-blue-100 hover:text-blue-700"}`}>B</button>
+              <button type="button"
                 onClick={() => editor?.chain().focus().toggleItalic().run()}
                 className={`px-3 py-1 rounded text-sm italic transition
                   ${editor?.isActive("italic")
                     ? "bg-purple-600 text-white border border-purple-700 shadow scale-95"
-                    : "hover:bg-purple-100 hover:text-purple-700"}`}
-              >
-                I
-              </button>
-              <button
-                type="button"
+                    : "hover:bg-purple-100 hover:text-purple-700"}`}>I</button>
+              <button type="button"
                 onClick={() => editor?.chain().focus().toggleUnderline().run()}
                 className={`px-3 py-1 rounded text-sm underline transition
                   ${editor?.isActive("underline")
                     ? "bg-green-600 text-white border border-green-700 shadow scale-95"
-                    : "hover:bg-green-100 hover:text-green-700"}`}
-              >
-                U
-              </button>
-              <button
-                type="button"
+                    : "hover:bg-green-100 hover:text-green-700"}`}>U</button>
+              <button type="button"
                 onClick={() => editor?.chain().focus().toggleBulletList().run()}
                 className={`px-3 py-1 rounded text-sm hover:bg-gray-100 ${editor?.isActive("bulletList")
                   ? "bg-blue-100 text-blue-700"
-                  : ""}`}
-              >
-                • List
-              </button>
-              <button
-                type="button"
+                  : ""}`}>• List</button>
+              <button type="button"
                 onClick={() => editor?.chain().focus().toggleOrderedList().run()}
                 className={`px-3 py-1 rounded text-sm hover:bg-gray-100 ${editor?.isActive("orderedList")
                   ? "bg-blue-100 text-blue-700"
-                  : ""}`}
-              >
-                1. List
-              </button>
-              <button
-                type="button"
+                  : ""}`}>1. List</button>
+              <button type="button"
                 onClick={() => editor?.chain().focus().clearNodes().unsetAllMarks().run()}
                 className="px-3 py-1 rounded text-sm hover:bg-gray-100 text-red-600"
-              >
-                Clear
-              </button>
+              >Clear</button>
             </div>
           </div>
-
-          {/* Previews for Images */}
-          {images.map((file, i) => (
-            <div
-              key={i}
-              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border"
-            >
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <img
-                    src={URL.createObjectURL(file)}
-                    alt={file.name}
-                    className="w-20 h-16 object-cover rounded border cursor-pointer hover:opacity-80"
-                    onClick={() => {
-                      setPreviewContent(
-                        <div className="p-4">
-                          <img
-                            src={URL.createObjectURL(file)}
-                            alt={file.name}
-                            className="max-w-full max-h-[80vh] object-contain mx-auto"
-                          />
-                          <p className="text-center mt-2 text-gray-600">
-                            {file.name}
-                          </p>
-                        </div>
-                      );
-                      setModalType("preview");
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="absolute -top-2 -right-2 bg-white rounded-full p-1 shadow hover:bg-gray-100"
-                    onClick={() => {
-                      setPreviewContent(
-                        <div className="p-4">
-                          <img
-                            src={URL.createObjectURL(file)}
-                            alt={file.name}
-                            className="max-w-full max-h-[80vh] object-contain mx-auto"
-                          />
-                          <p className="text-center mt-2 text-gray-600">
-                            {file.name}
-                          </p>
-                        </div>
-                      );
-                      setModalType("preview");
-                    }}
-                  >
-                    <ZoomIn size={14} />
-                  </button>
-                </div>
-                <div>
-                  <div className="text-sm font-medium">{file.name}</div>
-                  <div className="text-xs text-gray-500">
-                    Image • {(file.size / 1024 / 1024).toFixed(2)} MB
-                  </div>
-                </div>
+          {/* Existing Images (can remove) */}
+          {images.map((img, i) =>
+            imagesToRemove.includes(img) ? null : (
+              <div key={i} className="flex items-center bg-gray-50 rounded p-2 mb-2">
+                <img src={img.startsWith("http") ? img : process.env.NEXT_PUBLIC_BACKEND_URL + img}
+                  className="w-16 h-16 object-cover rounded border mr-3" />
+                <button type="button"
+                  className="text-red-600 text-xs ml-auto"
+                  onClick={() => setImagesToRemove(prev => [...prev, img])}
+                >Remove</button>
               </div>
-              <button
-                type="button"
-                onClick={() => setImages((prev) => prev.filter((_, idx) => idx !== i))}
-                className="p-2 text-red-500 hover:bg-red-50 rounded"
-              >
-                <Trash2 size={16} />
-              </button>
+            )
+          )}
+          {/* New images */}
+          {imagesToAdd.map((file, i) => (
+            <div key={i} className="flex items-center bg-gray-50 rounded p-2 mb-2">
+              <img src={URL.createObjectURL(file)} className="w-16 h-16 object-cover rounded border mr-3" />
+              <span className="text-xs">{file.name}</span>
+              <button type="button"
+                className="text-red-600 text-xs ml-auto"
+                onClick={() => setImagesToAdd(prev => prev.filter((_, idx) => idx !== i))}
+              >Remove</button>
             </div>
           ))}
-
-          {/* Previews for Videos */}
+          {/* Existing Docs */}
+          {docs.map((doc, i) =>
+            docsToRemove.includes(doc) ? null : (
+              <div key={i} className="flex items-center bg-gray-50 rounded p-2 mb-2">
+                <FileTextIcon size={20} className="text-blue-600 mr-3" />
+                <a href={doc.startsWith("http") ? doc : process.env.NEXT_PUBLIC_BACKEND_URL + doc}
+                  target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-blue-600 underline">{doc.split("/").pop()}</a>
+                <button type="button"
+                  className="text-red-600 text-xs ml-auto"
+                  onClick={() => setDocsToRemove(prev => [...prev, doc])}
+                >Remove</button>
+              </div>
+            )
+          )}
+          {/* New docs */}
+          {docsToAdd.map((file, i) => (
+            <div key={i} className="flex items-center bg-gray-50 rounded p-2 mb-2">
+              <FileTextIcon size={20} className="text-blue-600 mr-3" />
+              <span className="text-xs">{file.name}</span>
+              <button type="button"
+                className="text-red-600 text-xs ml-auto"
+                onClick={() => setDocsToAdd(prev => prev.filter((_, idx) => idx !== i))}
+              >Remove</button>
+            </div>
+          ))}
+          {/* Videos */}
           {videos.map((url, i) => {
             const videoId = getYouTubeVideoId(url);
-            const embedUrl = videoId
-              ? `https://www.youtube.com/embed/${videoId}`
-              : url;
+            const embedUrl = videoId ? `https://www.youtube.com/embed/${videoId}` : url;
             return (
               <div key={i} className="bg-gray-50 rounded-lg border overflow-hidden">
                 <div className="p-3 flex justify-between items-center bg-white border-b">
@@ -375,13 +398,10 @@ export default function AnnouncementForm({
                     <Play size={16} className="text-red-600" />
                     <span className="text-sm font-medium">YouTube Video</span>
                   </div>
-                  <button
-                    type="button"
+                  <button type="button"
                     onClick={() => setVideos((prev) => prev.filter((_, idx) => idx !== i))}
                     className="p-1 text-red-500 hover:bg-red-50 rounded"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  ><Trash2 size={16} /></button>
                 </div>
                 <div
                   className="relative cursor-pointer"
@@ -416,63 +436,7 @@ export default function AnnouncementForm({
               </div>
             );
           })}
-
-          {/* Previews for Docs */}
-          {docs.map((file, i) => (
-            <div
-              key={i}
-              className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-blue-100 rounded flex items-center justify-center">
-                  <FileTextIcon size={20} className="text-blue-600" />
-                </div>
-                <div>
-                  <div className="text-sm font-medium">{file.name}</div>
-                  <div className="text-xs text-gray-500">
-                    {file.type || "Document"} •{" "}
-                    {(file.size / 1024 / 1024).toFixed(2)} MB
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPreviewContent(
-                      <div className="p-6 text-center">
-                        <FileTextIcon
-                          size={48}
-                          className="text-blue-600 mx-auto mb-4"
-                        />
-                        <h3 className="text-lg font-medium mb-2">{file.name}</h3>
-                        <p className="text-gray-600 mb-4">
-                          {file.type || "Document"} •{" "}
-                          {(file.size / 1024 / 1024).toFixed(2)} MB
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          Preview not available. Document will be attached.
-                        </p>
-                      </div>
-                    );
-                    setModalType("preview");
-                  }}
-                  className="p-2 text-blue-600 hover:bg-blue-50 rounded"
-                >
-                  <ZoomIn size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDocs((prev) => prev.filter((_, idx) => idx !== i))}
-                  className="p-2 text-red-500 hover:bg-red-50 rounded"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </div>
-          ))}
-
-          {/* Previews for Links */}
+          {/* Links */}
           {links.map((url, i) => (
             <div
               key={i}
@@ -513,10 +477,8 @@ export default function AnnouncementForm({
               </div>
             </div>
           ))}
-
-          {/* Upload controls */}
+          {/* File pickers */}
           <div className="flex gap-4 p-4 bg-gray-50 rounded-lg">
-            {/* Images */}
             <label className="cursor-pointer group">
               <input
                 type="file"
@@ -525,7 +487,7 @@ export default function AnnouncementForm({
                 accept="image/*"
                 onChange={(e) => {
                   const files = Array.from(e.target.files || []);
-                  setImages((prev) => [...prev, ...files]);
+                  setImagesToAdd((prev) => [...prev, ...files]);
                 }}
               />
               <div className="w-12 h-12 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center group-hover:border-blue-500 group-hover:bg-blue-50">
@@ -533,7 +495,6 @@ export default function AnnouncementForm({
               </div>
               <div className="text-xs text-center mt-1 text-gray-500">Images</div>
             </label>
-            {/* YouTube */}
             <button
               type="button"
               onClick={() => {
@@ -548,7 +509,6 @@ export default function AnnouncementForm({
               </div>
               <div className="text-xs text-center mt-1 text-gray-500">YouTube</div>
             </button>
-            {/* Documents */}
             <label className="cursor-pointer group">
               <input
                 type="file"
@@ -557,7 +517,7 @@ export default function AnnouncementForm({
                 accept=".pdf,.doc,.docx,.ppt,.pptx,.csv,.xls,.xlsx,.txt"
                 onChange={(e) => {
                   const files = Array.from(e.target.files || []);
-                  setDocs((prev) => [...prev, ...files]);
+                  setDocsToAdd((prev) => [...prev, ...files]);
                 }}
               />
               <div className="w-12 h-12 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center group-hover:border-green-500 group-hover:bg-green-50">
@@ -565,7 +525,6 @@ export default function AnnouncementForm({
               </div>
               <div className="text-xs text-center mt-1 text-gray-500">Documents</div>
             </label>
-            {/* Links */}
             <button
               type="button"
               onClick={() => {
@@ -581,7 +540,6 @@ export default function AnnouncementForm({
               <div className="text-xs text-center mt-1 text-gray-500">Links</div>
             </button>
           </div>
-
           {/* Feedback */}
           {message && (
             <div
@@ -594,21 +552,12 @@ export default function AnnouncementForm({
             </div>
           )}
         </div>
-
-        {/* STICKY FOOTER */}
+        {/* Sticky Footer */}
         <div className="border-t bg-white py-4 px-6 flex justify-between items-center sticky bottom-0 z-20">
           <button
             type="button"
             className="text-gray-500 text-sm hover:text-gray-700"
-            onClick={() => {
-              editor?.commands.clearContent();
-              setImages([]);
-              setDocs([]);
-              setVideos([]);
-              setLinks([]);
-              setVisibleTo([]);
-              onSuccess?.();
-            }}
+            onClick={onClose}
           >
             Cancel
           </button>
@@ -618,15 +567,17 @@ export default function AnnouncementForm({
               loading ||
               !(
                 editor?.getText().trim() ||
-                images.length > 0 ||
-                docs.length > 0 ||
+                images.length - imagesToRemove.length > 0 ||
+                imagesToAdd.length > 0 ||
+                docs.length - docsToRemove.length > 0 ||
+                docsToAdd.length > 0 ||
                 videos.length > 0 ||
                 links.length > 0
               )
             }
             className="bg-blue-600 text-white px-8 py-3 rounded-full disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
           >
-            {loading ? "Posting..." : "Post Announcement"}
+            {loading ? "Updating..." : "Update Announcement"}
           </button>
         </div>
       </form>

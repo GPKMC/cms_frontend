@@ -44,6 +44,37 @@ body {
     background-position: 0% 50%;
   }
 }
+.ProseMirror ul, .ProseMirror ol {
+  padding-left: 1.25em;
+  margin-bottom: 0.5em;
+}
+.ProseMirror ul {
+  list-style-type: disc;
+}
+.ProseMirror ol {
+  list-style-type: decimal;
+}
+.ProseMirror li {
+  margin-left: 0.5em;
+}
+/* announcement-list style */
+.announcement-content ul,
+.announcement-content ol {
+  margin-left: 1.25em;
+  padding-left: 1em;
+}
+
+.announcement-content ul {
+  list-style-type: disc;
+}
+.announcement-content ol {
+  list-style-type: decimal;
+}
+
+.announcement-content li {
+  margin-bottom: 0.2em;
+}
+
 
 .hover-slide {
   /* Use primary and secondary colors in gradient */
