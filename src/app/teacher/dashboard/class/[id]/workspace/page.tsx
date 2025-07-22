@@ -7,8 +7,6 @@ import {
 } from "lucide-react";
 import TopicModal from "./topicform";
 import toast, { Toaster } from "react-hot-toast";
-
-import MaterialsByTopic from "./workspacelist";
 import CourseMaterialForm from "./materialform";
 
 const menuOptions = [
@@ -71,11 +69,6 @@ export default function CreateMenu() {
       >
         <PlusCircle size={22} /> Create
       </button>
-      
-      {/* Render only if courseInstanceId is defined */}
-      {courseInstanceId && (
-        <MaterialsByTopic courseInstanceId={courseInstanceId} token={token} />
-      )}
 
       {menuOpen && (
         <div className="absolute mt-2 left-0 bg-white border rounded-xl shadow-xl py-1 z-50 min-w-[200px]">
