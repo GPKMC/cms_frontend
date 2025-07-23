@@ -114,7 +114,7 @@ export default function CreateMenu() {
             token={token}
           
           />
-          <MaterialList courseInstanceId={courseInstanceId} />
+          {/* <MaterialList courseInstanceId={courseInstanceId} /> */}
           {/* <CourseFeed courseInstanceId={courseInstanceId}/> */}
         </div>
 
