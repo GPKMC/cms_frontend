@@ -12,9 +12,11 @@ import {
 } from "lucide-react";
 import TopicModal from "./topicform";
 import toast, { Toaster } from "react-hot-toast";
-import MaterialList from "./workspacelist";
 import CourseMaterialForm from "./materialform";
 import AssignmentForm from "./assignmentform";
+import MaterialList from "./workspacelist";
+import TopicSelector from "./topicSelect";
+// import CourseFeed from "./workspacelist";
 
 
 const menuOptions = [
@@ -45,6 +47,7 @@ export default function CreateMenu() {
   const [showMaterialForm, setShowMaterialForm] = useState(false);
   const [showAssignmentForm, setShowAssignmentForm] = useState(false);
   const [showTopicModal, setShowTopicModal] = useState(false);
+  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
 
   // Fetch courseInstance details (for courseName, if needed)
   useEffect(() => {
@@ -89,7 +92,7 @@ export default function CreateMenu() {
       >
         <PlusCircle size={22} /> Create
       </button>
-      
+
       {menuOpen && (
         <div className="absolute mt-2 left-0 bg-white border rounded-xl shadow-xl py-1 z-50 min-w-[200px]">
           {menuOptions.map((opt) => (
@@ -103,9 +106,18 @@ export default function CreateMenu() {
           ))}
         </div>
       )}
- {courseInstanceId && (
-        <MaterialList courseInstanceId={courseInstanceId} />
-        )}
+      {courseInstanceId && (
+        <div>
+          <TopicSelector
+            courseInstanceId={courseInstanceId}
+            token={token}
+          
+          />
+          <MaterialList courseInstanceId={courseInstanceId} />
+          {/* <CourseFeed courseInstanceId={courseInstanceId}/> */}
+        </div>
+
+      )}
       {showMaterialForm && courseInstanceId && (
         <CourseMaterialForm
           courseInstanceId={courseInstanceId}
