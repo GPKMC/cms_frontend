@@ -14,6 +14,10 @@ import TopicModal from "./topicform";
 import toast, { Toaster } from "react-hot-toast";
 import CourseMaterialForm from "./materialform";
 import AssignmentForm from "./assignmentform";
+import MaterialList from "./workspacelist";
+import TopicSelector from "./topicSelect";
+// import CourseFeed from "./workspacelist";
+
 
 const menuOptions = [
   { label: "Assignment", icon: <FileText size={18} />, value: "assignment" },
@@ -43,6 +47,7 @@ export default function CreateMenu() {
   const [showMaterialForm, setShowMaterialForm] = useState(false);
   const [showAssignmentForm, setShowAssignmentForm] = useState(false);
   const [showTopicModal, setShowTopicModal] = useState(false);
+  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
 
   // Fetch courseInstance details (for courseName, if needed)
   useEffect(() => {
@@ -101,7 +106,18 @@ export default function CreateMenu() {
           ))}
         </div>
       )}
+      {courseInstanceId && (
+        <div>
+          <TopicSelector
+            courseInstanceId={courseInstanceId}
+            token={token}
+          
+          />
+          <MaterialList courseInstanceId={courseInstanceId} />
+          {/* <CourseFeed courseInstanceId={courseInstanceId}/> */}
+        </div>
 
+      )}
       {showMaterialForm && courseInstanceId && (
         <CourseMaterialForm
           courseInstanceId={courseInstanceId}
