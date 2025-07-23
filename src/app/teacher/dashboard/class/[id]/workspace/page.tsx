@@ -3,12 +3,19 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import {
-  PlusCircle, FileText, HelpCircle, Book, ListChecks, List
+  PlusCircle,
+  FileText,
+  HelpCircle,
+  Book,
+  ListChecks,
+  List,
 } from "lucide-react";
 import TopicModal from "./topicform";
 import toast, { Toaster } from "react-hot-toast";
 import CourseMaterialForm from "./materialform";
 import MaterialList from "./workspacelist";
+import AssignmentForm from "./assignmentform";
+
 
 const menuOptions = [
   { label: "Assignment", icon: <FileText size={18} />, value: "assignment" },
@@ -36,6 +43,7 @@ export default function CreateMenu() {
   const [courseName, setCourseName] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [showMaterialForm, setShowMaterialForm] = useState(false);
+  const [showAssignmentForm, setShowAssignmentForm] = useState(false);
   const [showTopicModal, setShowTopicModal] = useState(false);
 
   // Fetch courseInstance details (for courseName, if needed)
@@ -54,9 +62,20 @@ export default function CreateMenu() {
     fetchCourseInstance();
   }, [courseInstanceId, token]);
 
-  function handleMenu(option: { label: string; icon: React.ReactNode; value: string }) {
+  function handleMenu(option: {
+    label: string;
+    icon: React.ReactNode;
+    value: string;
+  }) {
     setMenuOpen(false);
-    if (option.value === "material") setShowMaterialForm(true);
+    if (option.value === "material") {
+      setShowMaterialForm(true);
+      setShowAssignmentForm(false);
+    }
+    if (option.value === "assignment") {
+      setShowAssignmentForm(true);
+      setShowMaterialForm(false);
+    }
     if (option.value === "Topic") setShowTopicModal(true);
   }
 
@@ -92,6 +111,13 @@ export default function CreateMenu() {
           courseInstanceId={courseInstanceId}
           courseName={courseName}
           onSuccess={() => setShowMaterialForm(false)}
+        />
+      )}
+      {showAssignmentForm && courseInstanceId && (
+        <AssignmentForm
+          courseInstanceId={courseInstanceId}
+          courseName={courseName}
+          onSuccess={() => setShowAssignmentForm(false)}
         />
       )}
 
