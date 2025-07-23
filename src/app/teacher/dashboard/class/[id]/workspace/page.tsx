@@ -8,6 +8,7 @@ import {
 import TopicModal from "./topicform";
 import toast, { Toaster } from "react-hot-toast";
 import CourseMaterialForm from "./materialform";
+import MaterialList from "./workspacelist";
 
 const menuOptions = [
   { label: "Assignment", icon: <FileText size={18} />, value: "assignment" },
@@ -69,7 +70,7 @@ export default function CreateMenu() {
       >
         <PlusCircle size={22} /> Create
       </button>
-
+      
       {menuOpen && (
         <div className="absolute mt-2 left-0 bg-white border rounded-xl shadow-xl py-1 z-50 min-w-[200px]">
           {menuOptions.map((opt) => (
@@ -83,7 +84,9 @@ export default function CreateMenu() {
           ))}
         </div>
       )}
-
+ {courseInstanceId && (
+        <MaterialList courseInstanceId={courseInstanceId} />
+        )}
       {showMaterialForm && courseInstanceId && (
         <CourseMaterialForm
           courseInstanceId={courseInstanceId}
