@@ -5,6 +5,9 @@ import {
     Download, Maximize2, X, FileSpreadsheet, Presentation, File,
     ChevronDown, Users, Hash, Sparkles, MoreVertical
 } from "lucide-react";
+import CourseMaterialEditForm from "./editMaterialForm";
+import AssignmentEditForm from "./editAssignmentForm";
+import TopicModal from "./editTopicForm";
 
 // --- Type Definitions ---
 interface UserType { _id?: string; username?: string; email?: string; }
@@ -91,39 +94,53 @@ function formatTimeAgo(dateString: string) {
 }
 
 // --- Modal Component ---
-function Modal({ children, onClose, isFull, onToggleFull }: {
-    children: React.ReactNode, onClose: () => void, isFull: boolean, onToggleFull: () => void
+function Modal({
+    children,
+    onClose,
+    isFull,
+    onToggleFull,
+    showHeader = true, // Default to true for document preview
+}: {
+    children: React.ReactNode,
+    onClose: () => void,
+    isFull: boolean,
+    onToggleFull: () => void,
+    showHeader?: boolean
 }) {
     return (
         <div className={`fixed inset-0 z-50 bg-black/60 flex items-center justify-center ${isFull ? "p-0" : "p-4"} backdrop-blur-md transition-all duration-300`}>
             <div className={`bg-white rounded-2xl shadow-2xl w-full ${isFull ? "h-full rounded-none" : "max-w-5xl max-h-[90vh]"} relative flex flex-col overflow-hidden`}>
-                <div className="flex items-center justify-between p-6 border-b bg-gradient-to-r from-blue-50 to-indigo-50">
-                    <h3 className="font-bold text-xl text-gray-800 flex items-center gap-2">
-                        <Sparkles className="w-5 h-5 text-blue-600" />
-                        Document Preview
-                    </h3>
-                    <div className="flex items-center gap-2">
-                        <button
-                            className="p-2 hover:bg-white/80 rounded-xl"
-                            onClick={onToggleFull}
-                            title={isFull ? "Exit Fullscreen" : "Fullscreen"}
-                        >
-                            <Maximize2 className="w-5 h-5 text-gray-600" />
-                        </button>
-                        <button
-                            className="p-2 hover:bg-red-100 rounded-xl"
-                            onClick={onClose}
-                            title="Close"
-                        >
-                            <X className="w-5 h-5 text-red-500" />
-                        </button>
+                {showHeader && (
+                    <div className="flex items-center justify-between p-6 border-b bg-gradient-to-r from-blue-50 to-indigo-50">
+                        <h3 className="font-bold text-xl text-gray-800 flex items-center gap-2">
+                            <Sparkles className="w-5 h-5 text-blue-600" />
+                            Document Preview
+                        </h3>
+                        <div className="flex items-center gap-2">
+                            <button
+                                className="p-2 hover:bg-white/80 rounded-xl"
+                                onClick={onToggleFull}
+                                title={isFull ? "Exit Fullscreen" : "Fullscreen"}
+                            >
+                                <Maximize2 className="w-5 h-5 text-gray-600" />
+                            </button>
+                            <button
+                                className="p-2 hover:bg-red-100 rounded-xl"
+                                onClick={onClose}
+                                title="Close"
+                            >
+                                <X className="w-5 h-5 text-red-500" />
+                            </button>
+                        </div>
                     </div>
-                </div>
+                )}
+                {/* Body */}
                 <div className="flex-1 overflow-auto">{children}</div>
             </div>
         </div>
     );
 }
+
 
 // --- Loading Component ---
 function LoadingSkeleton() {
@@ -634,6 +651,21 @@ export default function UnifiedFeed({
             })
             .filter((t, i, arr) => arr.findIndex(x => x._id === t._id) === i)
     ];
+    const [courseName, setCourseName] = useState<string>("");
+
+useEffect(() => {
+  async function fetchCourseName() {
+    const token = localStorage.getItem("token_teacher") || sessionStorage.getItem("token_teacher");
+    const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/course-api/courseInstance/${courseInstanceId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const data = await res.json();
+    // You may need to adjust this based on your API's response structure:
+    setCourseName(data.instance?.course?.name || ""); // or data.courseInstance.course.name
+  }
+  fetchCourseName();
+}, [courseInstanceId]);
+
 
     // Topic filtering
     let groupsToShow = feedData;
@@ -681,9 +713,9 @@ export default function UnifiedFeed({
         setLoadingDelete(true);
         let url = "";
         if (deleteTarget.type === "material") {
-            url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/materials/${deleteTarget._id}`;
+            url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/course-materials/${deleteTarget._id}`;
         } else if (deleteTarget.type === "assignment") {
-            url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/assignments/${deleteTarget._id}`;
+            url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/assignment/${deleteTarget._id}`;
         }
         if (url) {
             await fetch(url, {
@@ -699,7 +731,7 @@ export default function UnifiedFeed({
     async function handleDeleteTopic() {
         if (!deleteTopicTarget?._id) return;
         setLoadingDelete(true);
-        await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/topics/${deleteTopicTarget._id}`, {
+        await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/topic-api/topic/${deleteTopicTarget._id}`, {
             method: "DELETE",
             headers: { Authorization: `Bearer ${token}` }
         });
@@ -838,7 +870,7 @@ export default function UnifiedFeed({
 
             {/* Delete confirmation modal for items */}
             {deleteTarget && (
-                <Modal onClose={() => setDeleteTarget(null)} isFull={false} onToggleFull={() => { }}>
+                <Modal onClose={() => setDeleteTarget(null)} isFull={false} onToggleFull={() => { }} showHeader={false}>
                     <div className="p-8 text-center space-y-6">
                         <X className="w-10 h-10 mx-auto text-red-500" />
                         <div className="text-xl font-bold">Are you sure you want to delete?</div>
@@ -865,12 +897,12 @@ export default function UnifiedFeed({
 
             {/* Delete confirmation modal for topics */}
             {deleteTopicTarget && (
-                <Modal onClose={() => setDeleteTopicTarget(null)} isFull={false} onToggleFull={() => { }}>
+                <Modal onClose={() => setDeleteTopicTarget(null)} isFull={false} onToggleFull={() => { }} showHeader={false}>
                     <div className="p-8 text-center space-y-6">
                         <X className="w-10 h-10 mx-auto text-red-500" />
                         <div className="text-xl font-bold">Are you sure you want to delete this topic?</div>
                         <div className="text-gray-500">
-                            "{deleteTopicTarget.title}" will be permanently deleted along with all its materials and assignments.
+                            This topic will be deleted. All related materials and assignments will move to <b>No Topic</b>.
                         </div>
                         <div className="flex justify-center gap-4 mt-6">
                             <button
@@ -892,30 +924,54 @@ export default function UnifiedFeed({
                 </Modal>
             )}
 
-            {/* Edit modals placeholder */}
-            {editTarget && (
-                <Modal onClose={() => setEditTarget(null)} isFull={false} onToggleFull={() => { }}>
-                    <div className="p-10">
-                        <h3 className="text-xl font-bold mb-4">Edit: {editTarget.title}</h3>
-                        <div>Edit modal goes here.</div>
-                        <button className="mt-8 px-4 py-2 rounded bg-blue-600 text-white"
-                            onClick={() => setEditTarget(null)}
-                        >Close</button>
-                    </div>
-                </Modal>
-            )}
 
-            {editTopicTarget && (
-                <Modal onClose={() => setEditTopicTarget(null)} isFull={false} onToggleFull={() => { }}>
-                    <div className="p-10">
-                        <h3 className="text-xl font-bold mb-4">Edit Topic: {editTopicTarget.title}</h3>
-                        <div>Edit topic modal goes here.</div>
-                        <button className="mt-8 px-4 py-2 rounded bg-blue-600 text-white"
-                            onClick={() => setEditTopicTarget(null)}
-                        >Close</button>
-                    </div>
-                </Modal>
-            )}
+     {editTarget && editTarget.type === "material" && (
+  <CourseMaterialEditForm
+    materialId={editTarget._id}
+    courseInstanceId={courseInstanceId}
+    onSuccess={() => {
+      setEditTarget(null);
+      fetchFeed();
+    }}
+  />
+)}
+{editTarget && editTarget.type === "assignment" && (
+  <Modal
+    onClose={() => setEditTarget(null)}
+    isFull={false}
+    onToggleFull={() => {}} // No fullscreen needed for now
+    showHeader={false}
+  >
+    <AssignmentEditForm
+  assignmentId={editTarget._id}
+  courseInstanceId={courseInstanceId}
+  courseName={courseName} // <-- the subject name
+  onSuccess={() => {
+    setEditTarget(null);
+    fetchFeed();
+  }}
+  onCancel={() => setEditTarget(null)}
+/>
+
+  </Modal>
+)}
+{editTopicTarget && (
+  <TopicModal
+    open={true}
+    courseInstanceId={courseInstanceId}
+    onClose={() => setEditTopicTarget(null)}
+    onSuccess={() => {
+      setEditTopicTarget(null);
+      fetchFeed();
+    }}
+    topic={{
+      _id: editTopicTarget._id!,
+      title: editTopicTarget.title,
+      // if you also have description, add here
+      // description: editTopicTarget.description
+    }}
+  />
+)}
 
         </div>
     );
