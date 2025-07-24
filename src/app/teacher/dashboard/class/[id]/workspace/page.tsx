@@ -1,4 +1,3 @@
-// CreateMenu.tsx
 "use client";
 import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
@@ -9,34 +8,31 @@ import {
   Book,
   ListChecks,
   List,
+  Users2, // Optional: for icon
 } from "lucide-react";
 import TopicModal from "./topicform";
 import toast, { Toaster } from "react-hot-toast";
 import CourseMaterialForm from "./materialform";
 import MaterialList from "./workspacelist";
 import AssignmentForm from "./assignmentform";
-import MaterialList from "./workspacelist";
 import TopicSelector from "./topicSelect";
-// import CourseFeed from "./workspacelist";
-
+import QuestionForm from "./question/question";
 
 const menuOptions = [
   { label: "Assignment", icon: <FileText size={18} />, value: "assignment" },
+  { label: "Group Assignment", icon: <ListChecks size={18} />, value: "group-assignment" }, // <-- New
   { label: "Quiz Assignment", icon: <ListChecks size={18} />, value: "quiz" },
   { label: "Question", icon: <HelpCircle size={18} />, value: "question" },
   { label: "Material", icon: <Book size={18} />, value: "material" },
   { label: "Topic", icon: <List size={18} />, value: "Topic" },
-  // etc
 ];
 
 export default function CreateMenu() {
   const params = useParams();
-  // Adjust based on your dynamic segment: [id] or [courseInstanceId]
   const courseInstanceId: string | undefined =
     (params?.id && params.id.toString()) ||
     (params?.courseInstanceId && params.courseInstanceId.toString());
 
-  // Get token ONCE, so you don't repeat code
   const token =
     (typeof window !== "undefined" &&
       (localStorage.getItem("token_teacher") ||
@@ -47,10 +43,10 @@ export default function CreateMenu() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showMaterialForm, setShowMaterialForm] = useState(false);
   const [showAssignmentForm, setShowAssignmentForm] = useState(false);
+  const [showQuestionForm, setShowQuestionForm] = useState(false);
+  const [showGroupAssignmentForm, setShowGroupAssignmentForm] = useState(false); // <-- New
   const [showTopicModal, setShowTopicModal] = useState(false);
-  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
 
-  // Fetch courseInstance details (for courseName, if needed)
   useEffect(() => {
     if (!courseInstanceId) return;
     async function fetchCourseInstance() {
@@ -75,10 +71,22 @@ export default function CreateMenu() {
     if (option.value === "material") {
       setShowMaterialForm(true);
       setShowAssignmentForm(false);
+      setShowGroupAssignmentForm(false);
     }
     if (option.value === "assignment") {
       setShowAssignmentForm(true);
       setShowMaterialForm(false);
+      setShowGroupAssignmentForm(false);
+    }
+    if (option.value === "group-assignment") {
+      setShowGroupAssignmentForm(true);
+      setShowMaterialForm(false);
+      setShowAssignmentForm(false);
+    }
+    if (option.value === "question") {
+      setShowQuestionForm(true);
+      setShowMaterialForm(false);
+      setShowAssignmentForm(false);
     }
     if (option.value === "Topic") setShowTopicModal(true);
   }
@@ -107,18 +115,16 @@ export default function CreateMenu() {
           ))}
         </div>
       )}
+
       {courseInstanceId && (
         <div>
           <TopicSelector
             courseInstanceId={courseInstanceId}
             token={token}
-          
           />
-          {/* <MaterialList courseInstanceId={courseInstanceId} /> */}
-          {/* <CourseFeed courseInstanceId={courseInstanceId}/> */}
         </div>
-
       )}
+
       {showMaterialForm && courseInstanceId && (
         <CourseMaterialForm
           courseInstanceId={courseInstanceId}
@@ -131,6 +137,13 @@ export default function CreateMenu() {
           courseInstanceId={courseInstanceId}
           courseName={courseName}
           onSuccess={() => setShowAssignmentForm(false)}
+        />
+      )}
+ {showQuestionForm && courseInstanceId && (
+        <QuestionForm
+          courseInstanceId={courseInstanceId}
+          courseName={courseName}
+          onSuccess={() => setShowQuestionForm(false)}
         />
       )}
 

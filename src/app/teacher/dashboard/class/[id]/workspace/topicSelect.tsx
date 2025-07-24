@@ -3,11 +3,13 @@ import React, { useEffect, useState } from "react";
 import {
     FileText, Book, FileImage, Video, Link, User, Clock, Eye,
     Download, Maximize2, X, FileSpreadsheet, Presentation, File,
-    ChevronDown, Users, Hash, Sparkles, MoreVertical
+    ChevronDown, Users, Hash, Sparkles, MoreVertical,
+    MessageCircleQuestionIcon, MicOff
 } from "lucide-react";
 import CourseMaterialEditForm from "./editMaterialForm";
 import AssignmentEditForm from "./editAssignmentForm";
 import TopicModal from "./editTopicForm";
+import QuestionEditForm from "./question/editQuestionForm";
 
 // --- Type Definitions ---
 interface UserType { _id?: string; username?: string; email?: string; }
@@ -18,19 +20,25 @@ interface MaterialOrAssignment {
     postedBy?: UserType;
     createdAt: string;
     updatedAt?: string;
-    type?: "material" | "assignment";
-    media?: string[];
-    documents?: string[];
+    type?: "material" | "assignment" | "question";
+    // media?: string[];
+    // documents?: string[];
+    documents?: { url: string; originalname: string }[];
+    media?: { url: string; originalname: string }[];
+
     youtubeLinks?: string[];
     visibleTo?: UserType[];
     links?: string[];
+    mutedStudents?: string[];
     // topic?: { _id: string, title: string }; // not needed in the card here
 }
 interface TopicGroup {
     topic: { _id: string | null; title: string };
     materials: MaterialOrAssignment[];
     assignments: MaterialOrAssignment[];
+    questions: MaterialOrAssignment[];   // <-- add this
 }
+
 
 // --- Utilities ---
 function getYoutubeEmbed(url: string): string {
@@ -187,6 +195,13 @@ function ContentCard({
             border: 'border-emerald-200',
             icon: <Book className="w-4 h-4" />,
             label: 'Material'
+        },
+        question: {
+            color: 'from-pink-500 to-pink-600',
+            bg: 'bg-pink-50',
+            border: 'border-pink-200',
+            icon: <MessageCircleQuestionIcon className="w-4 h-4" />,
+            label: 'Question'
         }
     };
     const config = typeConfig[item.type || "material"];
@@ -230,33 +245,66 @@ function ContentCard({
                     </div>
                     <div className="flex items-center gap-3">
                         {/* Student count & tooltip */}
+                        {/* VisibleTo Students */}
                         {Array.isArray(item.visibleTo) && item.visibleTo.length > 0 ? (
-                            <div className="relative group">
+                            <div className="relative group/visible">
                                 <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-full text-xs text-blue-700 font-semibold cursor-pointer">
                                     <Users className="w-4 h-4" />
                                     <span>{item.visibleTo.length}</span>
                                 </div>
-                                {/* Tooltip with specific allowed students */}
-                                <div className="absolute left-0 z-20 mt-2 px-4 py-2 bg-white rounded-lg shadow-lg text-sm text-gray-700 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity duration-200 max-h-48 overflow-y-auto">
+                                {/* Tooltip for specific students */}
+                                <div className="absolute left-0 z-20 mt-2 px-4 py-2 bg-white rounded-lg shadow-lg text-sm text-gray-700 whitespace-nowrap 
+        opacity-0 pointer-events-none group-hover/visible:opacity-100 group-hover/visible:pointer-events-auto transition-opacity duration-200 max-h-48 overflow-y-auto">
                                     {item.visibleTo.map((u: any) => (
                                         <div key={u._id || u.email}>{u.username || u.email}</div>
                                     ))}
                                 </div>
                             </div>
                         ) : (
-                            <div className="relative group">
+                            <div className="relative group/visible">
                                 <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-full text-xs text-blue-700 font-semibold cursor-pointer">
                                     <Users className="w-4 h-4" />
                                     <span>All</span>
                                 </div>
-                                {/* Tooltip with ALL students */}
-                                <div className="absolute left-0 z-20 mt-2 px-4 py-2 bg-white rounded-lg shadow-lg text-sm text-gray-700 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity duration-200 max-h-48 overflow-y-auto">
+                                {/* Tooltip for all students */}
+                                <div className="absolute left-0 z-20 mt-2 px-4 py-2 bg-white rounded-lg shadow-lg text-sm text-gray-700 whitespace-nowrap 
+        opacity-0 pointer-events-none group-hover/visible:opacity-100 group-hover/visible:pointer-events-auto transition-opacity duration-200 max-h-48 overflow-y-auto">
                                     {allStudents.map((u: any) => (
                                         <div key={u._id || u.email}>{u.username || u.email}</div>
                                     ))}
                                 </div>
                             </div>
                         )}
+
+                        {/* Muted Students */}
+                        <div className="relative group/muted">
+                            <div
+                                className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold cursor-pointer
+      ${(item.mutedStudents ?? []).length > 0
+                                        ? "bg-yellow-100 text-yellow-800"
+                                        : "bg-gray-100 text-gray-400"
+                                    }`}
+                            >
+                                <MicOff className="w-4 h-4" />
+                                <span>
+                                    {(item.mutedStudents ?? []).length}
+                                </span>
+                            </div>
+                            <div className="absolute left-0 z-20 mt-2 px-4 py-2 bg-white rounded-lg shadow-lg text-sm text-gray-700 whitespace-nowrap 
+        opacity-0 pointer-events-none group-hover/muted:opacity-100 group-hover/muted:pointer-events-auto transition-opacity duration-200 max-h-48 overflow-y-auto min-w-[120px]">
+                                {(item.mutedStudents ?? []).length > 0 ? (
+                                    allStudents.filter(u => (item.mutedStudents ?? []).includes(u._id!)).length > 0
+                                        ? allStudents.filter(u => (item.mutedStudents ?? []).includes(u._id!)).map(u => (
+                                            <div key={u._id || u.email}>
+                                                {u.username || u.email}
+                                            </div>
+                                        ))
+                                        : <div className="text-gray-400">Unknown students muted</div>
+                                ) : (
+                                    <div className="text-gray-400">No muted students</div>
+                                )}
+                            </div>
+                        </div>
 
 
                         {/* Type badge */}
@@ -265,7 +313,7 @@ function ContentCard({
                             {config.label}
                         </div>
                         {/* Expand/collapse chevron */}
-                        <div className="flex flex-col items-center justify-center cursor-pointer ">
+                        <div className="flex flex-col items-center  justify-center cursor-pointer ">
                             <div className={`p-2 rounded-full transition-all duration-200 ${isExpanded ? 'bg-gray-200 rotate-180' : 'bg-gray-100 group-hover:bg-gray-200'}`}>
                                 <ChevronDown className="w-5 h-5 text-gray-600" />
                             </div>
@@ -337,95 +385,103 @@ function ContentCard({
                                 dangerouslySetInnerHTML={{ __html: item.content }} />
 
                             {/* Documents */}
-                            {item.documents && item.documents.length > 0 && (
-                                <div className="bg-gradient-to-br from-red-50 to-orange-50 p-6 rounded-xl border border-red-100">
-                                    <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-3 text-lg">
-                                        <div className="p-2 bg-red-100 rounded-lg">
-                                            <FileText className="w-6 h-6 text-red-600" />
-                                        </div>
-                                        Documents ({item.documents.length})
-                                    </h4>
-                                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                        {item.documents.map((doc, i) => {
-                                            const docUrl = getFileUrl(doc);
-                                            const filename = doc.split("/").pop() || doc;
-                                            const ext = doc.split('.').pop()?.toLowerCase() || "";
-                                            const isOffice = ["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext);
-                                            const isPdf = ext === "pdf";
-                                            return (
-                                                <div key={i} className="bg-white border-2 border-gray-100 rounded-xl p-4 hover:border-red-200 hover:shadow-md transition-all duration-200 group">
-                                                    <div className="flex items-start gap-3">
-                                                        <div className="flex-shrink-0 p-2 bg-gray-50 rounded-lg group-hover:bg-red-50 transition-colors">
-                                                            {getFileIcon(filename)}
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="font-semibold text-gray-900 text-sm truncate mb-1" title={filename}>
-                                                                {filename}
-                                                            </div>
-                                                            <div className="text-xs text-gray-500 mb-3">
-                                                                {getFileTypeLabel(filename)} • {getFileSize(filename)}
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <button
-                                                                    onClick={e => {
-                                                                        e.stopPropagation();
-                                                                        onPreview(
-                                                                            <div className="p-6">
-                                                                                {isOffice ? (
-                                                                                    <iframe
-                                                                                        src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(docUrl)}`}
-                                                                                        className="w-full h-[70vh] border-0 rounded-lg"
-                                                                                        title={filename}
-                                                                                    />
-                                                                                ) : isPdf ? (
-                                                                                    <iframe
-                                                                                        src={docUrl}
-                                                                                        className="w-full h-[70vh] border-0 rounded-lg"
-                                                                                        title={filename}
-                                                                                    />
-                                                                                ) : (
-                                                                                    <div className="text-center py-12">
-                                                                                        <File className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                                                                                        <p className="text-gray-500">Preview not available for this file type</p>
-                                                                                        <a
-                                                                                            href={docUrl}
-                                                                                            target="_blank"
-                                                                                            rel="noopener noreferrer"
-                                                                                            className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                                                                                        >
-                                                                                            <Download className="w-4 h-4" />
-                                                                                            Download File
-                                                                                        </a>
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        );
-                                                                    }}
-                                                                >
-                                                                    <Eye className="w-3 h-3" />
-                                                                    Preview
-                                                                </button>
-                                                                <a
-                                                                    href={docUrl}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-semibold transition-all duration-200 hover:scale-105"
-                                                                    onClick={e => e.stopPropagation()}
-                                                                >
-                                                                    <Download className="w-3 h-3" />
-                                                                    Download
-                                                                </a>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            )}
+{item.documents && item.documents.length > 0 && (
+  <div className="mb-8">
+    <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-3 text-lg">
+      <span className="p-2 bg-blue-50 rounded-lg">
+        <FileText className="w-6 h-6 text-blue-500" />
+      </span>
+      Documents <span className="font-medium text-base">({item.documents.length})</span>
+    </h4>
+    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {item.documents.map((docObj, i) => {
+        const docUrl = getFileUrl(docObj.url);
+        const filename = docObj.originalname;
+        const ext = filename.split('.').pop()?.toLowerCase() || "";
+        const isOffice = ["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext);
+        const isPdf = ext === "pdf";
+        return (
+          <div
+            key={i}
+            className="bg-white rounded-2xl border border-gray-100 shadow-lg flex flex-col p-6 transition hover:border-blue-400 hover:shadow-2xl"
+          >
+            {/* File Info */}
+            <div className="flex items-center gap-4 mb-4">
+              <span className="p-3 bg-blue-50 rounded-xl flex items-center justify-center">
+                {getFileIcon(filename)}
+              </span>
+              <div className="flex flex-col min-w-0">
+                <span className="font-semibold text-gray-900 text-base truncate" title={filename}>
+                  {filename}
+                </span>
+                <span className="text-xs text-gray-400 mt-1">{getFileTypeLabel(filename)} &bull; {getFileSize(filename)}</span>
+              </div>
+            </div>
+            {/* Divider */}
+            <div className="border-t border-gray-100 my-4" />
+            {/* Button Row */}
+            <div className="flex flex-row gap-3 mt-auto">
+              <button
+                className=" flex items-center justify-center gap-2 py-2 px-2 rounded-md bg-white text-gray-900 border border-gray-300 hover:bg-gray-50 font-semibold transition shadow-sm"
+                onClick={e => {
+                  e.stopPropagation();
+                  onPreview(
+                    <div className="p-6">
+                      {isOffice ? (
+                        <iframe
+                          src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(docUrl)}`}
+                          className="w-full h-[70vh] border-0 rounded-lg"
+                          title={filename}
+                        />
+                      ) : isPdf ? (
+                        <iframe
+                          src={docUrl}
+                          className="w-full h-[70vh] border-0 rounded-lg"
+                          title={filename}
+                        />
+                      ) : (
+                        <div className="text-center py-12">
+                          <File className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                          <p className="text-gray-500">Preview not available for this file type</p>
+                          <a
+                            href={docUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors whitespace-nowrap"
+                            download={filename}
+                          >
+                            <Download className="w-4 h-4" />
+                            Download File
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }}
+              >
+                <Eye className="w-5 h-5" />
+                View
+              </button>
+              <a
+                href={docUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                download={filename}
+                className="flex-1 flex items-center justify-center gap-2 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 font-semibold transition shadow-sm"
+                onClick={e => e.stopPropagation()}
+              >
+                <Download className="w-5 h-5" />
+                Download
+              </a>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  </div>
+)}
 
-                            {/* Images */}
+
                             {item.media && item.media.length > 0 && (
                                 <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-xl border border-purple-100">
                                     <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-3 text-lg">
@@ -435,7 +491,7 @@ function ContentCard({
                                         Images ({item.media.length})
                                     </h4>
                                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                                        {item.media.map((img, i) => (
+                                        {item.media.map((imgObj, i) => (
                                             <div
                                                 key={i}
                                                 className="group relative cursor-pointer transform transition-all duration-300 hover:scale-105"
@@ -444,14 +500,14 @@ function ContentCard({
                                                     onPreview(
                                                         <div className="flex flex-col items-center p-6 bg-black/80 min-h-[50vh]">
                                                             <img
-                                                                src={getFileUrl(img)}
+                                                                src={getFileUrl(imgObj.url)}
                                                                 className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-lg border mb-4"
-                                                                alt={`Preview ${i + 1}`}
+                                                                alt={imgObj.originalname || `Preview ${i + 1}`}
                                                                 style={{ background: "#fff" }}
                                                             />
                                                             <a
-                                                                href={getFileUrl(img)}
-                                                                download
+                                                                href={getFileUrl(imgObj.url)}
+                                                                download={imgObj.originalname}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
                                                                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
@@ -461,13 +517,14 @@ function ContentCard({
                                                                 <Download className="w-5 h-5" />
                                                                 Download Image
                                                             </a>
+
                                                         </div>
                                                     );
                                                 }}
                                             >
                                                 <img
-                                                    src={getFileUrl(img)}
-                                                    alt={`Material image ${i + 1}`}
+                                                    src={getFileUrl(imgObj.url)}
+                                                    alt={imgObj.originalname || `Material image ${i + 1}`}
                                                     className="w-full h-32 object-cover rounded-xl border-2 border-gray-100 group-hover:border-purple-200 shadow-sm group-hover:shadow-md transition-all duration-300"
                                                 />
                                                 <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-xl backdrop-blur-sm">
@@ -480,6 +537,7 @@ function ContentCard({
                                     </div>
                                 </div>
                             )}
+
 
                             {/* YouTube Videos */}
                             {item.youtubeLinks && item.youtubeLinks.length > 0 && (
@@ -624,6 +682,8 @@ export default function UnifiedFeed({
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             const data = await res.json();
+            console.log("Course feed response:", data);  // <-- ADD THIS
+
             setFeedData(data);
         } catch (err) {
             setFeedData([]);
@@ -653,18 +713,18 @@ export default function UnifiedFeed({
     ];
     const [courseName, setCourseName] = useState<string>("");
 
-useEffect(() => {
-  async function fetchCourseName() {
-    const token = localStorage.getItem("token_teacher") || sessionStorage.getItem("token_teacher");
-    const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/course-api/courseInstance/${courseInstanceId}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const data = await res.json();
-    // You may need to adjust this based on your API's response structure:
-    setCourseName(data.instance?.course?.name || ""); // or data.courseInstance.course.name
-  }
-  fetchCourseName();
-}, [courseInstanceId]);
+    useEffect(() => {
+        async function fetchCourseName() {
+            const token = localStorage.getItem("token_teacher") || sessionStorage.getItem("token_teacher");
+            const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/course-api/courseInstance/${courseInstanceId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = await res.json();
+            // You may need to adjust this based on your API's response structure:
+            setCourseName(data.instance?.course?.name || ""); // or data.courseInstance.course.name
+        }
+        fetchCourseName();
+    }, [courseInstanceId]);
 
 
     // Topic filtering
@@ -695,17 +755,20 @@ useEffect(() => {
 
     function getSortedItems(
         materials: MaterialOrAssignment[],
-        assignments: MaterialOrAssignment[]
+        assignments: MaterialOrAssignment[],
+        questions: MaterialOrAssignment[]
     ) {
         const all = [
             ...materials.map((m) => ({ ...m, type: "material" as const })),
-            ...assignments.map((a) => ({ ...a, type: "assignment" as const }))
+            ...assignments.map((a) => ({ ...a, type: "assignment" as const })),
+            ...questions.map((q) => ({ ...q, type: "question" as const }))
         ];
         return all.sort(
             (a, b) =>
                 new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
     }
+
 
     // --- Delete Handlers ---
     async function handleDeleteItem() {
@@ -716,6 +779,8 @@ useEffect(() => {
             url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/course-materials/${deleteTarget._id}`;
         } else if (deleteTarget.type === "assignment") {
             url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/assignment/${deleteTarget._id}`;
+        } else if (deleteTarget.type === "question") {
+            url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/question/${deleteTarget._id}`;
         }
         if (url) {
             await fetch(url, {
@@ -771,7 +836,13 @@ useEffect(() => {
 
             {/* Feed Groups */}
             {groupsToShow.map((group) => {
-                const items = getSortedItems(group.materials, group.assignments);
+                const items = getSortedItems(
+                    group.materials || [],
+                    group.assignments || [],
+                    group.questions || []
+                );
+
+
                 if (items.length === 0) return null;
 
                 const isNoTopic =
@@ -925,53 +996,72 @@ useEffect(() => {
             )}
 
 
-     {editTarget && editTarget.type === "material" && (
-  <CourseMaterialEditForm
-    materialId={editTarget._id}
-    courseInstanceId={courseInstanceId}
-    onSuccess={() => {
-      setEditTarget(null);
-      fetchFeed();
-    }}
-  />
-)}
-{editTarget && editTarget.type === "assignment" && (
-  <Modal
-    onClose={() => setEditTarget(null)}
-    isFull={false}
-    onToggleFull={() => {}} // No fullscreen needed for now
-    showHeader={false}
-  >
-    <AssignmentEditForm
-  assignmentId={editTarget._id}
-  courseInstanceId={courseInstanceId}
-  courseName={courseName} // <-- the subject name
-  onSuccess={() => {
-    setEditTarget(null);
-    fetchFeed();
-  }}
-  onCancel={() => setEditTarget(null)}
-/>
+            {editTarget && editTarget.type === "material" && (
+                <CourseMaterialEditForm
+                    materialId={editTarget._id}
+                    courseInstanceId={courseInstanceId}
+                    onSuccess={() => {
+                        setEditTarget(null);
+                        fetchFeed();
+                    }}
+                />
+            )}
+            {editTarget && editTarget.type === "assignment" && (
+                <Modal
+                    onClose={() => setEditTarget(null)}
+                    isFull={false}
+                    onToggleFull={() => { }} // No fullscreen needed for now
+                    showHeader={false}
+                >
+                    <AssignmentEditForm
+                        assignmentId={editTarget._id}
+                        courseInstanceId={courseInstanceId}
+                        courseName={courseName} // <-- the subject name
+                        onSuccess={() => {
+                            setEditTarget(null);
+                            fetchFeed();
+                        }}
+                        onCancel={() => setEditTarget(null)}
+                    />
 
-  </Modal>
-)}
-{editTopicTarget && (
-  <TopicModal
-    open={true}
-    courseInstanceId={courseInstanceId}
-    onClose={() => setEditTopicTarget(null)}
-    onSuccess={() => {
-      setEditTopicTarget(null);
-      fetchFeed();
-    }}
-    topic={{
-      _id: editTopicTarget._id!,
-      title: editTopicTarget.title,
-      // if you also have description, add here
-      // description: editTopicTarget.description
-    }}
-  />
-)}
+                </Modal>
+            )}
+
+            {editTopicTarget && (
+                <TopicModal
+                    open={true}
+                    courseInstanceId={courseInstanceId}
+                    onClose={() => setEditTopicTarget(null)}
+                    onSuccess={() => {
+                        setEditTopicTarget(null);
+                        fetchFeed();
+                    }}
+                    topic={{
+                        _id: editTopicTarget._id!,
+                        title: editTopicTarget.title,
+                        // if you also have description, add here
+                        // description: editTopicTarget.description
+                    }}
+                />
+            )}
+
+            {editTarget && editTarget.type === "question" && (
+                <>
+                    {console.log("Editing question:", editTarget._id)}
+                    <QuestionEditForm
+                        QuestionId={editTarget._id}
+                        courseInstanceId={courseInstanceId}
+                        courseName={courseName}
+                        onSuccess={() => {
+                            setEditTarget(null);
+                            fetchFeed();
+                        }}
+                        onCancel={() => setEditTarget(null)}
+                    />
+                </>
+            )}
+
+
 
         </div>
     );
