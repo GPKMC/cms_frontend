@@ -123,17 +123,17 @@ const getYouTubeVideoId = (url: string): string | null => {
 interface Topic { _id: string; title: string; }
 interface User { _id: string; username?: string; name?: string; email?: string; }
 
-interface AssignmentFormProps {
+interface QuestionFormProps {
   courseInstanceId: string;
   courseName: string;
   onSuccess?: () => void;
 }
 
-export default function AssignmentForm({
+export default function QuestionForm({
   courseInstanceId,
   courseName,
   onSuccess,
-}: AssignmentFormProps) {
+}: QuestionFormProps) {
   // --- Form States ---
   const [title, setTitle] = useState("");
   const [topics, setTopics] = useState<Topic[]>([]);
@@ -264,7 +264,7 @@ export default function AssignmentForm({
         isAllSelected ? JSON.stringify([]) : JSON.stringify(visibleTo)
       );
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/assignment/`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/question/`,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
@@ -272,11 +272,11 @@ export default function AssignmentForm({
         }
       );
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed to create assignment");
+      if (!res.ok) throw new Error(json.error || "Failed to create questions");
       setTitle(""); setDocs([]); setImages([]); setLinks([]); setVideos([]); setVisibleTo([]); setPoints(""); setDueDate("");
       editor?.commands.clearContent();
-      setMessage("✅ Assignment posted!");
-      toast.success("✅ Assignment posted!");
+      setMessage("✅ Question created!");
+      toast.success("✅ Question created!");
       setTimeout(() => onSuccess?.(), 1500);
     } catch (err: any) {
       setMessage(`❌ ${err.message}`);
@@ -299,14 +299,14 @@ export default function AssignmentForm({
             <div className="flex-1 min-w-0 flex flex-col max-h-[68vh] overflow-y-auto">
               <input
                 className="w-full text-xl bg-gray-100 rounded p-3 border-b-2 border-blue-400 focus:outline-none mb-3"
-                placeholder="Assignment Title*"
+                placeholder="Question Title*"
                 required
                 value={title}
                 onChange={e => setTitle(e.target.value)}
               />
               <div className="border-2 rounded-lg bg-gray-50 focus-within:border-blue-300 mb-3">
                 <div className="p-3 pb-0">
-                  <div className="text-sm text-gray-600 mb-2">Write your assignment</div>
+                  <div className="text-sm text-gray-600 mb-2">Write your Questions</div>
                   <EditorContent editor={editor} />
                 </div>
                 <div className="flex gap-2 p-3 pt-2 border-t bg-white rounded-b-lg">
@@ -443,7 +443,7 @@ export default function AssignmentForm({
                   <div className="text-xs text-center mt-1 text-gray-500">Links</div>
                 </button>
               </div>
-                 {/* Preview Bar Below (Scrollable) */}
+                   {/* Preview Bar Below (Scrollable) */}
            {(images.length > 0 || docs.length > 0 || videos.length > 0 || links.length > 0) && (
             <div className="w-full px-8 pb-5 flex flex-col gap-6 items-start bg-gray-50 max-h-[180px] overflow-x-auto overflow-y-auto">
             {/* Images Row */}
@@ -741,7 +741,7 @@ export default function AssignmentForm({
               </div>
             </div>
           </div>
-       
+     
         </div>
      
         {/* Footer */}
@@ -761,7 +761,7 @@ export default function AssignmentForm({
             disabled={loading || !title.trim()}
             className="bg-blue-600 text-white px-8 py-3 rounded-full disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
           >
-            {loading ? "Posting..." : "Post Assignment"}
+            {loading ? "Creating..." : "Create Question"}
           </button>
         </div>
       </form>
