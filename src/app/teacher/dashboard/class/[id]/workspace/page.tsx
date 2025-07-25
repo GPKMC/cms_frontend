@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   PlusCircle,
   FileText,
@@ -17,7 +17,7 @@ import MaterialList from "./workspacelist";
 import AssignmentForm from "./assignmentform";
 import TopicSelector from "./topicSelect";
 import QuestionForm from "./question/question";
-import GroupAssignmentForm from "./groupAssignment";
+import GroupAssignmentForm from "./groupassignment/groupAssignmentform";
 
 
 
@@ -53,7 +53,7 @@ export default function CreateMenu() {
   const [showQuestionForm, setShowQuestionForm] = useState(false);
   const [showGroupAssignmentForm, setShowGroupAssignmentForm] = useState(false); // <-- New
   const [showTopicModal, setShowTopicModal] = useState(false);
-
+ const router = useRouter();
   useEffect(() => {
     if (!courseInstanceId) return;
     async function fetchCourseInstance() {
@@ -86,10 +86,11 @@ export default function CreateMenu() {
       setShowGroupAssignmentForm(false);
     }
     if (option.value === "group-assignment") {
-      setShowGroupAssignmentForm(true);
+    setShowAssignmentForm(false);
       setShowMaterialForm(false);
-      setShowAssignmentForm(false);
+      setShowGroupAssignmentForm(true);
     }
+    
     if (option.value === "question") {
       setShowQuestionForm(true);
       setShowMaterialForm(false);
@@ -143,13 +144,28 @@ export default function CreateMenu() {
           onSuccess={() => setShowAssignmentForm(false)}
         />
       )}
-{showGroupAssignmentForm && (
+{/* {showGroupAssignmentForm && (
   <GroupAssignmentForm
     open={showGroupAssignmentForm}
     onClose={() => setShowGroupAssignmentForm(false)}
     onSuccess={() => { setShowGroupAssignmentForm(false); }}
   />
+)} */}
+{showGroupAssignmentForm && courseInstanceId &&(
+  <GroupAssignmentForm
+    open={showGroupAssignmentForm}
+    courseInstanceId={courseInstanceId}
+    courseName={courseName}
+    onClose={() => setShowGroupAssignmentForm(false)}
+    onSuccess={() => {
+      setShowGroupAssignmentForm(false);
+      toast.success("Group assignment created!");
+    }}
+  />
 )}
+
+
+
 
 
       {showQuestionForm && courseInstanceId && (
