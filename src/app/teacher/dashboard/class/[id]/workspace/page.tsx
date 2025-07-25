@@ -16,10 +16,17 @@ import CourseMaterialForm from "./materialform";
 import AssignmentForm from "./assignmentform";
 import TopicSelector from "./topicSelect";
 import QuestionForm from "./question/question";
+import GroupAssignmentForm from "./groupAssignment";
+
+
 
 const menuOptions = [
   { label: "Assignment", icon: <FileText size={18} />, value: "assignment" },
-  { label: "Group Assignment", icon: <ListChecks size={18} />, value: "group-assignment" }, // <-- New
+  {
+    label: "Group Assignment",
+    icon: <ListChecks size={18} />,
+    value: "group-assignment",
+  }, // <-- New
   { label: "Quiz Assignment", icon: <ListChecks size={18} />, value: "quiz" },
   { label: "Question", icon: <HelpCircle size={18} />, value: "question" },
   { label: "Material", icon: <Book size={18} />, value: "material" },
@@ -117,10 +124,7 @@ export default function CreateMenu() {
 
       {courseInstanceId && (
         <div>
-          <TopicSelector
-            courseInstanceId={courseInstanceId}
-            token={token}
-          />
+          <TopicSelector courseInstanceId={courseInstanceId} token={token} />
         </div>
       )}
 
@@ -138,7 +142,16 @@ export default function CreateMenu() {
           onSuccess={() => setShowAssignmentForm(false)}
         />
       )}
- {showQuestionForm && courseInstanceId && (
+{showGroupAssignmentForm && (
+  <GroupAssignmentForm
+    open={showGroupAssignmentForm}
+    onClose={() => setShowGroupAssignmentForm(false)}
+    onSuccess={() => { setShowGroupAssignmentForm(false); }}
+  />
+)}
+
+
+      {showQuestionForm && courseInstanceId && (
         <QuestionForm
           courseInstanceId={courseInstanceId}
           courseName={courseName}
