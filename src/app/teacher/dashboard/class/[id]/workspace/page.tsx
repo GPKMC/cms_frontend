@@ -1,32 +1,28 @@
+// src/CreateMenu.tsx
 "use client";
 import React, { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import {
   PlusCircle,
   FileText,
   HelpCircle,
   Book,
   ListChecks,
-  List,
-  Users2, // Optional: for icon
+  List
 } from "lucide-react";
-import TopicModal from "./topicform";
 import toast, { Toaster } from "react-hot-toast";
+
+import TopicModal from "./topicform";
+import TopicSelector from "./topicSelect";
 import CourseMaterialForm from "./materialform";
 import AssignmentForm from "./assignmentform";
-import TopicSelector from "./topicSelect";
+import GroupAssignmentForm from "./groupAssignment/groupAssignmentform";
 import QuestionForm from "./question/question";
-import GroupAssignmentForm from "./groupassignment/groupAssignmentform";
-
-
+import QuizForm from "./quiz/quizform";
 
 const menuOptions = [
   { label: "Assignment", icon: <FileText size={18} />, value: "assignment" },
-  {
-    label: "Group Assignment",
-    icon: <ListChecks size={18} />,
-    value: "group-assignment",
-  }, // <-- New
+  { label: "Group Assignment", icon: <ListChecks size={18} />, value: "group-assignment" },
   { label: "Quiz Assignment", icon: <ListChecks size={18} />, value: "quiz" },
   { label: "Question", icon: <HelpCircle size={18} />, value: "question" },
   { label: "Material", icon: <Book size={18} />, value: "material" },
@@ -35,67 +31,64 @@ const menuOptions = [
 
 export default function CreateMenu() {
   const params = useParams();
-  const courseInstanceId: string | undefined =
-    (params?.id && params.id.toString()) ||
-    (params?.courseInstanceId && params.courseInstanceId.toString());
-
-  const token =
-    (typeof window !== "undefined" &&
-      (localStorage.getItem("token_teacher") ||
-        sessionStorage.getItem("token_teacher"))) ||
+  const courseInstanceId =
+    (params?.id as string) ||
+    (params?.courseInstanceId as string) ||
     "";
+
+  const token = typeof window !== "undefined"
+    ? localStorage.getItem("token_teacher") || sessionStorage.getItem("token_teacher") || ""
+    : "";
 
   const [courseName, setCourseName] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [showMaterialForm, setShowMaterialForm] = useState(false);
   const [showAssignmentForm, setShowAssignmentForm] = useState(false);
+  const [showGroupAssignmentForm, setShowGroupAssignmentForm] = useState(false);
+  const [showQuizForm, setShowQuizForm] = useState(false);
   const [showQuestionForm, setShowQuestionForm] = useState(false);
-  const [showGroupAssignmentForm, setShowGroupAssignmentForm] = useState(false); // <-- New
   const [showTopicModal, setShowTopicModal] = useState(false);
- const router = useRouter();
+
   useEffect(() => {
     if (!courseInstanceId) return;
-    async function fetchCourseInstance() {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/course-api/courseInstance/${courseInstanceId}`,
-        { headers: { Authorization: token ? `Bearer ${token}` : "" } }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setCourseName(data?.instance?.course?.name || "Course");
-      }
-    }
-    fetchCourseInstance();
+    fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/course-api/courseInstance/${courseInstanceId}`, {
+      headers: { Authorization: token ? `Bearer ${token}` : "" },
+    })
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => setCourseName(data.instance.course.name))
+      .catch(() => setCourseName("Course"));
   }, [courseInstanceId, token]);
 
-  function handleMenu(option: {
-    label: string;
-    icon: React.ReactNode;
-    value: string;
-  }) {
+  function handleMenu(option: { value: string }) {
     setMenuOpen(false);
-    if (option.value === "material") {
-      setShowMaterialForm(true);
-      setShowAssignmentForm(false);
-      setShowGroupAssignmentForm(false);
-    }
-    if (option.value === "assignment") {
-      setShowAssignmentForm(true);
-      setShowMaterialForm(false);
-      setShowGroupAssignmentForm(false);
-    }
-    if (option.value === "group-assignment") {
+    // reset
+    setShowMaterialForm(false);
     setShowAssignmentForm(false);
-      setShowMaterialForm(false);
-      setShowGroupAssignmentForm(true);
+    setShowGroupAssignmentForm(false);
+    setShowQuizForm(false);
+    setShowQuestionForm(false);
+    setShowTopicModal(false);
+
+    switch (option.value) {
+      case "material":
+        setShowMaterialForm(true);
+        break;
+      case "assignment":
+        setShowAssignmentForm(true);
+        break;
+      case "group-assignment":
+        setShowGroupAssignmentForm(true);
+        break;
+      case "quiz":
+        setShowQuizForm(true);
+        break;
+      case "question":
+        setShowQuestionForm(true);
+        break;
+      case "Topic":
+        setShowTopicModal(true);
+        break;
     }
-    
-    if (option.value === "question") {
-      setShowQuestionForm(true);
-      setShowMaterialForm(false);
-      setShowAssignmentForm(false);
-    }
-    if (option.value === "Topic") setShowTopicModal(true);
   }
 
   return (
@@ -104,14 +97,14 @@ export default function CreateMenu() {
 
       <button
         className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2 rounded-full font-semibold text-lg shadow hover:bg-blue-700"
-        onClick={() => setMenuOpen((v) => !v)}
+        onClick={() => setMenuOpen(open => !open)}
       >
         <PlusCircle size={22} /> Create
       </button>
 
       {menuOpen && (
         <div className="absolute mt-2 left-0 bg-white border rounded-xl shadow-xl py-1 z-50 min-w-[200px]">
-          {menuOptions.map((opt) => (
+          {menuOptions.map(opt => (
             <button
               key={opt.value}
               className="flex items-center w-full px-4 py-2 text-left hover:bg-gray-100 gap-2"
@@ -124,63 +117,61 @@ export default function CreateMenu() {
       )}
 
       {courseInstanceId && (
-        <div>
-          <TopicSelector courseInstanceId={courseInstanceId} token={token} />
-        </div>
+        <TopicSelector courseInstanceId={courseInstanceId} token={token} />
       )}
 
-      {showMaterialForm && courseInstanceId && (
+      {showMaterialForm && (
         <CourseMaterialForm
           courseInstanceId={courseInstanceId}
           courseName={courseName}
           onSuccess={() => setShowMaterialForm(false)}
         />
       )}
-      {showAssignmentForm && courseInstanceId && (
+      {showAssignmentForm && (
         <AssignmentForm
           courseInstanceId={courseInstanceId}
           courseName={courseName}
           onSuccess={() => setShowAssignmentForm(false)}
         />
       )}
-{/* {showGroupAssignmentForm && (
-  <GroupAssignmentForm
-    open={showGroupAssignmentForm}
-    onClose={() => setShowGroupAssignmentForm(false)}
-    onSuccess={() => { setShowGroupAssignmentForm(false); }}
-  />
-)} */}
-{showGroupAssignmentForm && courseInstanceId &&(
-  <GroupAssignmentForm
-    open={showGroupAssignmentForm}
-    courseInstanceId={courseInstanceId}
-    courseName={courseName}
-    onClose={() => setShowGroupAssignmentForm(false)}
-    onSuccess={() => {
-      setShowGroupAssignmentForm(false);
-      toast.success("Group assignment created!");
-    }}
-  />
-)}
+      {showGroupAssignmentForm && (
+        <GroupAssignmentForm
+          open={true}
+          courseInstanceId={courseInstanceId}
+          courseName={courseName}
+          onClose={() => setShowGroupAssignmentForm(false)}
+          onSuccess={() => {
+            setShowGroupAssignmentForm(false);
+            toast.success("Group assignment created!");
+          }}
+        />
+      )}
 
+      {showQuizForm && (
+        <QuizForm
+          courseInstanceId={courseInstanceId}
+          courseName={courseName}
+          onClose={() => setShowQuizForm(false)}
+          onSuccess={() => {
+            setShowQuizForm(false);
+            toast.success("Quiz created!");
+          }}
+        />
+      )}
 
-
-
-
-      {showQuestionForm && courseInstanceId && (
+      {showQuestionForm && (
         <QuestionForm
           courseInstanceId={courseInstanceId}
           courseName={courseName}
           onSuccess={() => setShowQuestionForm(false)}
         />
       )}
-
-      {showTopicModal && courseInstanceId && (
+      {showTopicModal && (
         <TopicModal
           courseInstanceId={courseInstanceId}
-          open={showTopicModal}
+          open={true}
           onClose={() => setShowTopicModal(false)}
-          onSuccess={(msg) => {
+          onSuccess={msg => {
             toast.success(msg || "Topic created!");
             setShowTopicModal(false);
           }}
