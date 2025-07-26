@@ -20,7 +20,15 @@ interface MaterialOrAssignment {
     postedBy?: UserType;
     createdAt: string;
     updatedAt?: string;
-    type?: "material" | "assignment" | "question";
+    type: "material" | "assignment" | "question" | "groupAssignment";
+
+    // for “global” groupAssignment:
+    groups?: { id: string; name: string; members: string[] }[];
+
+    // for “per‑group” groupAssignment:
+    parentId?: string;
+    groupName?: string;
+    members?: string[];
     // media?: string[];
     // documents?: string[];
     documents?: { url: string; originalname: string }[];
@@ -31,12 +39,15 @@ interface MaterialOrAssignment {
     links?: string[];
     mutedStudents?: string[];
     // topic?: { _id: string, title: string }; // not needed in the card here
+
 }
 interface TopicGroup {
     topic: { _id: string | null; title: string };
     materials: MaterialOrAssignment[];
     assignments: MaterialOrAssignment[];
     questions: MaterialOrAssignment[];   // <-- add this
+    groupAssignments: MaterialOrAssignment[];
+
 }
 
 
@@ -202,7 +213,15 @@ function ContentCard({
             border: 'border-pink-200',
             icon: <MessageCircleQuestionIcon className="w-4 h-4" />,
             label: 'Question'
+        },
+        groupAssignment: {
+            color: "from-yellow-500 to-yellow-600",
+            bg: "bg-yellow-50",
+            border: "border-yellow-200",
+            icon: <Users className="w-4 h-4" />,   // or another “group” icon
+            label: "Group Assignment"
         }
+
     };
     const config = typeConfig[item.type || "material"];
     useEffect(() => {
@@ -385,101 +404,101 @@ function ContentCard({
                                 dangerouslySetInnerHTML={{ __html: item.content }} />
 
                             {/* Documents */}
-{item.documents && item.documents.length > 0 && (
-  <div className="mb-8">
-    <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-3 text-lg">
-      <span className="p-2 bg-blue-50 rounded-lg">
-        <FileText className="w-6 h-6 text-blue-500" />
-      </span>
-      Documents <span className="font-medium text-base">({item.documents.length})</span>
-    </h4>
-    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-      {item.documents.map((docObj, i) => {
-        const docUrl = getFileUrl(docObj.url);
-        const filename = docObj.originalname;
-        const ext = filename.split('.').pop()?.toLowerCase() || "";
-        const isOffice = ["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext);
-        const isPdf = ext === "pdf";
-        return (
-          <div
-            key={i}
-            className="bg-white rounded-2xl border border-gray-100 shadow-lg flex flex-col p-6 transition hover:border-blue-400 hover:shadow-2xl"
-          >
-            {/* File Info */}
-            <div className="flex items-center gap-4 mb-4">
-              <span className="p-3 bg-blue-50 rounded-xl flex items-center justify-center">
-                {getFileIcon(filename)}
-              </span>
-              <div className="flex flex-col min-w-0">
-                <span className="font-semibold text-gray-900 text-base truncate" title={filename}>
-                  {filename}
-                </span>
-                <span className="text-xs text-gray-400 mt-1">{getFileTypeLabel(filename)} &bull; {getFileSize(filename)}</span>
-              </div>
-            </div>
-            {/* Divider */}
-            <div className="border-t border-gray-100 my-4" />
-            {/* Button Row */}
-            <div className="flex flex-row gap-3 mt-auto">
-              <button
-                className=" flex items-center justify-center gap-2 py-2 px-2 rounded-md bg-white text-gray-900 border border-gray-300 hover:bg-gray-50 font-semibold transition shadow-sm"
-                onClick={e => {
-                  e.stopPropagation();
-                  onPreview(
-                    <div className="p-6">
-                      {isOffice ? (
-                        <iframe
-                          src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(docUrl)}`}
-                          className="w-full h-[70vh] border-0 rounded-lg"
-                          title={filename}
-                        />
-                      ) : isPdf ? (
-                        <iframe
-                          src={docUrl}
-                          className="w-full h-[70vh] border-0 rounded-lg"
-                          title={filename}
-                        />
-                      ) : (
-                        <div className="text-center py-12">
-                          <File className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                          <p className="text-gray-500">Preview not available for this file type</p>
-                          <a
-                            href={docUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors whitespace-nowrap"
-                            download={filename}
-                          >
-                            <Download className="w-4 h-4" />
-                            Download File
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  );
-                }}
-              >
-                <Eye className="w-5 h-5" />
-                View
-              </button>
-              <a
-                href={docUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                download={filename}
-                className="flex-1 flex items-center justify-center gap-2 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 font-semibold transition shadow-sm"
-                onClick={e => e.stopPropagation()}
-              >
-                <Download className="w-5 h-5" />
-                Download
-              </a>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  </div>
-)}
+                            {item.documents && item.documents.length > 0 && (
+                                <div className="mb-8">
+                                    <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-3 text-lg">
+                                        <span className="p-2 bg-blue-50 rounded-lg">
+                                            <FileText className="w-6 h-6 text-blue-500" />
+                                        </span>
+                                        Documents <span className="font-medium text-base">({item.documents.length})</span>
+                                    </h4>
+                                    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                                        {item.documents.map((docObj, i) => {
+                                            const docUrl = getFileUrl(docObj.url);
+                                            const filename = docObj.originalname;
+                                            const ext = filename.split('.').pop()?.toLowerCase() || "";
+                                            const isOffice = ["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext);
+                                            const isPdf = ext === "pdf";
+                                            return (
+                                                <div
+                                                    key={i}
+                                                    className="bg-white rounded-2xl border border-gray-100 shadow-lg flex flex-col p-6 transition hover:border-blue-400 hover:shadow-2xl"
+                                                >
+                                                    {/* File Info */}
+                                                    <div className="flex items-center gap-4 mb-4">
+                                                        <span className="p-3 bg-blue-50 rounded-xl flex items-center justify-center">
+                                                            {getFileIcon(filename)}
+                                                        </span>
+                                                        <div className="flex flex-col min-w-0">
+                                                            <span className="font-semibold text-gray-900 text-base truncate" title={filename}>
+                                                                {filename}
+                                                            </span>
+                                                            <span className="text-xs text-gray-400 mt-1">{getFileTypeLabel(filename)} &bull; {getFileSize(filename)}</span>
+                                                        </div>
+                                                    </div>
+                                                    {/* Divider */}
+                                                    <div className="border-t border-gray-100 my-4" />
+                                                    {/* Button Row */}
+                                                    <div className="flex flex-row gap-3 mt-auto">
+                                                        <button
+                                                            className=" flex items-center justify-center gap-2 py-2 px-2 rounded-md bg-white text-gray-900 border border-gray-300 hover:bg-gray-50 font-semibold transition shadow-sm"
+                                                            onClick={e => {
+                                                                e.stopPropagation();
+                                                                onPreview(
+                                                                    <div className="p-6">
+                                                                        {isOffice ? (
+                                                                            <iframe
+                                                                                src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(docUrl)}`}
+                                                                                className="w-full h-[70vh] border-0 rounded-lg"
+                                                                                title={filename}
+                                                                            />
+                                                                        ) : isPdf ? (
+                                                                            <iframe
+                                                                                src={docUrl}
+                                                                                className="w-full h-[70vh] border-0 rounded-lg"
+                                                                                title={filename}
+                                                                            />
+                                                                        ) : (
+                                                                            <div className="text-center py-12">
+                                                                                <File className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                                                                                <p className="text-gray-500">Preview not available for this file type</p>
+                                                                                <a
+                                                                                    href={docUrl}
+                                                                                    target="_blank"
+                                                                                    rel="noopener noreferrer"
+                                                                                    className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors whitespace-nowrap"
+                                                                                    download={filename}
+                                                                                >
+                                                                                    <Download className="w-4 h-4" />
+                                                                                    Download File
+                                                                                </a>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            }}
+                                                        >
+                                                            <Eye className="w-5 h-5" />
+                                                            View
+                                                        </button>
+                                                        <a
+                                                            href={docUrl}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            download={filename}
+                                                            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 font-semibold transition shadow-sm"
+                                                            onClick={e => e.stopPropagation()}
+                                                        >
+                                                            <Download className="w-5 h-5" />
+                                                            Download
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
 
 
                             {item.media && item.media.length > 0 && (
@@ -681,15 +700,42 @@ export default function UnifiedFeed({
                 `${process.env.NEXT_PUBLIC_BACKEND_URL}/Coursefeeds/${courseInstanceId}`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-            const data = await res.json();
-            console.log("Course feed response:", data);  // <-- ADD THIS
 
-            setFeedData(data);
+
+
+            // 1) pull raw JSON
+            const raw = await res.json();
+
+            // 2) normalize every incoming item.type into our literal union
+            const normalized: TopicGroup[] = raw.map((g: any) => ({
+                topic: g.topic,
+                materials: (g.materials || []).map((m: any) => ({
+                    ...m,
+                    type: "material" as const
+                })),
+                assignments: (g.assignments || []).map((a: any) => ({
+                    ...a,
+                    type: "assignment" as const
+                })),
+                questions: (g.questions || []).map((q: any) => ({
+                    ...q,
+                    type: "question" as const
+                })),
+                groupAssignments: (g.groupAssignments || []).map((x: any) => ({
+                    ...x,
+                    type: "groupAssignment" as const
+                }))
+            }));
+
+            // 3) now feed your React state with correctly‑typed data
+            setFeedData(normalized);
         } catch (err) {
             setFeedData([]);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
+
 
     useEffect(() => {
         fetchFeed();
@@ -756,12 +802,14 @@ export default function UnifiedFeed({
     function getSortedItems(
         materials: MaterialOrAssignment[],
         assignments: MaterialOrAssignment[],
-        questions: MaterialOrAssignment[]
+        questions: MaterialOrAssignment[],
+        groupAssignments: MaterialOrAssignment[],
     ) {
         const all = [
             ...materials.map((m) => ({ ...m, type: "material" as const })),
             ...assignments.map((a) => ({ ...a, type: "assignment" as const })),
-            ...questions.map((q) => ({ ...q, type: "question" as const }))
+            ...questions.map((q) => ({ ...q, type: "question" as const })),
+            ...groupAssignments.map(g => ({ ...g, type: "groupAssignment" })),
         ];
         return all.sort(
             (a, b) =>
@@ -839,7 +887,8 @@ export default function UnifiedFeed({
                 const items = getSortedItems(
                     group.materials || [],
                     group.assignments || [],
-                    group.questions || []
+                    group.questions || [],
+                    group.groupAssignments || []      // ← new
                 );
 
 
@@ -912,7 +961,8 @@ export default function UnifiedFeed({
                             {items.map((item) => (
                                 <ContentCard
                                     key={item._id}
-                                    item={item}
+                                    // assert that `item` really is a MaterialOrAssignment
+                                    item={item as MaterialOrAssignment}
                                     isExpanded={expanded === item._id}
                                     onToggle={() => setExpanded(expanded === item._id ? null : item._id)}
                                     onPreview={(node) => {
@@ -920,11 +970,14 @@ export default function UnifiedFeed({
                                         setModalContent(node);
                                     }}
                                     allStudents={allStudents}
-                                    onEdit={() => setEditTarget(item)}
-                                    onDelete={() => setDeleteTarget(item)}
+                                    // same assertion when you hand it to setEditTarget and setDeleteTarget:
+                                    onEdit={() => setEditTarget(item as MaterialOrAssignment)}
+                                    onDelete={() => setDeleteTarget(item as MaterialOrAssignment)}
                                 />
                             ))}
                         </div>
+
+
                     </div>
                 );
             })}

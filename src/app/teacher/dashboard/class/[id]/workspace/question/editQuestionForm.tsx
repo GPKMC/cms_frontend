@@ -120,7 +120,7 @@ interface QuestionEditFormProps {
   onSuccess?: () => void;
     onCancel?: () => void; 
 }
-
+  interface FileEntry { url: string; originalname: string }
 export default function QuestionEditForm({
   QuestionId,
   courseInstanceId,
@@ -137,9 +137,13 @@ export default function QuestionEditForm({
   const [showTopicInput, setShowTopicInput] = useState(false);
   const [images, setImages] = useState<File[]>([]);
   const [docs, setDocs] = useState<File[]>([]);
-  const [media, setMedia] = useState<string[]>([]);
+
+const [media, setMedia] = useState<FileEntry[]>([]);
+
+// similarly for documents:
+const [documents, setDocuments] = useState<FileEntry[]>([]);
   const [mediaToRemove, setMediaToRemove] = useState<string[]>([]);
-  const [documents, setDocuments] = useState<string[]>([]);
+  // const [documents, setDocuments] = useState<string[]>([]);
   const [docsToRemove, setDocsToRemove] = useState<string[]>([]);
   const [links, setLinks] = useState<string[]>([]);
   const [videos, setVideos] = useState<string[]>([]);
@@ -198,8 +202,8 @@ useEffect(() => {
         ? new Date(data.question.dueDate).toISOString().slice(0, 16)
         : ""
     );
-    setMedia(data.question.media || []);
-    setDocuments(data.question.documents || []);
+setMedia(data.question.media as FileEntry[] || []);
+setDocuments(data.question.documents as FileEntry[] || []);
     setLinks(data.question.links || []);
     setVideos(data.question.youtubeLinks || []);
     setTopic(data.question.topic || "");
@@ -234,14 +238,22 @@ useEffect(() => {
   const isAllSelected = students.length > 0 && visibleTo.length === students.length;
 
   // Remove file helpers:
+  // function removeExistingMedia(url: string) {
+  //   setMediaToRemove(arr => [...arr, url]);
+  //   setMedia(arr => arr.filter(m => m !== url));
+  // }
+  // function removeExistingDoc(url: string) {
+  //   setDocsToRemove(arr => [...arr, url]);
+  //   setDocuments(arr => arr.filter(d => d !== url));
+  // }
   function removeExistingMedia(url: string) {
-    setMediaToRemove(arr => [...arr, url]);
-    setMedia(arr => arr.filter(m => m !== url));
-  }
-  function removeExistingDoc(url: string) {
-    setDocsToRemove(arr => [...arr, url]);
-    setDocuments(arr => arr.filter(d => d !== url));
-  }
+  setMediaToRemove(arr => [...arr, url]);
+  setMedia(arr => arr.filter(item => item.url !== url));
+}
+function removeExistingDoc(url: string) {
+  setDocsToRemove(arr => [...arr, url]);
+  setDocuments(arr => arr.filter(item => item.url !== url));
+}
 
   // Add topic handler
   async function handleAddTopic() {
@@ -374,38 +386,58 @@ console.log("FormData topic (should match above):", formData.get("topic"));
               {/* EXISTING media/docs preview and remove */}
               <div className="mb-4">
                 {/* Existing Images */}
-                {media.length > 0 && (
-                  <div>
-                    <div className="text-sm font-semibold mb-1">Uploaded Images</div>
-                    <div className="flex flex-wrap gap-2">
-                      {media.map((url, i) => (
-                        <div key={i} className="relative">
-                          <img src={url.startsWith("http") ? url : `${process.env.NEXT_PUBLIC_BACKEND_URL}${url}`} className="w-20 h-16 object-cover rounded" />
-                          <button type="button" onClick={() => removeExistingMedia(url)} className="absolute top-1 right-1 bg-white/80 rounded-full p-1 text-red-600">
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {/* Existing Docs */}
-                {documents.length > 0 && (
-                  <div className="mt-2">
-                    <div className="text-sm font-semibold mb-1">Uploaded Documents</div>
-                    <div className="flex flex-wrap gap-2">
-                      {documents.map((url, i) => (
-                        <div key={i} className="relative flex items-center gap-2 bg-white p-2 rounded shadow border">
-                          <FileTextIcon size={18} className="text-blue-600" />
-                          <a href={url.startsWith("http") ? url : `${process.env.NEXT_PUBLIC_BACKEND_URL}${url}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-700 underline">{url.split("/").pop()}</a>
-                          <button type="button" onClick={() => removeExistingDoc(url)} className="text-red-500">
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+               {/* Uploaded Images */}
+{media.length > 0 && (
+  <div>
+    <div className="text-sm font-semibold mb-1">Uploaded Images</div>
+    <div className="flex flex-wrap gap-2">
+      {media.map((item, i) => (
+        <div key={i} className="relative">
+          <img
+            src={
+              item.url.startsWith("http")
+                ? item.url
+                : `${process.env.NEXT_PUBLIC_BACKEND_URL}${item.url}`
+            }
+            className="w-20 h-16 object-cover rounded"
+          />
+          <button
+            type="button"
+            onClick={() => removeExistingMedia(item.url)}
+            className="absolute top-1 right-1 bg-white/80 rounded-full p-1 text-red-600"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+{/* Uploaded Documents */}
+{documents.length > 0 && (
+  <div className="mt-2">
+    <div className="text-sm font-semibold mb-1">Uploaded Documents</div>
+    <div className="flex flex-wrap gap-2">
+      {documents.map((item, i) => (
+        <div key={i} className="relative flex items-center gap-2 bg-white p-2 rounded shadow border">
+          <FileTextIcon size={18} className="text-blue-600" />
+          <a
+            href={ item.url.startsWith("http") ? item.url : `${process.env.NEXT_PUBLIC_BACKEND_URL}${item.url}` }
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-700 underline"
+          >
+            {item.originalname}
+          </a>
+          <button type="button" onClick={() => removeExistingDoc(item.url)} className="text-red-500">
+            <Trash2 size={14} />
+          </button>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+
               </div>
             </div>
             {/* RIGHT: Sidebar */}
