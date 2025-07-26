@@ -94,7 +94,8 @@ export default function GroupAssignmentForm({
   // Preview states
   const [mediaPreview, setMediaPreview] = useState<File | null>(null);
   const [videoPreview, setVideoPreview] = useState<string>("");
-
+  const [docPreviewFile, setDocPreviewFile] = useState<File | null>(null);
+  const [docPreviewMode, setDocPreviewMode] = useState<"pdf" | "download" | null>(null);
 
 
   useEffect(() => {
@@ -164,14 +165,47 @@ export default function GroupAssignmentForm({
   const appendFiles = (existing: File[], incoming: FileList | null) =>
     incoming ? [...existing, ...Array.from(incoming)] : existing;
 
-  const addYouTubeLink = (url: string, isGlobal: boolean, groupIdx?: number) => {
-    if (!url.trim()) return;
-    if (isGlobal) {
-      setGlobalYt(prev => [...prev, url.trim()]);
-    } else if (groupIdx !== undefined) {
-      updateGroup(groupIdx, "ytLinks", [...groups[groupIdx].ytLinks, url.trim()]);
+  const getYouTubeVideoId = (url: string): string | null => {
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+      /youtube\.com\/watch\?.*v=([^&\n?#]+)/,
+    ];
+    for (const pattern of patterns) {
+      const m = url.match(pattern);
+      if (m) return m[1];
     }
+    return null;
   };
+
+  // Optional—if you want to accept arbitrary URLs
+  const normalizeUrl = (raw: string) => {
+    try { return new URL(raw).href; }
+    catch { return raw; }
+  };
+
+  // 2) addYouTubeLink now always produces a full embed URL:
+  function addYouTubeLink(
+    raw: string,
+    isGlobal: boolean,
+    groupIdx?: number
+  ) {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+
+    const id = getYouTubeVideoId(trimmed);
+    const embedUrl = id
+      ? `https://www.youtube.com/embed/${id}`
+      : normalizeUrl(trimmed);
+
+    if (isGlobal) {
+      setGlobalYt(prev => [...prev, embedUrl]);
+    } else if (groupIdx !== undefined) {
+      updateGroup(groupIdx, "ytLinks", [
+        ...groups[groupIdx].ytLinks,
+        embedUrl
+      ]);
+    }
+  }
 
   const addExternalLink = (url: string, isGlobal: boolean, groupIdx?: number) => {
     if (!url.trim()) return;
@@ -192,55 +226,56 @@ export default function GroupAssignmentForm({
       '';
 
     // 1) Build your groupsPayload exactly as JSON
-    const groupsPayload = groups.map((g) => {
-      const isGlobal = !!useGlobal[g.id];
+ const groupsPayload = groups.map(g => {
+  const isGlobal = !!useGlobal[g.id];
+  const youtubeLinks = isGlobal
+    ? [...globalYt, ...g.ytLinks]
+    : g.ytLinks;
+  const links = isGlobal
+    ? [...globalLinks, ...g.links]
+    : g.links;
 
-      return {
-        members: g.members,
-        task: g.task,
-        name: g.name,
+  return {
+    members: g.members,
+    task:    g.task,
+    name:    g.name,
+    points:  isGlobal ? globalPoints  : g.points,
+    dueDate: isGlobal ? globalDueDate : g.dueDate,
 
-        // always include points & dueDate
-        points: isGlobal ? globalPoints : g.points,
-        dueDate: isGlobal ? globalDueDate : g.dueDate,
+    // whether global or not, we always include all of the above,
+    // but for resources we branch into our merged arrays:
+    youtubeLinks,
+    links,
+    media:      isGlobal ? globalMedia.map(f => ({ url: "", originalname: f.name })) : g.mediaFiles.map(f => ({ url: "", originalname: f.name })),
+    documents:  isGlobal ? globalDocs.map(f => ({ url: "", originalname: f.name })) : g.docFiles.map(f => ({ url: "", originalname: f.name })),
+    title:      isGlobal ? globalTitle   : g.title,
+    content:    isGlobal ? globalContent : g.content,
+    topic:      isGlobal ? globalTopic   : g.topic,
+  };
+});
 
-        // only include overrides when NOT using global
-        ...(isGlobal
-          ? {}
-          : {
-            title: g.title,
-            content: g.content,
-            topic: g.topic,
-            media: g.mediaFiles.map(f => ({ url: "", originalname: f.name })),
-            documents: g.docFiles.map(f => ({ url: "", originalname: f.name })),
-            youtubeLinks: g.ytLinks,
-            links: g.links,
-          }
-        ),
-      };
-    });
 
 
     // 2) Build your top‑level payload
     const form = new FormData();
     form.append("courseInstance", courseInstanceId);
-console.log("Sending courseInstance:", courseInstanceId);
-  if (globalTitle.trim())    form.append("title",        globalTitle);
-if (globalContent.trim())  form.append("content",      globalContent);
-if (globalTopic)           form.append("topic",        globalTopic);
-if (globalPoints != null)  form.append("points",       String(globalPoints));
-if (globalDueDate)         form.append("dueDate",      globalDueDate);
+    console.log("Sending courseInstance:", courseInstanceId);
+    if (globalTitle.trim()) form.append("title", globalTitle);
+    if (globalContent.trim()) form.append("content", globalContent);
+    if (globalTopic) form.append("topic", globalTopic);
+    if (globalPoints != null) form.append("points", String(globalPoints));
+    if (globalDueDate) form.append("dueDate", globalDueDate);
 
-// media/docs: only append if non‑empty
-globalMedia .forEach(f => form.append("media",     f));
-globalDocs   .forEach(f => form.append("documents", f));
+    // media/docs: only append if non‑empty
+    globalMedia.forEach(f => form.append("media", f));
+    globalDocs.forEach(f => form.append("documents", f));
 
-// same for links arrays
-if (globalYt.length)   form.append("youtubeLinks", JSON.stringify(globalYt));
-if (globalLinks.length)form.append("links",        JSON.stringify(globalLinks));
+    // same for links arrays
+    if (globalYt.length) form.append("youtubeLinks", JSON.stringify(globalYt));
+    if (globalLinks.length) form.append("links", JSON.stringify(globalLinks));
 
-// always append the JSON payload for groups
-form.append("groups", JSON.stringify(groupsPayload));
+    // always append the JSON payload for groups
+    form.append("groups", JSON.stringify(groupsPayload));
 
     console.group("🚀 Submitting Group Assignment");
     console.log("  Global points:", globalPoints);
@@ -289,6 +324,7 @@ form.append("groups", JSON.stringify(groupsPayload));
       toast.error('Something went wrong. Please check your inputs.');
     }
   }
+  //yt 
 
   // do we have a valid global title?
   const hasGlobalTitle = globalTitle.trim().length > 0;
@@ -338,25 +374,47 @@ form.append("groups", JSON.stringify(groupsPayload));
       );
     }
   };
+  function renderDocThumb(file: File, idx: number, onRemove: () => void) {
+    const url = URL.createObjectURL(file);
+    // Derive the extension (pdf, docx, pptx, etc.)
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    // Map to a human‑friendly label
+    const label = ext === 'pdf'
+      ? 'PDF'
+      : ext === 'doc' || ext === 'docx'
+        ? 'DOC'
+        : ext === 'ppt' || ext === 'pptx'
+          ? 'PPT'
+          : ext.toUpperCase();
 
-  const renderDocThumb = (file: File, idx: number, onRemove: () => void) => {
     return (
       <div key={idx} className="relative group">
-        <div className="w-16 h-16 bg-gray-100 rounded-lg border border-gray-200 flex flex-col items-center justify-center hover:border-blue-400 transition-colors">
+        <div
+          className="w-16 h-16 bg-gray-100 rounded-lg border border-gray-200
+                   flex flex-col items-center justify-center cursor-pointer
+                   hover:border-blue-400 transition-colors"
+          onClick={() => {
+            const isPDF = ext === 'pdf';
+            setDocPreviewFile(file);
+            setDocPreviewMode(isPDF ? 'pdf' : 'download');
+          }}
+        >
+          {/* keep your icon */}
           <FileText className="w-6 h-6 text-gray-600 mb-1" />
-          <span className="text-xs text-gray-500 text-center truncate w-full px-1">
-            {file.name.split('.').pop()?.toUpperCase()}
-          </span>
+          {/* render a tiny extension badge */}
+          <span className="text-[10px] font-medium text-gray-700">{label}</span>
         </div>
         <button
           onClick={onRemove}
-          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+          className="absolute -top-2 -right-2 bg-red-500 text-white
+                   rounded-full w-5 h-5 flex items-center justify-center text-xs
+                   opacity-0 group-hover:opacity-100 transition-opacity"
         >
           ×
         </button>
       </div>
     );
-  };
+  }
 
   if (!open) return null;
 
@@ -386,6 +444,46 @@ form.append("groups", JSON.stringify(groupsPayload));
           </div>
         </div>
       )}
+      {docPreviewFile && (
+        <div
+          className="fixed inset-0 z-90 bg-black/70 flex items-center justify-center p-4"
+          onClick={() => { setDocPreviewFile(null); setDocPreviewMode(null); }}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl overflow-hidden max-h-[90vh] w-full max-w-4xl relative"
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              className="absolute top-4 right-4 bg-black/50 text-white p-2 rounded-full hover:bg-black/70"
+              onClick={() => { setDocPreviewFile(null); setDocPreviewMode(null); }}
+            >
+              <X size={20} />
+            </button>
+
+            {docPreviewMode === "pdf" ? (
+              <iframe
+                src={URL.createObjectURL(docPreviewFile)}
+                className="w-full h-[80vh]"
+                frameBorder="0"
+              />
+            ) : (
+              <div className="p-6 text-center">
+                <p className="mb-4">Cannot preview this file in‑browser.</p>
+                <a
+                  href={URL.createObjectURL(docPreviewFile)}
+                  download={docPreviewFile.name}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg"
+                >
+                  Download {docPreviewFile.name}
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+
+
 
       {/* Video Preview Modal */}
       {videoPreview && (
@@ -581,6 +679,7 @@ form.append("groups", JSON.stringify(groupsPayload));
                     </div>
 
                     {/* YouTube Links */}
+
                     <div className="space-y-3">
                       <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                         <Youtube className="w-4 h-4" />
@@ -588,7 +687,7 @@ form.append("groups", JSON.stringify(groupsPayload));
                       </label>
                       <input
                         type="text"
-                        placeholder="Paste YouTube URL..."
+                        placeholder="Paste YouTube URL…"
                         onKeyDown={e => {
                           if (e.key === "Enter") {
                             e.preventDefault();
@@ -596,33 +695,23 @@ form.append("groups", JSON.stringify(groupsPayload));
                             e.currentTarget.value = "";
                           }
                         }}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
                       />
                       <div className="space-y-2">
-                        {globalYt.map((url, i) => (
-                          <div key={i} className="relative group">
-                            <div
-                              className="aspect-video bg-gray-100 rounded cursor-pointer overflow-hidden border"
-                              onClick={() => setVideoPreview(url)}
-                            >
-                              <iframe
-                                width="100%"
-                                height="100%"
-                                src={url.replace("watch?v=", "embed/")}
-                                frameBorder="0"
-                                className="pointer-events-none"
-                              />
-                            </div>
-                            <button
-                              onClick={() => setGlobalYt(prev => prev.filter((_, idx) => idx !== i))}
-                              className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              ×
-                            </button>
+                        {globalYt.map((embedUrl, i) => (
+                          <div key={i} onClick={() => setVideoPreview(embedUrl)}>
+                            <iframe
+                              src={embedUrl}
+                              width="100%"
+                              height="100%"
+                              frameBorder="0"
+                              className="pointer-events-none rounded-lg"
+                            />
                           </div>
                         ))}
                       </div>
                     </div>
+
 
                     {/* External Links */}
                     <div className="space-y-3">
@@ -777,71 +866,71 @@ form.append("groups", JSON.stringify(groupsPayload));
                               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 {/* Left Column - Group Settings */}
                                 <div className="space-y-4">
-                                    {!isUsingGlobal && (
-                                      <>
+                                  {!isUsingGlobal && (
+                                    <>
+                                      <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Group Assignment Title</label>
+                                        <input
+                                          className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                          value={group.title ?? ""}
+                                          onChange={e => updateGroup(groupIndex, "title", e.target.value)}
+                                          placeholder="Enter group title..."
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Topic</label>
+                                        <select
+                                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                          value={group.topic ?? ""}
+                                          onChange={e => updateGroup(groupIndex, "topic", e.target.value)}
+                                        >
+                                          <option value="">— inherit global —</option>
+                                          {topics.map(t => (
+                                            <option key={t._id} value={t._id}>{t.title}</option>
+                                          ))}
+                                        </select>
+                                      </div>
+
+                                      {!useGlobal[group.id] && (
                                         <div>
-                                          <label className="block text-sm font-medium text-gray-700 mb-2">Group Assignment Title</label>
+                                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Group Instructions
+                                          </label>
+                                          <TiptapEditor
+                                            content={group.content ?? ""}
+                                            onChange={html => updateGroup(groupIndex, "content", html)}
+                                            placeholder="Enter group‑specific instructions…"
+                                            className="min-h-[120px] prose prose-sm max-w-none"
+                                          />
+                                        </div>
+                                      )}
+
+
+
+
+                                      <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                          <label className="block text-sm font-medium text-gray-700 mb-2">Points</label>
                                           <input
+                                            type="number"
+                                            min={0}
                                             className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                            value={group.title ?? ""}
-                                            onChange={e => updateGroup(groupIndex, "title", e.target.value)}
-                                            placeholder="Enter group title..."
+                                            value={group.points ?? ""}
+                                            onChange={e => updateGroup(groupIndex, "points", +e.target.value)}
                                           />
                                         </div>
                                         <div>
-                                          <label className="block text-sm font-medium text-gray-700 mb-2">Topic</label>
-                                          <select
-                                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                                            value={group.topic ?? ""}
-                                            onChange={e => updateGroup(groupIndex, "topic", e.target.value)}
-                                          >
-                                            <option value="">— inherit global —</option>
-                                            {topics.map(t => (
-                                              <option key={t._id} value={t._id}>{t.title}</option>
-                                            ))}
-                                          </select>
+                                          <label className="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
+                                          <input
+                                            type="datetime-local"
+                                            className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                            value={group.dueDate ?? ""}
+                                            onChange={e => updateGroup(groupIndex, "dueDate", e.target.value)}
+                                          />
                                         </div>
-  
-                                        {!useGlobal[group.id] && (
-                                          <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                              Group Instructions
-                                            </label>
-                                            <TiptapEditor
-                                              content={group.content ?? ""}
-                                              onChange={html => updateGroup(groupIndex, "content", html)}
-                                              placeholder="Enter group‑specific instructions…"
-                                              className="min-h-[120px] prose prose-sm max-w-none"
-                                            />
-                                          </div>
-                                        )}
-  
-  
-  
-  
-                                        <div className="grid grid-cols-2 gap-4">
-                                          <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Points</label>
-                                            <input
-                                              type="number"
-                                              min={0}
-                                              className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                              value={group.points ?? ""}
-                                              onChange={e => updateGroup(groupIndex, "points", +e.target.value)}
-                                            />
-                                          </div>
-                                          <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
-                                            <input
-                                              type="datetime-local"
-                                              className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                              value={group.dueDate ?? ""}
-                                              onChange={e => updateGroup(groupIndex, "dueDate", e.target.value)}
-                                            />
-                                          </div>
-                                        </div>
-                                      </>
-                                    )}
+                                      </div>
+                                    </>
+                                  )}
                                   <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                       Task (Required)
@@ -958,6 +1047,25 @@ form.append("groups", JSON.stringify(groupsPayload));
                                   </h5>
 
                                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <div>
+                                      <div className="text-sm font-medium text-gray-600">
+                                        YouTube Videos
+                                      </div>
+                                      <div className="space-y-2">
+                                        {globalYt.map((url, i) => (
+                                          <a
+                                            key={i}
+                                            href={url.replace("embed/", "watch?v=")}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-600 underline text-sm"
+                                          >
+                                            {url}
+                                          </a>
+                                        ))}
+                                      </div>
+                                    </div>
+
                                     {/* Group Media */}
                                     <div className="space-y-3">
                                       <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
