@@ -4,12 +4,17 @@ import {
     FileText, Book, FileImage, Video, Link, User, Clock, Eye,
     Download, Maximize2, X, FileSpreadsheet, Presentation, File,
     ChevronDown, Users, Hash, Sparkles, MoreVertical,
-    MessageCircleQuestionIcon, MicOff
+    MessageCircleQuestionIcon, MicOff,
+    ExternalLink,
+    Youtube,
+    Image,
+    Clipboard
 } from "lucide-react";
 import CourseMaterialEditForm from "./editMaterialForm";
 import AssignmentEditForm from "./editAssignmentForm";
 import TopicModal from "./editTopicForm";
 import QuestionEditForm from "./question/editQuestionForm";
+import EditGroupAssignmentForm from "./groupassignment/editGroupAssignmentForm";
 
 // --- Type Definitions ---
 interface UserType { _id?: string; username?: string; email?: string; }
@@ -23,7 +28,19 @@ interface MaterialOrAssignment {
     type: "material" | "assignment" | "question" | "groupAssignment";
 
     // for “global” groupAssignment:
-    groups?: { id: string; name: string; members: string[] }[];
+    groups?: {
+        id: string;
+        _id?: string;
+        name: string;
+        members: string[];
+        task?: string;
+        content?: string;
+        documents?: { url: string; originalname: string }[];
+        media?: { url: string; originalname: string }[];
+        youtubeLinks?: string[];
+        links?: string[];
+    }[];
+
 
     // for “per‑group” groupAssignment:
     parentId?: string;
@@ -181,7 +198,7 @@ function LoadingSkeleton() {
 // --- Enhanced Card Component ---
 function ContentCard({
     item, isExpanded, onToggle, onPreview, allStudents,
-    onEdit, onDelete
+    onEdit, onDelete, onDeleteGroup,
 }: {
     item: MaterialOrAssignment;
     isExpanded: boolean;
@@ -190,6 +207,7 @@ function ContentCard({
     allStudents: UserType[];
     onEdit: () => void;
     onDelete: () => void;
+    onDeleteGroup: (groupAssignmentId: string, groupId: string) => void;
 }) {
     const [menuOpen, setMenuOpen] = useState(false);
     const typeConfig = {
@@ -399,254 +417,575 @@ function ContentCard({
                     }`}>
                     {isExpanded && (
                         <div className="space-y-6">
-                            {/* Content */}
+                            {/* Content (Global/Group) */}
                             <div className="announcement-content prose max-w-none bg-white p-6 rounded-xl border border-gray-100"
                                 dangerouslySetInnerHTML={{ __html: item.content }} />
 
-                            {/* Documents */}
-                            {item.documents && item.documents.length > 0 && (
-                                <div className="mb-8">
-                                    <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-3 text-lg">
-                                        <span className="p-2 bg-blue-50 rounded-lg">
-                                            <FileText className="w-6 h-6 text-blue-500" />
-                                        </span>
-                                        Documents <span className="font-medium text-base">({item.documents.length})</span>
-                                    </h4>
-                                    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                                        {item.documents.map((docObj, i) => {
-                                            const docUrl = getFileUrl(docObj.url);
-                                            const filename = docObj.originalname;
-                                            const ext = filename.split('.').pop()?.toLowerCase() || "";
-                                            const isOffice = ["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext);
-                                            const isPdf = ext === "pdf";
-                                            return (
+                            {/* GROUP ASSIGNMENT: Show groups with their own attachments/fields */}
+                            {item.type === "groupAssignment" && Array.isArray(item.groups) && item.groups.length > 0 ? (
+                                <div className="space-y-6">
+                                    {/* Group Assignment Header (global info) */}
+                                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <div className="p-2 bg-blue-100 rounded-lg">
+                                                <Users className="w-6 h-6 text-blue-600" />
+                                            </div>
+                                            <h1 className="text-2xl font-bold text-gray-800">Group Assignment</h1>
+                                        </div>
+                                        {item.content && (
+                                            <div className="bg-green-50 rounded-lg p-4">
+                                                <h3 className="font-semibold text-gray-800 mb-3">Description</h3>
                                                 <div
-                                                    key={i}
-                                                    className="bg-white rounded-2xl border border-gray-100 shadow-lg flex flex-col p-6 transition hover:border-blue-400 hover:shadow-2xl"
-                                                >
-                                                    {/* File Info */}
-                                                    <div className="flex items-center gap-4 mb-4">
-                                                        <span className="p-3 bg-blue-50 rounded-xl flex items-center justify-center">
-                                                            {getFileIcon(filename)}
-                                                        </span>
-                                                        <div className="flex flex-col min-w-0">
-                                                            <span className="font-semibold text-gray-900 text-base truncate" title={filename}>
-                                                                {filename}
-                                                            </span>
-                                                            <span className="text-xs text-gray-400 mt-1">{getFileTypeLabel(filename)} &bull; {getFileSize(filename)}</span>
-                                                        </div>
-                                                    </div>
-                                                    {/* Divider */}
-                                                    <div className="border-t border-gray-100 my-4" />
-                                                    {/* Button Row */}
-                                                    <div className="flex flex-row gap-3 mt-auto">
-                                                        <button
-                                                            className=" flex items-center justify-center gap-2 py-2 px-2 rounded-md bg-white text-gray-900 border border-gray-300 hover:bg-gray-50 font-semibold transition shadow-sm"
-                                                            onClick={e => {
-                                                                e.stopPropagation();
-                                                                onPreview(
-                                                                    <div className="p-6">
-                                                                        {isOffice ? (
-                                                                            <iframe
-                                                                                src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(docUrl)}`}
-                                                                                className="w-full h-[70vh] border-0 rounded-lg"
-                                                                                title={filename}
-                                                                            />
-                                                                        ) : isPdf ? (
-                                                                            <iframe
-                                                                                src={docUrl}
-                                                                                className="w-full h-[70vh] border-0 rounded-lg"
-                                                                                title={filename}
-                                                                            />
-                                                                        ) : (
-                                                                            <div className="text-center py-12">
-                                                                                <File className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                                                                                <p className="text-gray-500">Preview not available for this file type</p>
-                                                                                <a
-                                                                                    href={docUrl}
-                                                                                    target="_blank"
-                                                                                    rel="noopener noreferrer"
-                                                                                    className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors whitespace-nowrap"
-                                                                                    download={filename}
-                                                                                >
-                                                                                    <Download className="w-4 h-4" />
-                                                                                    Download File
-                                                                                </a>
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                );
-                                                            }}
-                                                        >
-                                                            <Eye className="w-5 h-5" />
-                                                            View
-                                                        </button>
-                                                        <a
-                                                            href={docUrl}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            download={filename}
-                                                            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 font-semibold transition shadow-sm"
-                                                            onClick={e => e.stopPropagation()}
-                                                        >
-                                                            <Download className="w-5 h-5" />
-                                                            Download
-                                                        </a>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            )}
-
-
-                            {item.media && item.media.length > 0 && (
-                                <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-xl border border-purple-100">
-                                    <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-3 text-lg">
-                                        <div className="p-2 bg-purple-100 rounded-lg">
-                                            <FileImage className="w-6 h-6 text-purple-600" />
-                                        </div>
-                                        Images ({item.media.length})
-                                    </h4>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                                        {item.media.map((imgObj, i) => (
-                                            <div
-                                                key={i}
-                                                className="group relative cursor-pointer transform transition-all duration-300 hover:scale-105"
-                                                onClick={e => {
-                                                    e.stopPropagation();
-                                                    onPreview(
-                                                        <div className="flex flex-col items-center p-6 bg-black/80 min-h-[50vh]">
-                                                            <img
-                                                                src={getFileUrl(imgObj.url)}
-                                                                className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-lg border mb-4"
-                                                                alt={imgObj.originalname || `Preview ${i + 1}`}
-                                                                style={{ background: "#fff" }}
-                                                            />
-                                                            <a
-                                                                href={getFileUrl(imgObj.url)}
-                                                                download={imgObj.originalname}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                                                                style={{ marginTop: "1rem" }}
-                                                                onClick={e => e.stopPropagation()}
-                                                            >
-                                                                <Download className="w-5 h-5" />
-                                                                Download Image
-                                                            </a>
-
-                                                        </div>
-                                                    );
-                                                }}
-                                            >
-                                                <img
-                                                    src={getFileUrl(imgObj.url)}
-                                                    alt={imgObj.originalname || `Material image ${i + 1}`}
-                                                    className="w-full h-32 object-cover rounded-xl border-2 border-gray-100 group-hover:border-purple-200 shadow-sm group-hover:shadow-md transition-all duration-300"
-                                                />
-                                                <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-xl backdrop-blur-sm">
-                                                    <div className="bg-white/90 p-3 rounded-full shadow-lg">
-                                                        <Eye className="w-6 h-6 text-gray-700" />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-
-                            {/* YouTube Videos */}
-                            {item.youtubeLinks && item.youtubeLinks.length > 0 && (
-                                <div className="bg-gradient-to-br from-red-50 to-pink-50 p-6 rounded-xl border border-red-100">
-                                    <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-3 text-lg">
-                                        <div className="p-2 bg-red-100 rounded-lg">
-                                            <Video className="w-6 h-6 text-red-600" />
-                                        </div>
-                                        Videos ({item.youtubeLinks.length})
-                                    </h4>
-                                    <div className="grid gap-6 sm:grid-cols-2">
-                                        {item.youtubeLinks.map((url, i) => (
-                                            <div
-                                                key={i}
-                                                className="rounded-xl overflow-hidden border-2 border-gray-100 shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105 cursor-pointer"
-                                                onClick={e => {
-                                                    e.stopPropagation();
-                                                    onPreview(
-                                                        <div className="w-full flex items-center justify-center bg-black">
-                                                            <iframe
-                                                                src={getYoutubeEmbed(url)}
-                                                                title={`YouTube Video ${i + 1}`}
-                                                                className="w-[80vw] max-w-3xl h-[45vw] max-h-[70vh] bg-black rounded-xl border"
-                                                                allowFullScreen
-                                                            />
-                                                        </div>
-                                                    );
-                                                }}
-                                            >
-                                                <iframe
-                                                    src={getYoutubeEmbed(url)}
-                                                    title={`YouTube Video ${i + 1}`}
-                                                    className="w-full h-48 sm:h-56"
-                                                    allowFullScreen
+                                                    className="text-gray-700 leading-relaxed prose prose-sm max-w-none"
+                                                    dangerouslySetInnerHTML={{
+                                                        __html: item.content || "<span class='text-gray-400 italic'>No content available</span>"
+                                                    }}
                                                 />
                                             </div>
-                                        ))}
+                                        )}
                                     </div>
-                                </div>
-                            )}
 
-                            {/* Links */}
-                            {item.links && item.links.length > 0 && (
-                                <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-xl border border-green-100">
-                                    <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-3 text-lg">
-                                        <div className="p-2 bg-green-100 rounded-lg">
-                                            <Link className="w-6 h-6 text-green-600" />
-                                        </div>
-                                        Links ({item.links.length})
-                                    </h4>
-                                    <div className="space-y-3">
-                                        {item.links.map((url, i) => (
-                                            <a
-                                                key={i}
-                                                href={url}
-                                                className="flex items-center gap-3 p-4 bg-white hover:bg-green-50 border-2 border-gray-100 hover:border-green-200 rounded-xl transition-all duration-200 text-green-700 hover:text-green-800 group hover:scale-105 shadow-sm hover:shadow-md"
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                onClick={e => {
-                                                    e.stopPropagation();
-                                                    onPreview(
-                                                        <div className="p-10 bg-white max-w-xl mx-auto rounded-lg text-center space-y-6">
-                                                            <div className="flex justify-center">
-                                                                <Link className="w-12 h-12 text-green-600" />
+                                    {/* All Groups */}
+                                    <div className="grid gap-6">
+
+                                        {item.groups.map((group, i) => (
+                                            <div key={group.id || i} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow duration-200">
+                                                {/* Group Header */}
+                                                <div className="bg-gradient-to-r from-amber-500 to-orange-500 p-6 text-white">
+                                                    <div className="flex items-center justify-between">
+                                                        <h2 className="text-xl font-bold">{group.name}</h2>
+                                                        <div className="flex gap-2">
+
+                                                            <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1">
+                                                                <Users className="w-4 h-4" />
+                                                                <span className="text-sm font-medium">{group.members?.length || 0} members</span>
+
                                                             </div>
-                                                            <div className="text-xl font-semibold mb-2">{url}</div>
-                                                            <a
-                                                                href={url}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                                                            >
-                                                                <ExternalLinkIcon className="w-4 h-4" />
-                                                                Open Link
-                                                            </a>
+                                                            <div className="flex justify-end">
+
+                                                                <button
+                                                                    className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                                                                    onClick={e => {
+                                                                        e.stopPropagation();
+                                                                        const groupId = group.id || (group as any)._id;
+                                                                        if (!groupId) {
+                                                                            alert("Error: group ID missing!");
+                                                                            return;
+                                                                        }
+                                                                        onDeleteGroup(item._id, groupId);
+                                                                    }}
+                                                                >
+                                                                    Delete Group
+                                                                </button>
+
+
+                                                            </div>
                                                         </div>
-                                                    );
-                                                }}
-                                            >
-                                                <div className="p-2 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors">
-                                                    <Link className="w-4 h-4" />
+                                                    </div>
                                                 </div>
-                                                <span className="text-sm font-medium truncate flex-1">{url}</span>
-                                            </a>
+
+
+                                                <div className="p-6 space-y-6">
+                                                    {/* Team Members */}
+                                                    <div className="bg-gray-50 rounded-lg p-4">
+                                                        <div className="flex items-center gap-2 mb-3">
+                                                            <Users className="w-5 h-5 text-gray-600" />
+                                                            <h3 className="font-semibold text-gray-800">Team Members</h3>
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {group.members?.map((memberId, idx) => {
+                                                                const user = allStudents.find(u => u._id === memberId);
+                                                                return (
+                                                                    <span key={idx} className="bg-white border border-gray-200 rounded-full px-3 py-1 text-sm font-medium text-gray-700 shadow-sm">
+                                                                        {user ? user.username || user.email : memberId}
+                                                                    </span>
+                                                                );
+                                                            }) || <span className="text-gray-400 italic">No members assigned</span>}
+
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Task */}
+                                                    {group.task && (
+                                                        <div className="bg-blue-50 rounded-lg p-4">
+                                                            <div className="flex items-center gap-2 mb-3">
+                                                                <Clipboard className="w-5 h-5 text-blue-600" />
+                                                                <h3 className="font-semibold text-gray-800">Task</h3>
+                                                            </div>
+                                                            <p className="text-gray-700 leading-relaxed">{group.task}</p>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Description (per group or fallback to global) */}
+                                                    {(group.content || item.content) && (
+                                                        <div className="bg-green-50 rounded-lg p-4">
+                                                            <h3 className="font-semibold text-gray-800 mb-3">Description</h3>
+                                                            <div
+                                                                className="text-gray-700 leading-relaxed prose prose-sm max-w-none"
+                                                                dangerouslySetInnerHTML={{
+                                                                    __html: group.content || item.content || "<span class='text-gray-400 italic'>No content available</span>"
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    )}
+
+                                                    {/* Resources Grid */}
+                                             
+                                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                                        {/* Documents */}
+                                                        {((group?.documents?.length ?? 0) || (item.documents?.length ?? 0)) > 0 && (
+                                                            <div className="bg-purple-50 rounded-lg p-4">
+                                                                <div className="flex items-center gap-2 mb-4">
+                                                                    <FileText className="w-5 h-5 text-purple-600" />
+                                                                    <h3 className="font-semibold text-gray-800">Documents</h3>
+                                                                </div>
+                                                                <div className="space-y-2">
+                                                                    {(group?.documents?.length ? group.documents : item.documents ?? []).map((doc, idx) => {
+                                                                        const docUrl = getFileUrl(doc.url);
+                                                                        const filename = doc.originalname;
+                                                                        const ext = filename.split('.').pop()?.toLowerCase() || "";
+                                                                        const isOffice = ["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext);
+                                                                        const isPdf = ext === "pdf";
+                                                                        return (
+                                                                            <button
+                                                                                key={(doc.url || "") + idx}
+                                                                                type="button"
+                                                                                onClick={e => {
+                                                                                    e.stopPropagation();
+                                                                                    onPreview(
+                                                                                        <div className="p-6">
+                                                                                            {isOffice ? (
+                                                                                                <iframe
+                                                                                                    src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(docUrl)}`}
+                                                                                                    className="w-full h-[70vh] border-0 rounded-lg"
+                                                                                                    title={filename}
+                                                                                                />
+                                                                                            ) : isPdf ? (
+                                                                                                <iframe
+                                                                                                    src={docUrl}
+                                                                                                    className="w-full h-[70vh] border-0 rounded-lg"
+                                                                                                    title={filename}
+                                                                                                />
+                                                                                            ) : (
+                                                                                                <div className="text-center py-12">
+                                                                                                    <File className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                                                                                                    <p className="text-gray-500">Preview not available for this file type</p>
+                                                                                                    <a
+                                                                                                        href={docUrl}
+                                                                                                        target="_blank"
+                                                                                                        rel="noopener noreferrer"
+                                                                                                        className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors whitespace-nowrap"
+                                                                                                        download={filename}
+                                                                                                    >
+                                                                                                        <Download className="w-4 h-4" />
+                                                                                                        Download File
+                                                                                                    </a>
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    );
+                                                                                }}
+                                                                                className="flex items-center gap-3 p-3 bg-white rounded-lg border border-purple-200 hover:border-purple-300 hover:shadow-sm transition-all duration-200 group w-full text-left"
+                                                                            >
+                                                                                <div className="p-2 bg-purple-100 rounded-lg group-hover:bg-purple-200 transition-colors">
+                                                                                    <FileText className="w-4 h-4 text-purple-600" />
+                                                                                </div>
+                                                                                <span className="text-gray-700 font-medium flex-1 truncate">{filename}</span>
+                                                                                <Eye className="w-4 h-4 text-gray-400 group-hover:text-purple-600 transition-colors" />
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Links */}
+                                                        {((group?.links?.length ?? 0) || (item.links?.length ?? 0)) > 0 && (
+                                                            <div className="bg-green-50 rounded-lg p-4">
+                                                                <div className="flex items-center gap-2 mb-4">
+                                                                    <ExternalLink className="w-5 h-5 text-green-600" />
+                                                                    <h3 className="font-semibold text-gray-800">Links</h3>
+                                                                </div>
+                                                                <div className="space-y-2">
+                                                                    {(group?.links?.length ? group.links : item.links ?? []).map((url, idx) => (
+                                                                        <button
+                                                                            key={(url || "") + idx}
+                                                                            type="button"
+                                                                            onClick={e => {
+                                                                                e.stopPropagation();
+                                                                                onPreview(
+                                                                                    <div className="p-10 bg-white max-w-xl mx-auto rounded-lg text-center space-y-6">
+                                                                                        <div className="flex justify-center">
+                                                                                            <Link className="w-12 h-12 text-green-600" />
+                                                                                        </div>
+                                                                                        <div className="text-xl font-semibold mb-2">{url}</div>
+                                                                                        <a
+                                                                                            href={url}
+                                                                                            target="_blank"
+                                                                                            rel="noopener noreferrer"
+                                                                                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                                                                                        >
+                                                                                            <ExternalLink className="w-4 h-4" />
+                                                                                            Open Link
+                                                                                        </a>
+                                                                                    </div>
+                                                                                );
+                                                                            }}
+                                                                            className="flex items-center gap-3 p-3 bg-white rounded-lg border border-green-200 hover:border-green-300 hover:shadow-sm transition-all duration-200 group w-full text-left"
+                                                                        >
+                                                                            <div className="p-2 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors">
+                                                                                <ExternalLink className="w-4 h-4 text-green-600" />
+                                                                            </div>
+                                                                            <span className="text-gray-700 font-medium flex-1 truncate">{url}</span>
+                                                                            <Eye className="w-4 h-4 text-gray-400 group-hover:text-green-600 transition-colors" />
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Media Gallery */}
+                                                    {((group?.media?.length ?? 0) || (item.media?.length ?? 0)) > 0 && (
+                                                        <div className="bg-rose-50 rounded-lg p-4 mt-6">
+                                                            <div className="flex items-center gap-2 mb-4">
+                                                                <Image className="w-5 h-5 text-rose-600" />
+                                                                <h3 className="font-semibold text-gray-800">Images</h3>
+                                                            </div>
+                                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                                                {(group?.media?.length ? group.media : item.media ?? []).map((img, idx) => (
+                                                                    <div
+                                                                        key={(img.url || "") + idx}
+                                                                        className="group relative overflow-hidden rounded-lg border-2 border-rose-200 hover:border-rose-300 transition-all duration-200 cursor-pointer"
+                                                                        onClick={e => {
+                                                                            e.stopPropagation();
+                                                                            onPreview(
+                                                                                <div className="flex flex-col items-center p-6 bg-black/80 min-h-[50vh]">
+                                                                                    <img
+                                                                                        src={getFileUrl(img.url)}
+                                                                                        className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-lg border mb-4"
+                                                                                        alt={img.originalname || `Preview ${idx + 1}`}
+                                                                                        style={{ background: "#fff" }}
+                                                                                    />
+                                                                                    <a
+                                                                                        href={getFileUrl(img.url)}
+                                                                                        download={img.originalname}
+                                                                                        target="_blank"
+                                                                                        rel="noopener noreferrer"
+                                                                                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                                                                                        style={{ marginTop: "1rem" }}
+                                                                                        onClick={e => e.stopPropagation()}
+                                                                                    >
+                                                                                        <Download className="w-4 h-4" />
+                                                                                        Download Image
+                                                                                    </a>
+                                                                                </div>
+                                                                            );
+                                                                        }}
+                                                                    >
+                                                                        <img
+                                                                            src={getFileUrl(img.url)}
+                                                                            alt={img.originalname || `Material image ${idx + 1}`}
+                                                                            className="w-full h-24 object-cover rounded-xl border-2 border-gray-100 group-hover:border-rose-200 shadow-sm group-hover:shadow-md transition-all duration-300"
+                                                                        />
+                                                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-200" />
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* YouTube Videos */}
+                                                    {((group?.youtubeLinks?.length ?? 0) || (item.youtubeLinks?.length ?? 0)) > 0 && (
+                                                        <div className="bg-red-50 rounded-lg p-4 mt-6">
+                                                            <div className="flex items-center gap-2 mb-4">
+                                                                <Youtube className="w-5 h-5 text-red-600" />
+                                                                <h3 className="font-semibold text-gray-800">YouTube Videos</h3>
+                                                            </div>
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                                {(group?.youtubeLinks?.length ? group.youtubeLinks : item.youtubeLinks ?? []).map((url, idx) => (
+                                                                    <div
+                                                                        key={(url || "") + idx}
+                                                                        className="bg-white rounded-lg overflow-hidden border border-red-200 shadow-sm cursor-pointer"
+                                                                        onClick={e => {
+                                                                            e.stopPropagation();
+                                                                            onPreview(
+                                                                                <div className="w-full flex items-center justify-center bg-black">
+                                                                                    <iframe
+                                                                                        src={getYoutubeEmbed(url)}
+                                                                                        title={`YouTube Video ${idx + 1}`}
+                                                                                        className="w-[80vw] max-w-3xl h-[45vw] max-h-[70vh] bg-black rounded-xl border"
+                                                                                        allowFullScreen
+                                                                                    />
+                                                                                </div>
+                                                                            );
+                                                                        }}
+                                                                    >
+                                                                        <iframe
+                                                                            src={getYoutubeEmbed(url)}
+                                                                            title={`YouTube Video ${idx + 1}`}
+                                                                            className="w-full h-48"
+                                                                            allowFullScreen
+                                                                        />
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                </div>
+                                            </div>
                                         ))}
                                     </div>
                                 </div>
+                            ) : (
+                                // NORMAL (non-groupAssignment) content
+                                <>
+                                    {/* Documents */}
+                                    {item.documents && item.documents.length > 0 && (
+                                        <div className="mb-8">
+                                            <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-3 text-lg">
+                                                <span className="p-2 bg-blue-50 rounded-lg">
+                                                    <FileText className="w-6 h-6 text-blue-500" />
+                                                </span>
+                                                Documents <span className="font-medium text-base">({item.documents.length})</span>
+                                            </h4>
+                                            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                                                {item.documents.map((docObj, i) => {
+                                                    const docUrl = getFileUrl(docObj.url);
+                                                    const filename = docObj.originalname;
+                                                    const ext = filename.split('.').pop()?.toLowerCase() || "";
+                                                    const isOffice = ["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext);
+                                                    const isPdf = ext === "pdf";
+                                                    return (
+                                                        <div
+                                                            key={i}
+                                                            className="bg-white rounded-2xl border border-gray-100 shadow-lg flex flex-col p-6 transition hover:border-blue-400 hover:shadow-2xl"
+                                                        >
+                                                            {/* File Info */}
+                                                            <div className="flex items-center gap-4 mb-4">
+                                                                <span className="p-3 bg-blue-50 rounded-xl flex items-center justify-center">
+                                                                    {getFileIcon(filename)}
+                                                                </span>
+                                                                <div className="flex flex-col min-w-0">
+                                                                    <span className="font-semibold text-gray-900 text-base truncate" title={filename}>
+                                                                        {filename}
+                                                                    </span>
+                                                                    <span className="text-xs text-gray-400 mt-1">{getFileTypeLabel(filename)} &bull; {getFileSize(filename)}</span>
+                                                                </div>
+                                                            </div>
+                                                            {/* Divider */}
+                                                            <div className="border-t border-gray-100 my-4" />
+                                                            {/* Button Row */}
+                                                            <div className="flex flex-row gap-3 mt-auto">
+                                                                <button
+                                                                    className=" flex items-center justify-center gap-2 py-2 px-2 rounded-md bg-white text-gray-900 border border-gray-300 hover:bg-gray-50 font-semibold transition shadow-sm"
+                                                                    onClick={e => {
+                                                                        e.stopPropagation();
+                                                                        onPreview(
+                                                                            <div className="p-6">
+                                                                                {isOffice ? (
+                                                                                    <iframe
+                                                                                        src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(docUrl)}`}
+                                                                                        className="w-full h-[70vh] border-0 rounded-lg"
+                                                                                        title={filename}
+                                                                                    />
+                                                                                ) : isPdf ? (
+                                                                                    <iframe
+                                                                                        src={docUrl}
+                                                                                        className="w-full h-[70vh] border-0 rounded-lg"
+                                                                                        title={filename}
+                                                                                    />
+                                                                                ) : (
+                                                                                    <div className="text-center py-12">
+                                                                                        <File className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                                                                                        <p className="text-gray-500">Preview not available for this file type</p>
+                                                                                        <a
+                                                                                            href={docUrl}
+                                                                                            target="_blank"
+                                                                                            rel="noopener noreferrer"
+                                                                                            className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors whitespace-nowrap"
+                                                                                            download={filename}
+                                                                                        >
+                                                                                            <Download className="w-4 h-4" />
+                                                                                            Download File
+                                                                                        </a>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    }}
+                                                                >
+                                                                    <Eye className="w-5 h-5" />
+                                                                    View
+                                                                </button>
+                                                                <a
+                                                                    href={docUrl}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    download={filename}
+                                                                    className="flex-1 flex items-center justify-center gap-2 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 font-semibold transition shadow-sm"
+                                                                    onClick={e => e.stopPropagation()}
+                                                                >
+                                                                    <Download className="w-5 h-5" />
+                                                                    Download
+                                                                </a>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Media */}
+                                    {item.media && item.media.length > 0 && (
+                                        <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-xl border border-purple-100">
+                                            <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-3 text-lg">
+                                                <div className="p-2 bg-purple-100 rounded-lg">
+                                                    <FileImage className="w-6 h-6 text-purple-600" />
+                                                </div>
+                                                Images ({item.media.length})
+                                            </h4>
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                                                {item.media.map((imgObj, i) => (
+                                                    <div
+                                                        key={i}
+                                                        className="group relative cursor-pointer transform transition-all duration-300 hover:scale-105"
+                                                        onClick={e => {
+                                                            e.stopPropagation();
+                                                            onPreview(
+                                                                <div className="flex flex-col items-center p-6 bg-black/80 min-h-[50vh]">
+                                                                    <img
+                                                                        src={getFileUrl(imgObj.url)}
+                                                                        className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-lg border mb-4"
+                                                                        alt={imgObj.originalname || `Preview ${i + 1}`}
+                                                                        style={{ background: "#fff" }}
+                                                                    />
+                                                                    <a
+                                                                        href={getFileUrl(imgObj.url)}
+                                                                        download={imgObj.originalname}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                                                                        style={{ marginTop: "1rem" }}
+                                                                        onClick={e => e.stopPropagation()}
+                                                                    >
+                                                                        <Download className="w-5 h-5" />
+                                                                        Download Image
+                                                                    </a>
+                                                                </div>
+                                                            );
+                                                        }}
+                                                    >
+                                                        <img
+                                                            src={getFileUrl(imgObj.url)}
+                                                            alt={imgObj.originalname || `Material image ${i + 1}`}
+                                                            className="w-full h-32 object-cover rounded-xl border-2 border-gray-100 group-hover:border-purple-200 shadow-sm group-hover:shadow-md transition-all duration-300"
+                                                        />
+                                                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-xl backdrop-blur-sm">
+                                                            <div className="bg-white/90 p-3 rounded-full shadow-lg">
+                                                                <Eye className="w-6 h-6 text-gray-700" />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* YouTube Videos */}
+                                    {item.youtubeLinks && item.youtubeLinks.length > 0 && (
+                                        <div className="bg-gradient-to-br from-red-50 to-pink-50 p-6 rounded-xl border border-red-100">
+                                            <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-3 text-lg">
+                                                <div className="p-2 bg-red-100 rounded-lg">
+                                                    <Video className="w-6 h-6 text-red-600" />
+                                                </div>
+                                                Videos ({item.youtubeLinks.length})
+                                            </h4>
+                                            <div className="grid gap-6 sm:grid-cols-2">
+                                                {item.youtubeLinks.map((url, i) => (
+                                                    <div
+                                                        key={i}
+                                                        className="rounded-xl overflow-hidden border-2 border-gray-100 shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105 cursor-pointer"
+                                                        onClick={e => {
+                                                            e.stopPropagation();
+                                                            onPreview(
+                                                                <div className="w-full flex items-center justify-center bg-black">
+                                                                    <iframe
+                                                                        src={getYoutubeEmbed(url)}
+                                                                        title={`YouTube Video ${i + 1}`}
+                                                                        className="w-[80vw] max-w-3xl h-[45vw] max-h-[70vh] bg-black rounded-xl border"
+                                                                        allowFullScreen
+                                                                    />
+                                                                </div>
+                                                            );
+                                                        }}
+                                                    >
+                                                        <iframe
+                                                            src={getYoutubeEmbed(url)}
+                                                            title={`YouTube Video ${i + 1}`}
+                                                            className="w-full h-48 sm:h-56"
+                                                            allowFullScreen
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Links */}
+                                    {item.links && item.links.length > 0 && (
+                                        <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-xl border border-green-100">
+                                            <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-3 text-lg">
+                                                <div className="p-2 bg-green-100 rounded-lg">
+                                                    <Link className="w-6 h-6 text-green-600" />
+                                                </div>
+                                                Links ({item.links.length})
+                                            </h4>
+                                            <div className="space-y-3">
+                                                {item.links.map((url, i) => (
+                                                    <a
+                                                        key={i}
+                                                        href={url}
+                                                        className="flex items-center gap-3 p-4 bg-white hover:bg-green-50 border-2 border-gray-100 hover:border-green-200 rounded-xl transition-all duration-200 text-green-700 hover:text-green-800 group hover:scale-105 shadow-sm hover:shadow-md"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        onClick={e => {
+                                                            e.stopPropagation();
+                                                            onPreview(
+                                                                <div className="p-10 bg-white max-w-xl mx-auto rounded-lg text-center space-y-6">
+                                                                    <div className="flex justify-center">
+                                                                        <Link className="w-12 h-12 text-green-600" />
+                                                                    </div>
+                                                                    <div className="text-xl font-semibold mb-2">{url}</div>
+                                                                    <a
+                                                                        href={url}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                                                                    >
+                                                                        <ExternalLinkIcon className="w-4 h-4" />
+                                                                        Open Link
+                                                                    </a>
+                                                                </div>
+                                                            );
+                                                        }}
+                                                    >
+                                                        <div className="p-2 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors">
+                                                            <Link className="w-4 h-4" />
+                                                        </div>
+                                                        <span className="text-sm font-medium truncate flex-1">{url}</span>
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
                     )}
+
                 </div>
             </div>
         </div>
@@ -740,6 +1079,24 @@ export default function UnifiedFeed({
     useEffect(() => {
         fetchFeed();
     }, [courseInstanceId, token]);
+    //delete group
+    async function handleDeleteGroup(groupAssignmentId: string, groupId: string) {
+        if (!window.confirm("Are you sure you want to remove this group?")) return;
+
+        try {
+            await fetch(
+                `${process.env.NEXT_PUBLIC_BACKEND_URL}/group-assignment/${groupAssignmentId}/group/${groupId}`,
+                {
+                    method: "DELETE",
+                    headers: { Authorization: `Bearer ${token}` }
+                }
+            );
+            fetchFeed();
+        } catch (err) {
+            alert("Error removing group: " + (err as Error).message);
+        }
+
+    }
 
     // Topic dropdown options
     const topicOptions = [
@@ -829,6 +1186,8 @@ export default function UnifiedFeed({
             url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/assignment/${deleteTarget._id}`;
         } else if (deleteTarget.type === "question") {
             url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/question/${deleteTarget._id}`;
+        } else if (deleteTarget.type === "groupAssignment") {
+            url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/group-assignment/${deleteTarget._id}`;
         }
         if (url) {
             await fetch(url, {
@@ -973,6 +1332,7 @@ export default function UnifiedFeed({
                                     // same assertion when you hand it to setEditTarget and setDeleteTarget:
                                     onEdit={() => setEditTarget(item as MaterialOrAssignment)}
                                     onDelete={() => setDeleteTarget(item as MaterialOrAssignment)}
+                                    onDeleteGroup={handleDeleteGroup}
                                 />
                             ))}
                         </div>
@@ -1079,7 +1439,26 @@ export default function UnifiedFeed({
 
                 </Modal>
             )}
-
+            {editTarget && editTarget.type === "groupAssignment" && (
+  <Modal
+    onClose={() => setEditTarget(null)}
+    isFull={false}
+    onToggleFull={() => {}}
+    showHeader={false}
+  >
+    <EditGroupAssignmentForm
+      groupAssignmentId={editTarget._id}
+      courseInstanceId={courseInstanceId}
+      courseName={courseName}
+      open={true}
+      onClose={() => setEditTarget(null)}
+      onSuccess={() => {
+        setEditTarget(null);
+        fetchFeed();
+      }}
+    />
+  </Modal>
+)}
             {editTopicTarget && (
                 <TopicModal
                     open={true}

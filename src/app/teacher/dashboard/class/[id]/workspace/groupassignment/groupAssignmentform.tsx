@@ -10,7 +10,7 @@ import {
 import dynamic from "next/dynamic";
 import toast from "react-hot-toast";
 
-const TiptapEditor = dynamic(() => import("./rtecomponent"), { ssr: false });
+const TiptapEditor = dynamic(() => import("./groupAssignment_rtecomponent"), { ssr: false });
 // Mock data for demonstration
 interface User { _id: string; username: string; }
 interface Topic { _id: string; title: string; }
@@ -216,117 +216,172 @@ export default function GroupAssignmentForm({
     }
   };
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setIsSubmitting(true);
+ async function handleSubmit(e: React.FormEvent) {
+  e.preventDefault();
+  setIsSubmitting(true);
 
-    const token =
-      localStorage.getItem('token_teacher') ||
-      sessionStorage.getItem('token_teacher') ||
-      '';
+  // ==== Debugging Logs ====
+  console.log("=== handleSubmit debug ===");
+  console.log("globalPoints:", globalPoints, typeof globalPoints);
+  console.log("useGlobal:", useGlobal);
+  console.log("groups:", groups);
 
-    // 1) Build your groupsPayload exactly as JSON
- const groupsPayload = groups.map(g => {
-  const isGlobal = !!useGlobal[g.id];
-  const youtubeLinks = isGlobal
-    ? [...globalYt, ...g.ytLinks]
-    : g.ytLinks;
-  const links = isGlobal
-    ? [...globalLinks, ...g.links]
-    : g.links;
+  groups.forEach((g, idx) => {
+    const effectivePoints = useGlobal[g.id] ? globalPoints : g.points;
+    console.log(
+      `Group ${idx} (${g.name || g.id}):`,
+      {
+        points: g.points,
+        effectivePoints,
+        type: typeof effectivePoints,
+        name: g.name,
+        members: g.members,
+        task: g.task,
+        mediaFiles: g.mediaFiles,
+        docFiles: g.docFiles,
+        ytLinks: g.ytLinks,
+        links: g.links,
+      }
+    );
+  });
 
-  return {
-    members: g.members,
-    task:    g.task,
-    name:    g.name,
-    points:  isGlobal ? globalPoints  : g.points,
-    dueDate: isGlobal ? globalDueDate : g.dueDate,
+  // --- Points Validation (Global) ---
+  if (
+    typeof globalPoints !== "number" ||
+    isNaN(globalPoints) ||
+    globalPoints < 0 ||
+    !Number.isInteger(globalPoints)
+  ) {
+    console.error("Global Points validation failed!", globalPoints, typeof globalPoints);
+    toast.error("Global Points must be a non-negative integer");
+    setIsSubmitting(false);
+    return;
+  }
 
-    // whether global or not, we always include all of the above,
-    // but for resources we branch into our merged arrays:
-    youtubeLinks,
-    links,
-    media:      isGlobal ? globalMedia.map(f => ({ url: "", originalname: f.name })) : g.mediaFiles.map(f => ({ url: "", originalname: f.name })),
-    documents:  isGlobal ? globalDocs.map(f => ({ url: "", originalname: f.name })) : g.docFiles.map(f => ({ url: "", originalname: f.name })),
-    title:      isGlobal ? globalTitle   : g.title,
-    content:    isGlobal ? globalContent : g.content,
-    topic:      isGlobal ? globalTopic   : g.topic,
-  };
-});
+  // --- Points Validation (Each Group) ---
+  for (const g of groups) {
+    const points = useGlobal[g.id] ? globalPoints : g.points;
+    if (
+      typeof points !== "number" ||
+      isNaN(points) ||
+      points < 0 ||
+      !Number.isInteger(points)
+    ) {
+      console.error("Group Points validation failed!", points, g);
+      toast.error("Points for every group must be a non-negative integer");
+      setIsSubmitting(false);
+      return;
+    }
+  }
 
+  const token =
+    localStorage.getItem('token_teacher') ||
+    sessionStorage.getItem('token_teacher') ||
+    '';
 
+  // --- Build groupsPayload ---
+  const groupsPayload = groups.map((g, groupIdx) => {
+    const isGlobal = !!useGlobal[g.id];
+    return {
+      members: g.members,
+      task: g.task,
+      name: g.name,
+      points: isGlobal ? globalPoints : g.points,
+      dueDate: isGlobal ? globalDueDate : g.dueDate,
+      youtubeLinks: isGlobal ? globalYt : g.ytLinks,
+      links: isGlobal ? globalLinks : g.links,
+      media: isGlobal
+        ? globalMedia.map(f => ({ url: "", originalname: f.name }))
+        : g.mediaFiles.map(f => ({ url: "", originalname: f.name })),
+      documents: isGlobal
+        ? globalDocs.map(f => ({ url: "", originalname: f.name }))
+        : g.docFiles.map(f => ({ url: "", originalname: f.name })),
+      title: isGlobal ? globalTitle : g.title,
+      content: isGlobal ? globalContent : g.content,
+      topic: isGlobal ? globalTopic : g.topic,
+    };
+  });
 
-    // 2) Build your top‑level payload
-    const form = new FormData();
-    form.append("courseInstance", courseInstanceId);
-    console.log("Sending courseInstance:", courseInstanceId);
-    if (globalTitle.trim()) form.append("title", globalTitle);
+  // --- Omit global fields if all groups are custom ---
+  const allGroupsCustom = groups.every(g => !useGlobal[g.id]);
+  const payloadTitle = globalTitle.trim();
+
+  // --- Build FormData ---
+  const form = new FormData();
+  form.append("courseInstance", courseInstanceId);
+  if (payloadTitle) form.append("title", payloadTitle);
+
+  if (!allGroupsCustom) {
     if (globalContent.trim()) form.append("content", globalContent);
     if (globalTopic) form.append("topic", globalTopic);
     if (globalPoints != null) form.append("points", String(globalPoints));
     if (globalDueDate) form.append("dueDate", globalDueDate);
-
-    // media/docs: only append if non‑empty
     globalMedia.forEach(f => form.append("media", f));
     globalDocs.forEach(f => form.append("documents", f));
-
-    // same for links arrays
     if (globalYt.length) form.append("youtubeLinks", JSON.stringify(globalYt));
     if (globalLinks.length) form.append("links", JSON.stringify(globalLinks));
+  }
 
-    // always append the JSON payload for groups
-    form.append("groups", JSON.stringify(groupsPayload));
+  // --- Per-group files ---
+  groups.forEach((g, i) => {
+    g.mediaFiles?.forEach(f => form.append(`media-${i}`, f));
+    g.docFiles?.forEach(f => form.append(`documents-${i}`, f));
+  });
 
-    console.group("🚀 Submitting Group Assignment");
-    console.log("  Global points:", globalPoints);
-    groupsPayload.forEach((g, idx) =>
-      console.log(`  Group #${idx + 1} points:`, g.points)
-    );
-    console.log("Full payload:", form);
-    console.groupEnd();
-    let json: any;
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/group-assignment/`,
-        {
-          method: 'POST',
-          headers: {
-            // 'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: form,
-        }
-      );
+  // --- Always append groupsPayload as JSON ---
+  form.append("groups", JSON.stringify(groupsPayload));
 
-      json = await res.json();
-      setIsSubmitting(false);
+  // Debug before sending
+  console.log("FormData about to be submitted:");
+  for (let pair of form.entries()) {
+    console.log(pair[0], pair[1]);
+  }
 
-      if (res.ok) {
-        toast.success('Assignment created!');
-        onSuccess();
-        return;
+  // --- API Submit ---
+  let json;
+  try {
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_BACKEND_URL}/group-assignment/`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: form,
       }
-    } catch (err) {
-      setIsSubmitting(false);
-      toast.error('Network error. Please try again.');
+    );
+    json = await res.json();
+    setIsSubmitting(false);
+
+    if (res.ok) {
+      toast.success('Assignment created!');
+      onSuccess();
       return;
     }
-
-    // If we reach here, res.ok was false and `json` contains the error payload
-    if (Array.isArray(json.errors)) {
-      json.errors.forEach((error: { msg: string; path?: string }) => {
-        const label = error.path ? `${error.path}: ` : '';
-        toast.error(label + error.msg);
-      });
-    } else if (typeof json.error === 'string') {
-      toast.error(json.error);
-    } else {
-      toast.error('Something went wrong. Please check your inputs.');
-    }
+  } catch (err) {
+    setIsSubmitting(false);
+    toast.error('Network error. Please try again.');
+    console.error("Network error:", err);
+    return;
   }
-  //yt 
 
-  // do we have a valid global title?
+  // --- Error Display ---
+  if (Array.isArray(json.errors)) {
+    json.errors.forEach((error: { msg: string; path?: string }) => {
+      const label = error.path ? `${error.path}: ` : '';
+      toast.error(label + error.msg);
+      console.error("API error:", error);
+    });
+  } else if (typeof json.error === 'string') {
+    toast.error(json.error);
+    console.error("API error:", json.error);
+  } else {
+    toast.error('Something went wrong. Please check your inputs.');
+    console.error("Unknown error:", json);
+  }
+}
+
+
   const hasGlobalTitle = globalTitle.trim().length > 0;
 
   // do _all_ groups that are *not* using global have their own title?
@@ -537,7 +592,8 @@ export default function GroupAssignmentForm({
 
           {/* Content */}
           <div className="flex-1 overflow-auto">
-            <form onSubmit={handleSubmit} className="p-6 space-y-8">
+  <form className="p-6 space-y-8" onSubmit={handleSubmit}>
+
               {/* Global Settings */}
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
                 <div className="flex items-center gap-3 mb-6">
@@ -582,13 +638,18 @@ export default function GroupAssignmentForm({
                           <Award className="w-4 h-4 inline mr-1" />
                           Points
                         </label>
-                        <input
-                          type="number"
-                          min={0}
-                          className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                          value={globalPoints}
-                          onChange={e => setGlobalPoints(+e.target.value)}
-                        />
+                       <input
+  type="number"
+  min={0}
+  step={1}
+  value={globalPoints}
+  onChange={e =>
+    setGlobalPoints(
+      e.target.value === "" ? 0 : Math.max(0, Math.floor(Number(e.target.value)))
+    )
+  }
+/>
+
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -911,13 +972,17 @@ export default function GroupAssignmentForm({
                                       <div className="grid grid-cols-2 gap-4">
                                         <div>
                                           <label className="block text-sm font-medium text-gray-700 mb-2">Points</label>
-                                          <input
-                                            type="number"
-                                            min={0}
-                                            className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                            value={group.points ?? ""}
-                                            onChange={e => updateGroup(groupIndex, "points", +e.target.value)}
-                                          />
+                                         <input
+  type="number"
+  min={0}
+  step={1}
+  value={group.points}
+  onChange={e => {
+    const val = e.target.value === "" ? 0 : Math.max(0, Math.floor(Number(e.target.value)));
+    updateGroup(groupIndex, "points", val);
+  }}
+/>
+
                                         </div>
                                         <div>
                                           <label className="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
@@ -1047,24 +1112,7 @@ export default function GroupAssignmentForm({
                                   </h5>
 
                                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                    <div>
-                                      <div className="text-sm font-medium text-gray-600">
-                                        YouTube Videos
-                                      </div>
-                                      <div className="space-y-2">
-                                        {globalYt.map((url, i) => (
-                                          <a
-                                            key={i}
-                                            href={url.replace("embed/", "watch?v=")}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-blue-600 underline text-sm"
-                                          >
-                                            {url}
-                                          </a>
-                                        ))}
-                                      </div>
-                                    </div>
+
 
                                     {/* Group Media */}
                                     <div className="space-y-3">
@@ -1272,9 +1320,7 @@ export default function GroupAssignmentForm({
                   </div>
                 </div>
               )}
-            </form>
-          </div>
-
+              
           {/* Footer */}
           <div className="bg-gray-50 border-t border-gray-200 p-6">
             <div className="flex items-center justify-between">
@@ -1309,30 +1355,32 @@ export default function GroupAssignmentForm({
                 )}
 
                 <button
-                  type="submit"
-
-                  onClick={handleSubmit}
-                  disabled={isSubmitting || !canSubmit}
-                  className={`flex items-center gap-2 px-8 py-3 rounded-lg font-medium transition-all shadow-sm ${isSubmitting || !canSubmit
-                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                    : "bg-green-600 hover:bg-green-700 text-white shadow-green-200"
-                    }`}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Creating Assignment...
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-4 h-4" />
-                      Create Assignment
-                    </>
-                  )}
-                </button>
+      type="submit"
+      disabled={isSubmitting || !canSubmit}
+      className={`flex items-center gap-2 px-8 py-3 rounded-lg font-medium transition-all shadow-sm ${
+        isSubmitting || !canSubmit
+          ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+          : "bg-green-600 hover:bg-green-700 text-white shadow-green-200"
+      }`}
+    >
+      {isSubmitting ? (
+        <>
+          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          Creating Assignment...
+        </>
+      ) : (
+        <>
+          <Check className="w-4 h-4" />
+          Create Assignment
+        </>
+      )}
+    </button>
               </div>
             </div>
           </div>
+            </form>
+          </div>
+
         </div>
       </div>
     </>
