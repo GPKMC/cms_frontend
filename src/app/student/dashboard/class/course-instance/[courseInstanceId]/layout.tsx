@@ -1,6 +1,7 @@
 
 import React from "react";
-import CourseNavbar from "./navbar";
+import CourseNavbar from "./components/CourseNavbar";
+
 export default function ClassLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen w-full">

@@ -14,13 +14,13 @@ import {
 import { Home, Users } from "lucide-react";
 
 const sidebarTeacherItems = [
-  { id: 1, label: "Home", icon: <Home />, page: "/teacher/dashboard" },
-  { id: 2, label: "My Classes", icon: <FaBookOpen />, page: "/teacher/dashboard/class" },
-  { id: 3, label: "Assignments", icon: <FaClipboardList />, page: "/teacher/dashboard/assignments" },
-  { id: 4, label: "Attendance", icon: <FaCalendarCheck />, page: "/teacher/dashboard/attendance" },
-  { id: 5, label: "Grades", icon: <FaStar />, page: "/teacher/dashboard/grades" },
-  { id: 6, label: "Announcements", icon: <FaBullhorn />, page: "/teacher/dashboard/announcements" },
-  { id: 7, label: "Profile", icon: <FaUser />, page: "/teacher/dashboard/profile" },
+  { id: 1, label: "Home", icon: <Home />, page: "/student/dashboard" },
+  { id: 2, label: "My Classes", icon: <FaBookOpen />, page: "/student/dashboard/class" },
+  { id: 3, label: "Assignments", icon: <FaClipboardList />, page: "/student/dashboard/assignments" },
+  { id: 4, label: "Attendance", icon: <FaCalendarCheck />, page: "/student/dashboard/attendance" },
+  { id: 5, label: "Results", icon: <FaStar />, page: "/student/dashboard/grades" },
+  { id: 6, label: "Activities", icon: <FaBullhorn />, page: "/student/dashboard/announcements" },
+  { id: 7, label: "Profile", icon: <FaUser />, page: "/student/dashboard/profile" },
 ];
 
 export default function SidebarTeacher() {
@@ -28,16 +28,17 @@ export default function SidebarTeacher() {
   const router = useRouter();
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    router.push("/teacher/login");
+    localStorage.removeItem("token_student");
+    sessionStorage.removeItem("token_student");
+    router.push("/");
   };
 
   return (
     <aside className="fixed top-24 h-screen bg-[#F5F5F5] z-50 text-[#2E3094] group transition-all duration-300 w-20 hover:w-64 overflow-hidden overflow-y-auto">
       <ul className="space-y-3 px-2">
         {sidebarTeacherItems.map((item) => {
-          const isActive = item.page === "/teacher/dashboard"
-            ? pathname === "/teacher/dashboard"
+          const isActive = item.page === "/student/dashboard"
+            ? pathname === "/student/dashboard"
             : pathname.startsWith(item.page || "");
 
           return (
