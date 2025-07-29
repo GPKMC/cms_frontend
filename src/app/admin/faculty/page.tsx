@@ -26,7 +26,7 @@ export default function FacultyManagement() {
   }, []);
 
   const fetchFaculties = async () => {
-    const token = localStorage.getItem("token"); // or wherever you store it
+    const token = localStorage.getItem("token_admin"); // or wherever you store it
 
     const res = await fetch(
       `${process.env.NEXT_PUBLIC_BACKEND_URL}/faculty-api/faculties`,
