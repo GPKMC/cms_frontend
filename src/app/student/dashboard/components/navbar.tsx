@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useUser } from "../teacherContext";
+import { useUser } from "../studentContext";
  // Adjust this import to your file location
 
 export default function Navbarteacher() {

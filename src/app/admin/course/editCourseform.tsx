@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Course } from "../types/type.course"; // Adjust import
+import { Course } from "../types/type.course";
 import { SemesterOrYear } from "../types/type.semoryer";
 
 type Props = {
@@ -37,7 +37,7 @@ const EditCourseForm: React.FC<Props> = ({ id, onClose, onUpdateSuccess }) => {
     };
   };
 
-  // Load course and options
+  // Load course
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -49,13 +49,14 @@ const EditCourseForm: React.FC<Props> = ({ id, onClose, onUpdateSuccess }) => {
         const data = await res.json();
         if (!data.course) throw new Error("Not found");
         setCourse(data.course);
-        setForm({
+        setForm((prev) => ({
+          ...prev,
           name: data.course.name,
           code: data.course.code,
           description: data.course.description ?? "",
           type: data.course.type,
-          semesterOrYear: data.course.semesterOrYear?._id ?? "",
-        });
+          semesterOrYear: data.course.semesterOrYear?._id?.toString() ?? "",
+        }));
       } catch (err: any) {
         setError("Failed to load course.");
       } finally {
@@ -66,33 +67,40 @@ const EditCourseForm: React.FC<Props> = ({ id, onClose, onUpdateSuccess }) => {
     // eslint-disable-next-line
   }, [id]);
 
-useEffect(() => {
-  const fetchSems = async () => {
-    try {
-      const res = await fetch(`${baseUrl}/sem-api/semesterOrYear`, {
-        headers: getAuthHeaders(),
-      });
-      const data = await res.json();
+  // Load sem/year options
+  useEffect(() => {
+    const fetchSems = async () => {
+      try {
+        const res = await fetch(`${baseUrl}/sem-api/semesterOrYear`, {
+          headers: getAuthHeaders(),
+        });
+        const data = await res.json();
 
-      console.log('Fetched semesterOrYear:', data);
-
-      // Prefer semesters, fallback to semesterOrYears
-      if (Array.isArray(data.semesters)) {
-        setSemOptions(data.semesters);
-      } else if (Array.isArray(data.semesterOrYears)) {
-        setSemOptions(data.semesterOrYears);
-      } else {
+        if (Array.isArray(data.semesters)) {
+          setSemOptions(data.semesters);
+        } else if (Array.isArray(data.semesterOrYears)) {
+          setSemOptions(data.semesterOrYears);
+        } else {
+          setSemOptions([]);
+        }
+      } catch (error) {
         setSemOptions([]);
       }
-    } catch (error) {
-      console.error('Error fetching semester/year:', error);
-      setSemOptions([]);
-    }
-  };
+    };
 
-  fetchSems();
-}, []);
+    fetchSems();
+    // eslint-disable-next-line
+  }, []);
 
+  // Ensure dropdown shows the right value after both data are loaded
+  useEffect(() => {
+    if (!course || !semOptions.length) return;
+    setForm((prev) => ({
+      ...prev,
+      semesterOrYear: course.semesterOrYear?._id?.toString() ?? "",
+    }));
+    // eslint-disable-next-line
+  }, [course, semOptions]);
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -106,7 +114,7 @@ useEffect(() => {
     e.preventDefault();
     setSaving(true);
     setError(null);
-    // simple validation
+
     if (!form.name || !form.code || !form.semesterOrYear) {
       setError("Name, Code, and Semester/Year are required.");
       setSaving(false);
@@ -210,7 +218,7 @@ useEffect(() => {
             >
               <option value="">Select...</option>
               {semOptions.map((s) => (
-                <option key={s._id} value={s._id}>
+                <option key={s._id.toString()} value={s._id.toString()}>
                   {s.name}
                   {s.semesterNumber ? ` (${s.semesterNumber} Sem)` : ""}
                   {s.yearNumber ? ` (${s.yearNumber} Year)` : ""}
@@ -218,6 +226,11 @@ useEffect(() => {
               ))}
             </select>
           </div>
+          {/* For debugging - see selected and options */}
+          {/* <pre>
+            Current: {form.semesterOrYear}
+            Options: {JSON.stringify(semOptions.map(s => s._id))}
+          </pre> */}
           {error && <div className="text-red-600">{error}</div>}
           <div className="flex justify-end gap-4">
             <button
