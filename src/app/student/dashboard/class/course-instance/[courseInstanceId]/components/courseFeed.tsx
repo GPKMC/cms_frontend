@@ -1,0 +1,484 @@
+"use client";
+import { useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
+import {
+  AlertCircle, Loader2, Megaphone, FileText, BookOpenCheck, HelpCircle, ListChecks, User,
+  Users2Icon, Download, Eye, Calendar, FileText as FileTextIcon, FileImage as FileImageIcon,
+  FileSpreadsheet as FileSpreadsheetIcon, FileJson as FileJsonIcon, FileArchive as FileArchiveIcon,
+  FileAudio as FileAudioIcon, FileVideo as FileVideoIcon, FileCode as FileCodeIcon, FileIcon,
+} from "lucide-react";
+import { FaFilePowerpoint } from "react-icons/fa";
+import Image from "next/image";
+
+function timeAgo(dateString: string) {
+  const date = new Date(dateString);
+  const now = new Date();
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min${minutes !== 1 ? "s" : ""} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours !== 1 ? "s" : ""} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} day${days !== 1 ? "s" : ""} ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 4) return `${weeks} week${weeks !== 1 ? "s" : ""} ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months} month${months !== 1 ? "s" : ""} ago`;
+  const years = Math.floor(days / 365);
+  return `${years} year${years !== 1 ? "s" : ""} ago`;
+}
+
+type FeedItemType = "announcement" | "assignment" | "groupAssignment" | "material" | "quiz" | "question";
+interface FeedItem {
+  _id: string;
+  type: FeedItemType;
+  title: string;
+  content?: string;
+  createdAt: string;
+  updatedAt?: string;
+  postedBy?: {
+    _id: string;
+    username: string;
+    email: string;
+    role: string;
+  };
+  images?: string[];
+  documents?: string[];
+  links?: string[];
+  youtubeLinks?: string[];
+}
+
+interface Props {
+  courseInstanceId: string;
+}
+
+const getOriginalFileName = (path: string) => {
+  const filename = path.split("/").pop() || "";
+  const match = filename.match(/^(?:[\d-]+-)+(.*)$/);
+  return match ? match[1] : filename;
+};
+
+const fileTypeFromUrl = (url: string) => {
+  const lower = url.toLowerCase();
+  if (lower.match(/\.(jpg|jpeg|png|gif)$/)) return "image";
+  if (lower.endsWith(".pdf")) return "pdf";
+  if (lower.endsWith(".ppt") || lower.endsWith(".pptx")) return "ppt";
+  if (lower.endsWith(".doc") || lower.endsWith(".docx")) return "word";
+  if (lower.endsWith(".xls") || lower.endsWith(".xlsx") || lower.endsWith(".csv")) return "excel";
+  if (lower.endsWith(".txt")) return "txt";
+  if (lower.endsWith(".json")) return "json";
+  if (lower.endsWith(".zip") || lower.endsWith(".rar")) return "zip";
+  if (lower.endsWith(".mp3") || lower.endsWith(".wav")) return "audio";
+  if (lower.endsWith(".mp4") || lower.endsWith(".avi") || lower.endsWith(".mov")) return "video";
+  if (lower.endsWith(".js") || lower.endsWith(".ts")) return "code";
+  return "other";
+};
+
+const getFileIcon = (type: string) => {
+  switch (type) {
+    case "pdf": return <FileTextIcon className="text-red-500" />;
+    case "word": return <Image src={"/wordicon.svg"} alt="word icon" height={22} width={22} />;
+    case "excel": return <FileSpreadsheetIcon className="text-green-600" />;
+    case "ppt": return <FaFilePowerpoint className="text-orange-500" />;
+    case "image": return <FileImageIcon className="text-yellow-400" />;
+    case "txt": return <FileTextIcon className="text-gray-600" />;
+    case "json": return <FileJsonIcon className="text-green-700" />;
+    case "zip": return <FileArchiveIcon className="text-orange-700" />;
+    case "audio": return <FileAudioIcon className="text-purple-700" />;
+    case "video": return <FileVideoIcon className="text-indigo-700" />;
+    case "code": return <FileCodeIcon className="text-violet-700" />;
+    default: return <FileIcon className="text-gray-400" />;
+  }
+};
+
+function getOfficePreviewUrl(url: string) {
+  return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`;
+}
+
+function TxtPreview({ url }: { url: string }) {
+  const [text, setText] = useState("Loading...");
+  useEffect(() => {
+    fetch(url)
+      .then(r => r.text())
+      .then(setText)
+      .catch(() => setText("Could not load file."));
+  }, [url]);
+  return <pre className="overflow-x-auto max-h-[350px] bg-gray-50 p-3">{text}</pre>;
+}
+
+function openFullscreen(elem: HTMLImageElement | HTMLIFrameElement | null) {
+  if (!elem) return;
+  if ((elem as any).requestFullscreen) (elem as any).requestFullscreen();
+  else if ((elem as any).webkitRequestFullscreen) (elem as any).webkitRequestFullscreen();
+  else if ((elem as any).msRequestFullscreen) (elem as any).msRequestFullscreen();
+}
+
+const typeMeta: Record<FeedItemType, { icon: JSX.Element, route: string }> = {
+  announcement: { icon: <Megaphone className="h-5 w-5 text-indigo-600" />, route: "/announcement" },
+  assignment: { icon: <FileText className="h-5 w-5 text-pink-600" />, route: "/assignment" },
+  groupAssignment: { icon: <Users2Icon className="h-5 w-5 text-yellow-300" />, route: "/groupAssignment" },
+  material: { icon: <BookOpenCheck className="h-5 w-5 text-blue-600" />, route: "/materials" },
+  quiz: { icon: <ListChecks className="h-5 w-5 text-yellow-600" />, route: "/quiz" },
+  question: { icon: <HelpCircle className="h-5 w-5 text-emerald-600" />, route: "/question" }
+};
+
+export default function CourseFeed({ courseInstanceId }: Props) {
+  const [feed, setFeed] = useState<FeedItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Preview modal state
+  const [previewDoc, setPreviewDoc] = useState<{ url: string; type: string } | null>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!courseInstanceId) return;
+    setLoading(true);
+    setError(null);
+
+    const fetchFeed = async () => {
+      try {
+        const token =
+          localStorage.getItem("token_student") ||
+          sessionStorage.getItem("token_student");
+        if (!token) throw new Error("Token missing");
+
+        const res = await fetch(
+          `http://localhost:5000/student/course-instance/${courseInstanceId}/feed`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json"
+            }
+          }
+        );
+        if (!res.ok) throw new Error(`Failed to fetch feed: ${res.status}`);
+        const result = await res.json();
+        setFeed(result.feed || []);
+      } catch (err) {
+        setError((err as Error).message || "Unknown error");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchFeed();
+  }, [courseInstanceId]);
+
+  useEffect(() => {
+    if (!previewDoc) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPreviewDoc(null);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [previewDoc]);
+
+  if (loading) {
+    return (
+      <div className="text-center py-10 text-gray-500 flex flex-col items-center">
+        <Loader2 className="animate-spin h-6 w-6 mb-2" />
+        Loading feed...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-100 border border-red-300 p-4 rounded flex items-center gap-3 text-red-700">
+        <AlertCircle className="w-5 h-5" />
+        {error}
+      </div>
+    );
+  }
+
+  if (feed.length === 0) {
+    return (
+      <div className="text-center py-10 text-gray-500">
+        No recent updates available for this course.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {feed.map(item => {
+        const { icon, route } = typeMeta[item.type];
+
+        // Announcements: Inline full content and all attachments!
+        if (item.type === "announcement") {
+          return (
+            <div
+              key={item._id}
+              className="border border-indigo-100 rounded-lg p-4 bg-white shadow-sm"
+              title="Announcement"
+            >
+              {/* Header with Type, Updated, Time */}
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 text-sm text-indigo-700 font-medium">
+                  {icon}
+                  <span className="capitalize">Announcement</span>
+                  {item.updatedAt && item.updatedAt !== item.createdAt && (
+                    <span className="ml-2 px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 text-xs font-semibold">
+                      Updated
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-gray-500">
+                  {timeAgo(item.updatedAt || item.createdAt)}
+                </span>
+              </div>
+              {/* Title */}
+              <h3 className="text-gray-900 font-semibold mb-1 text-base">{item.title}</h3>
+              {/* Content */}
+              {item.content && (
+                <div
+                  className="mb-3 text-gray-800 prose prose-sm max-w-none announcement-content"
+                  dangerouslySetInnerHTML={{ __html: item.content }}
+                />
+              )}
+              {/* Images */}
+              {item.images && item.images.length > 0 && (
+                <div className="flex gap-4 flex-wrap mt-2">
+                  {item.images.map((url, idx) => {
+                    const src = url.startsWith("http")
+                      ? url
+                      : process.env.NEXT_PUBLIC_BACKEND_URL + url;
+                    return (
+                      <div key={idx} className="relative group">
+                        <img
+                          src={src}
+                          alt=""
+                          className="w-24 h-16 object-cover rounded border cursor-pointer hover:opacity-80"
+                          onClick={() => setPreviewDoc({ url: src, type: "image" })}
+                          title="Click to view full image"
+                        />
+                        <a
+                          href={src}
+                          download
+                          className="absolute right-1 top-1 p-1 rounded-full bg-white shadow opacity-80 hover:opacity-100"
+                          title="Download Image"
+                        >
+                          <Download size={16} />
+                        </a>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {/* Documents */}
+              {item.documents && item.documents.length > 0 && (
+                <div className="flex gap-4 flex-wrap mt-4">
+                  {item.documents.map((url, idx) => {
+                    const fileUrl = url.startsWith("http")
+                      ? url
+                      : process.env.NEXT_PUBLIC_BACKEND_URL + url;
+                    const originalName = getOriginalFileName(url);
+                    const fileType = fileTypeFromUrl(fileUrl);
+                    const isPreviewable =
+                      ["pdf", "ppt", "word", "excel", "txt"].includes(fileType);
+
+                    return (
+                      <div key={idx} className="flex items-center gap-2 bg-gray-50 rounded-lg px-2 py-1 border">
+                        <button
+                          type="button"
+                          className="flex items-center gap-2 font-medium text-blue-700 hover:underline"
+                          onClick={() =>
+                            isPreviewable
+                              ? setPreviewDoc({ url: fileUrl, type: fileType })
+                              : window.open(fileUrl, "_blank")
+                          }
+                          title={`Preview ${originalName}`}
+                        >
+                          {getFileIcon(fileType)}
+                          <span className="text-xs truncate max-w-[110px]" title={originalName}>
+                            {originalName}{isPreviewable ? " (Preview)" : ""}
+                          </span>
+                          <Eye className="ml-1" size={16} />
+                        </button>
+                        <a
+                          href={fileUrl}
+                          download={originalName}
+                          className="p-1 text-blue-700 hover:bg-blue-50 rounded-full"
+                          title={`Download ${originalName}`}
+                        >
+                          <Download size={16} />
+                        </a>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {/* Preview Modal */}
+              {previewDoc && (
+                <div className="fixed inset-0 bg-black/70 z-[9999] backdrop-blur-sm
+                  flex items-center justify-center transition-all duration-200">
+                  <div className="bg-white rounded-xl p-6 max-w-4xl w-full shadow-2xl relative flex flex-col
+                      scale-95 animate-[scale-in_0.2s_ease-in-out_forwards]">
+                    <button
+                      className="absolute top-2 right-2 bg-gray-200 p-1 rounded-full"
+                      onClick={() => setPreviewDoc(null)}
+                      title="Close"
+                    >✕</button>
+                    {/* Fullscreen button */}
+                    {previewDoc.type === "image" && (
+                      <button
+                        className="absolute top-2 left-2 bg-gray-200 p-1 rounded-full"
+                        title="Full screen"
+                        onClick={() => openFullscreen(imageRef.current)}
+                      >⛶</button>
+                    )}
+                    {["pdf", "ppt", "word", "excel"].includes(previewDoc.type) && (
+                      <button
+                        className="absolute top-2 left-2 bg-gray-200 p-1 rounded-full"
+                        title="Full screen"
+                        onClick={() => openFullscreen(iframeRef.current)}
+                      >⛶</button>
+                    )}
+                    <a
+                      href={previewDoc.url}
+                      download
+                      className="absolute bottom-2 right-2 bg-blue-600 text-white p-2 rounded-full"
+                      title="Download file"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Download size={18} />
+                    </a>
+                    {/* Preview content */}
+                    {previewDoc.type === "image" ? (
+                      <img
+                        ref={imageRef}
+                        src={previewDoc.url}
+                        alt=""
+                        className="max-w-full max-h-[80vh] rounded mx-auto"
+                      />
+                    ) : previewDoc.type === "pdf" ? (
+                      <iframe
+                        ref={iframeRef}
+                        src={previewDoc.url}
+                        width="100%"
+                        height="600px"
+                        className="rounded"
+                        allowFullScreen
+                      />
+                    ) : ["ppt", "word", "excel"].includes(previewDoc.type) ? (
+                      <iframe
+                        ref={iframeRef}
+                        src={getOfficePreviewUrl(previewDoc.url)}
+                        width="100%"
+                        height="500px"
+                        className="rounded"
+                        allowFullScreen
+                      />
+                    ) : previewDoc.type === "txt" ? (
+                      <TxtPreview url={previewDoc.url} />
+                    ) : (
+                      <div className="text-center text-gray-500">
+                        Preview not supported for this file type. <br />
+                        <a href={previewDoc.url} download className="text-blue-600 underline">Download</a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {/* Links and YouTube */}
+              {item.links && item.links.length > 0 && (
+                <div className="mt-2 space-x-2">
+                  {item.links.map((link, idx) => (
+                    <a
+                      key={idx}
+                      href={link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline break-all"
+                    >
+                      {link}
+                    </a>
+                  ))}
+                </div>
+              )}
+              {item.youtubeLinks && item.youtubeLinks.length > 0 && (
+                <div className="mt-2 flex gap-3">
+                  {item.youtubeLinks.map((url, idx) => {
+                    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([\w-]+)/);
+                    const embedUrl = match
+                      ? `https://www.youtube.com/embed/${match[1]}`
+                      : url;
+                    return (
+                      <iframe
+                        key={idx}
+                        width="300"
+                        height="170"
+                        src={embedUrl}
+                        title="YouTube video"
+                        allowFullScreen
+                        className="rounded"
+                      />
+                    );
+                  })}
+                </div>
+              )}
+              {/* Poster */}
+              <div className="mt-3 text-sm text-gray-600 flex items-center gap-2">
+                <User className="h-4 w-4 text-gray-400" />
+                {item.postedBy
+                  ? <>
+                      {item.postedBy.username} ({item.postedBy.role})
+                    </>
+                  : <span className="italic text-gray-400">Unknown poster</span>
+                }
+              </div>
+            </div>
+          );
+        }
+
+        // All other types (regular card, navigates on click)
+        return (
+          <div
+            key={item._id}
+            className="border border-gray-200 rounded-lg p-4 bg-white shadow-sm cursor-pointer hover:bg-blue-50 transition"
+    onClick={() => {
+      console.log("Clicked material id:", item._id); // <--- LOG HERE
+      router.push(`/student/dashboard/class/course-instance/${courseInstanceId}/${route}/${item._id}`);
+    }}            title={`View details of this ${item.type}`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 text-sm text-gray-700 font-medium">
+                {icon}
+                <span className="capitalize">{item.type}</span>
+                {item.updatedAt && item.updatedAt !== item.createdAt && (
+                  <span className="ml-2 px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 text-xs font-semibold">
+                    Updated
+                  </span>
+                )}
+              </div>
+              <span className="text-xs text-gray-500">
+                {timeAgo(item.updatedAt || item.createdAt)}
+              </span>
+            </div>
+            <h3 className="text-gray-900 font-semibold mb-1 text-base">{item.title}</h3>
+            {item.content && (
+              <div
+                className="mb-3 text-gray-800 prose prose-sm max-w-none announcement-content"
+                dangerouslySetInnerHTML={{ __html: item.content }}
+              />
+            )}
+            <div className="text-sm text-gray-600 flex items-center gap-2">
+              <User className="h-4 w-4 text-gray-400" />
+              {item.postedBy
+                ? <>
+                    {item.postedBy.username} ({item.postedBy.role})
+                  </>
+                : <span className="italic text-gray-400">Unknown poster</span>
+              }
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}

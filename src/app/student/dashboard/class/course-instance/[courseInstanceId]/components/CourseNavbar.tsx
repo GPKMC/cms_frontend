@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 
 const tabs = [
-  { label: "Class", slug: "class" },
-  { label: "Workspace", slug: "workspace" },
+  { label: "Overview", slug: "overview" },
+  {label : "Study Material", slug: "materials"},
+  { label: "Assignment", slug: "assignment" },
   { label: "People", slug: "people" },
   { label: "Grades", slug: "grades" },
   { label: "Notifications", slug: "notifications" }
@@ -22,7 +23,7 @@ export default function CourseNavbar() {
   // Get the current tab from URL: e.g. /student/dashboard/class/course-instance/123/workspace
   // parts[0]: "", [1]: "student", [2]: "dashboard", [3]: "class", [4]: "course-instance", [5]: "123", [6]: "workspace"
   const parts = pathname.split("/");
-  const currentTab = parts[6] ? parts[6].toLowerCase() : "class"; // fallback to "class"
+  const currentTab = parts[6] ? parts[6].toLowerCase() : "overview"; // fallback to "class"
 
   return (
     <nav className="w-full border-b border-gray-200 px-6 py-3 bg-white shadow-sm">
@@ -30,7 +31,7 @@ export default function CourseNavbar() {
         {tabs.map(tab => {
           // If "Class", omit extra path
           const path =
-            tab.slug === "class"
+            tab.slug === "overview"
               ? `/student/dashboard/class/course-instance/${courseInstanceId}`
               : `/student/dashboard/class/course-instance/${courseInstanceId}/${tab.slug}`;
 
