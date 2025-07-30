@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, JSX } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle, Loader2, Megaphone, FileText, BookOpenCheck, HelpCircle, ListChecks, User,
