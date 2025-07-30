@@ -17,9 +17,9 @@ import TopicSelector from "./topicSelect";
 import CourseMaterialForm from "./materialform";
 import MaterialList from "./workspacelist";
 import AssignmentForm from "./assignmentform";
-import GroupAssignmentForm from "./groupAssignment/groupAssignmentform";
 import QuestionForm from "./question/question";
 import QuizForm from "./quiz/quizform";
+import GroupAssignmentForm from "./groupassignment/groupAssignmentform";
 
 const menuOptions = [
   { label: "Assignment", icon: <FileText size={18} />, value: "assignment" },
