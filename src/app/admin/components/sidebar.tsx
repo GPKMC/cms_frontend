@@ -30,6 +30,7 @@ const sidebarItems: SidebarItems = [
   { id: 9, label: "Assignment Monitoring", icon: <MdAssignment />, page: "/admin/assignments" },
   { id: 10, label: "Announcements", icon: <FaBullhorn />, page: "/admin/announcements" },
   { id: 11, label: "Reports & Analytics", icon: <FaFileAlt />, page: "/admin/reports" },
+  { id: 12, label: "Reference", icon: <FaFileAlt />, page: "/admin/reference" },
 ];
 
 export default function Sidebar() {
