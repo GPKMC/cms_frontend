@@ -119,7 +119,7 @@ const typeMeta: Record<FeedItemType, { icon: JSX.Element, route: string }> = {
   assignment: { icon: <FileText className="h-5 w-5 text-pink-600" />, route: "/assignment" },
   groupAssignment: { icon: <Users2Icon className="h-5 w-5 text-yellow-300" />, route: "/groupAssignment" },
   material: { icon: <BookOpenCheck className="h-5 w-5 text-blue-600" />, route: "/materials" },
-  quiz: { icon: <ListChecks className="h-5 w-5 text-yellow-600" />, route: "/quiz" },
+  quiz: { icon: <ListChecks className="h-5 w-5 text-yellow-600" />, route: "/quizzes" },
   question: { icon: <HelpCircle className="h-5 w-5 text-emerald-600" />, route: "/question" }
 };
 
