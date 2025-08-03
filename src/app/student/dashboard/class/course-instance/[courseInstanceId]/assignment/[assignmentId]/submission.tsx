@@ -5,6 +5,7 @@ import {
   Eye, Trash2, AlertCircle, Trophy, Star, MessageSquare, ExternalLink, Plus
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { useUser } from "@/app/student/dashboard/studentContext";
 
 // Types, can be imported if you use a types file:
 interface SubmissionFile {
@@ -37,6 +38,7 @@ interface Props {
   isOfficeDoc: (name: string) => boolean;
   isPDF: (name: string) => boolean;
   setMediaPreview: (preview: any) => void;
+  onPlagiarismCheck?: (result: any) => void;
 }
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
@@ -44,7 +46,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:500
 export default function SubmissionPanel({
   submission, loadingUndo, submitting, error, setError,
   assignmentId, refreshSubmission, getFileUrl,
-  getFileIcon, isImage, isOfficeDoc, isPDF, setMediaPreview
+  getFileIcon, isImage, isOfficeDoc, isPDF, setMediaPreview,onPlagiarismCheck
 }: Props) {
   // Local states
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -52,6 +54,8 @@ export default function SubmissionPanel({
   const [newLink, setNewLink] = useState("");
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { user } = useUser();
+  const [plagiarismResult, setPlagiarismResult] = useState<any>(null);
 
   // --- Drag and Drop handlers ---
   const handleDrag = (e: React.DragEvent) => {
@@ -91,12 +95,16 @@ export default function SubmissionPanel({
     e.preventDefault();
     if (!assignmentId) return;
     setError(null);
-    // setSubmitting(true); // Don't use this here: use prop
+
     const formData = new FormData();
     selectedFiles.forEach(f => formData.append("files", f));
     links.forEach(l => formData.append("links", l));
+    if (user?._id || user?.id) {
+      formData.append("student_id", user._id || user.id);
+    }
+
     fetch(
-      `${BACKEND_URL}/student/assignment/${assignmentId}/submission`,
+      `${BACKEND_URL}/submission/submit-assignment`,
       {
         method: "POST",
         headers: {
@@ -110,23 +118,31 @@ export default function SubmissionPanel({
       }
     )
       .then(async (res) => {
+        // Always log the raw response status
+        console.log("Raw response status:", res.status);
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
+          console.error("Submission error body:", body);
           throw new Error(body.error || "Submission failed");
         }
-        return res.json();
+        const data = await res.json();
+        // Console log the plagiarism API result
+        console.log("Plagiarism check result:", data);
+        return data;
       })
-      .then(() => {
+      .then((data) => {
         setSelectedFiles([]);
         setLinks([]);
         toast.success("🎉 Submission successful!");
         refreshSubmission();
+        if (onPlagiarismCheck) onPlagiarismCheck(data); // SEND RESULT TO PARENT
       })
+
       .catch((err) => {
+        console.error("Submission fetch error:", err);
         setError(err.message);
         toast.error(err.message);
       });
-      // .finally(() => setSubmitting(false)); // Don't use here
   }
 
   // --- Undo Submission ---
@@ -317,11 +333,10 @@ export default function SubmissionPanel({
                 Upload Files
               </label>
               <div
-                className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 ${
-                  dragActive
+                className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 ${dragActive
                     ? 'border-indigo-400 bg-indigo-50 scale-105'
                     : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50/50'
-                }`}
+                  }`}
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
                 onDragOver={handleDrag}
@@ -352,7 +367,7 @@ export default function SubmissionPanel({
                   </button>
                 </div>
               </div>
-              
+
               {/* Selected Files Preview */}
               {selectedFiles.length > 0 && (
                 <div className="space-y-3">
@@ -409,7 +424,7 @@ export default function SubmissionPanel({
                   <Plus className="w-5 h-5" />
                 </button>
               </div>
-              
+
               {links.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="font-semibold text-gray-800 flex items-center gap-2">
@@ -423,10 +438,10 @@ export default function SubmissionPanel({
                           <div className="p-2 bg-emerald-500 rounded-lg text-white">
                             <LinkIcon className="w-4 h-4" />
                           </div>
-                          <a 
-                            href={l} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
+                          <a
+                            href={l}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="text-emerald-700 hover:underline truncate flex-1 font-medium"
                           >
                             {l}
@@ -468,11 +483,10 @@ export default function SubmissionPanel({
               </div>
               <button
                 type="submit"
-                className={`w-full inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-bold text-lg transition-all duration-300 transform shadow-lg ${
-                  submitting || (selectedFiles.length === 0 && links.length === 0)
+                className={`w-full inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-bold text-lg transition-all duration-300 transform shadow-lg ${submitting || (selectedFiles.length === 0 && links.length === 0)
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 hover:scale-105 hover:shadow-xl'
-                }`}
+                  }`}
                 disabled={submitting || (selectedFiles.length === 0 && links.length === 0)}
               >
                 {submitting ? (
@@ -506,7 +520,69 @@ export default function SubmissionPanel({
             </div>
           </div>
         )}
+        {plagiarismResult && (
+          <div className="mb-6 p-6 bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-2xl shadow space-y-2">
+            <div className="flex items-center gap-3 mb-2">
+              <Sparkles className="w-6 h-6 text-yellow-500" />
+              <span className="font-bold text-yellow-800 text-lg">Plagiarism Check Result</span>
+            </div>
+            {/* Plagiarism Status */}
+            {plagiarismResult.status && (
+              <div className="text-md font-semibold mb-1">
+                Status:{" "}
+                <span className={
+                  plagiarismResult.status === "PLAGIARIZED"
+                    ? "text-red-600"
+                    : plagiarismResult.status === "ACCEPTED"
+                      ? "text-green-600"
+                      : "text-gray-700"
+                }>
+                  {plagiarismResult.status}
+                </span>
+              </div>
+            )}
+            {/* Main Similarity Percentage */}
+            {typeof plagiarismResult.plagiarism === "number" && (
+              <div className="text-xl font-bold text-orange-600 mb-2">
+                Similarity: {plagiarismResult.plagiarism.toFixed(2)}%
+              </div>
+            )}
+            {/* Human-readable message if available */}
+            {plagiarismResult.message && (
+              <div className="text-gray-700">{plagiarismResult.message}</div>
+            )}
+            {/* Show Top Matches */}
+            {plagiarismResult.matches && plagiarismResult.matches.length > 0 && (
+              <div>
+                <div className="font-semibold mb-1">Top Matches:</div>
+                <ul className="pl-4 space-y-1">
+                  {plagiarismResult.matches.slice(0, 5).map((match: any, idx: any) => (
+                    <li key={idx} className="text-xs text-gray-800">
+                      <span className={match.type === "submission" ? "text-blue-600" : "text-purple-600"}>
+                        [{match.type}]
+                      </span>{" "}
+                      <span className="font-mono">ID: {match.source_id}</span>
+                      {" - "}
+                      <span>
+                        Similarity: {(match.similarity * 100).toFixed(2)}%
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {/* Raw result (for debugging) */}
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs text-gray-400">Raw details</summary>
+              <pre className="text-xs text-gray-600 bg-gray-100 p-2 rounded">
+                {JSON.stringify(plagiarismResult, null, 2)}
+              </pre>
+            </details>
+          </div>
+        )}
+
       </div>
+
     </div>
   );
 }

@@ -10,6 +10,9 @@ import {
 import { FaFilePowerpoint } from "react-icons/fa";
 import Image from "next/image";
 
+// CHANGE THIS PATH TO YOUR CONTEXT IF NEEDED!
+import { useUser } from "@/app/student/dashboard/studentContext";
+
 function timeAgo(dateString: string) {
   const date = new Date(dateString);
   const now = new Date();
@@ -47,6 +50,12 @@ interface FeedItem {
   documents?: string[];
   links?: string[];
   youtubeLinks?: string[];
+  groups?: {
+    _id: string;
+    members: { _id: string }[];
+    name?: string;
+    [key: string]: any;
+  }[];
 }
 
 interface Props {
@@ -117,10 +126,10 @@ function openFullscreen(elem: HTMLImageElement | HTMLIFrameElement | null) {
 const typeMeta: Record<FeedItemType, { icon: JSX.Element, route: string }> = {
   announcement: { icon: <Megaphone className="h-5 w-5 text-indigo-600" />, route: "/announcement" },
   assignment: { icon: <FileText className="h-5 w-5 text-pink-600" />, route: "/assignment" },
-  groupAssignment: { icon: <Users2Icon className="h-5 w-5 text-yellow-300" />, route: "/groupAssignment" },
+  groupAssignment: { icon: <Users2Icon className="h-5 w-5 text-yellow-300" />, route: "/group-assignments" },
   material: { icon: <BookOpenCheck className="h-5 w-5 text-blue-600" />, route: "/materials" },
   quiz: { icon: <ListChecks className="h-5 w-5 text-yellow-600" />, route: "/quizzes" },
-  question: { icon: <HelpCircle className="h-5 w-5 text-emerald-600" />, route: "/question" }
+  question: { icon: <HelpCircle className="h-5 w-5 text-emerald-600" />, route: "/questions" }
 };
 
 export default function CourseFeed({ courseInstanceId }: Props) {
@@ -134,6 +143,7 @@ export default function CourseFeed({ courseInstanceId }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const router = useRouter();
+  const { user } = useUser(); // Get current user from context
 
   useEffect(() => {
     if (!courseInstanceId) return;
@@ -177,6 +187,15 @@ export default function CourseFeed({ courseInstanceId }: Props) {
     return () => window.removeEventListener("keydown", handler);
   }, [previewDoc]);
 
+  // Filter group assignments to only those where user is a group member
+  const filteredFeed = feed.filter(item => {
+    if (item.type !== "groupAssignment") return true;
+    if (!user || !item.groups) return false;
+    return item.groups.some(
+      group => Array.isArray(group.members) && group.members.some(m => m._id === user._id || user.id)
+    );
+  });
+
   if (loading) {
     return (
       <div className="text-center py-10 text-gray-500 flex flex-col items-center">
@@ -195,7 +214,7 @@ export default function CourseFeed({ courseInstanceId }: Props) {
     );
   }
 
-  if (feed.length === 0) {
+  if (filteredFeed.length === 0) {
     return (
       <div className="text-center py-10 text-gray-500">
         No recent updates available for this course.
@@ -205,7 +224,7 @@ export default function CourseFeed({ courseInstanceId }: Props) {
 
   return (
     <div className="space-y-4">
-      {feed.map(item => {
+      {filteredFeed.map(item => {
         const { icon, route } = typeMeta[item.type];
 
         // Announcements: Inline full content and all attachments!
@@ -216,7 +235,6 @@ export default function CourseFeed({ courseInstanceId }: Props) {
               className="border border-indigo-100 rounded-lg p-4 bg-white shadow-sm"
               title="Announcement"
             >
-              {/* Header with Type, Updated, Time */}
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2 text-sm text-indigo-700 font-medium">
                   {icon}
@@ -231,16 +249,13 @@ export default function CourseFeed({ courseInstanceId }: Props) {
                   {timeAgo(item.updatedAt || item.createdAt)}
                 </span>
               </div>
-              {/* Title */}
               <h3 className="text-gray-900 font-semibold mb-1 text-base">{item.title}</h3>
-              {/* Content */}
               {item.content && (
                 <div
                   className="mb-3 text-gray-800 prose prose-sm max-w-none announcement-content"
                   dangerouslySetInnerHTML={{ __html: item.content }}
                 />
               )}
-              {/* Images */}
               {item.images && item.images.length > 0 && (
                 <div className="flex gap-4 flex-wrap mt-2">
                   {item.images.map((url, idx) => {
@@ -269,7 +284,6 @@ export default function CourseFeed({ courseInstanceId }: Props) {
                   })}
                 </div>
               )}
-              {/* Documents */}
               {item.documents && item.documents.length > 0 && (
                 <div className="flex gap-4 flex-wrap mt-4">
                   {item.documents.map((url, idx) => {
@@ -312,18 +326,14 @@ export default function CourseFeed({ courseInstanceId }: Props) {
                   })}
                 </div>
               )}
-              {/* Preview Modal */}
               {previewDoc && (
-                <div className="fixed inset-0 bg-black/70 z-[9999] backdrop-blur-sm
-                  flex items-center justify-center transition-all duration-200">
-                  <div className="bg-white rounded-xl p-6 max-w-4xl w-full shadow-2xl relative flex flex-col
-                      scale-95 animate-[scale-in_0.2s_ease-in-out_forwards]">
+                <div className="fixed inset-0 bg-black/70 z-[9999] backdrop-blur-sm flex items-center justify-center transition-all duration-200">
+                  <div className="bg-white rounded-xl p-6 max-w-4xl w-full shadow-2xl relative flex flex-col scale-95 animate-[scale-in_0.2s_ease-in-out_forwards]">
                     <button
                       className="absolute top-2 right-2 bg-gray-200 p-1 rounded-full"
                       onClick={() => setPreviewDoc(null)}
                       title="Close"
                     >✕</button>
-                    {/* Fullscreen button */}
                     {previewDoc.type === "image" && (
                       <button
                         className="absolute top-2 left-2 bg-gray-200 p-1 rounded-full"
@@ -348,7 +358,6 @@ export default function CourseFeed({ courseInstanceId }: Props) {
                     >
                       <Download size={18} />
                     </a>
-                    {/* Preview content */}
                     {previewDoc.type === "image" ? (
                       <img
                         ref={imageRef}
@@ -385,7 +394,6 @@ export default function CourseFeed({ courseInstanceId }: Props) {
                   </div>
                 </div>
               )}
-              {/* Links and YouTube */}
               {item.links && item.links.length > 0 && (
                 <div className="mt-2 space-x-2">
                   {item.links.map((link, idx) => (
@@ -422,7 +430,6 @@ export default function CourseFeed({ courseInstanceId }: Props) {
                   })}
                 </div>
               )}
-              {/* Poster */}
               <div className="mt-3 text-sm text-gray-600 flex items-center gap-2">
                 <User className="h-4 w-4 text-gray-400" />
                 {item.postedBy
@@ -441,10 +448,10 @@ export default function CourseFeed({ courseInstanceId }: Props) {
           <div
             key={item._id}
             className="border border-gray-200 rounded-lg p-4 bg-white shadow-sm cursor-pointer hover:bg-blue-50 transition"
-    onClick={() => {
-      console.log("Clicked material id:", item._id); // <--- LOG HERE
-      router.push(`/student/dashboard/class/course-instance/${courseInstanceId}/${route}/${item._id}`);
-    }}            title={`View details of this ${item.type}`}
+            onClick={() => {
+              router.push(`/student/dashboard/class/course-instance/${courseInstanceId}/${route}/${item._id}`);
+            }}
+            title={`View details of this ${item.type}`}
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 text-sm text-gray-700 font-medium">

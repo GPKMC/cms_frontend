@@ -9,6 +9,7 @@ import {
 import toast from "react-hot-toast";
 import SubmissionPanel from "./submission";
 import AssignmentCommentSection from "./assignmentcomment";
+import PlagiarismModal from "./plagresult";
 
 // ---- Types (import if you have a types file) ----
 interface UserMini {
@@ -65,6 +66,13 @@ export default function AssignmentDetail() {
     url: string; type: "img" | "pdf" | "office" | "youtube";
     originalname?: string; yt?: string;
   } | null>(null);
+const [plagiarismResult, setPlagiarismResult] = useState<any>(null);
+const [showPlagModal, setShowPlagModal] = useState(false);
+
+function handlePlagiarismCheck(result: any) {
+  setPlagiarismResult(result);
+  setShowPlagModal(true);
+}
 
   // --- Fetch Assignment & Submission ---
   const fetchSubmissionAndAssignment = () => {
@@ -516,9 +524,17 @@ export default function AssignmentDetail() {
               isOfficeDoc={isOfficeDoc}
               isPDF={isPDF}
               setMediaPreview={setMediaPreview}
+                onPlagiarismCheck={handlePlagiarismCheck}
             />
           </div>
         </div>
+        {showPlagModal && plagiarismResult && (
+  <PlagiarismModal
+    result={plagiarismResult}
+    onClose={() => setShowPlagModal(false)}
+  />
+)}
+
         <AssignmentCommentSection assignmentId={assignmentId} />
       </div>
     </div>

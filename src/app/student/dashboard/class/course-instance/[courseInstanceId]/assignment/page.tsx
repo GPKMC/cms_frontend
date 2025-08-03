@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useRouter } from "next/navigation";
-
+import { useUser } from "@/app/student/dashboard/studentContext";
 // Types
 type FeedType = "assignment" | "groupAssignment" | "quiz" | "question";
 interface UserMini { _id: string; username: string; role?: string; }
@@ -87,6 +87,7 @@ export default function CourseTaskFeed() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
+    const { user } = useUser();
     // Fetch topics for filter
     useEffect(() => {
         if (!courseInstanceId) return;
@@ -106,30 +107,54 @@ export default function CourseTaskFeed() {
 
     // Fetch feed
     useEffect(() => {
-        if (!courseInstanceId) return;
-        setLoading(true);
-        setError(null);
+    if (!courseInstanceId) return;
+    setLoading(true);
+    setError(null);
 
-        let url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/student/feed/${courseInstanceId}`;
-        if (selectedTopic) url += `?topic=${selectedTopic}`;
+    let url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/student/feed/${courseInstanceId}`;
+    if (selectedTopic) url += `?topic=${selectedTopic}`;
 
-        fetch(url, {
-            headers: {
-                Authorization:
-                    "Bearer " +
-                    (localStorage.getItem("token_student") ||
-                        sessionStorage.getItem("token_student") ||
-                        ""),
+    fetch(url, {
+        headers: {
+            Authorization:
+                "Bearer " +
+                (localStorage.getItem("token_student") ||
+                    sessionStorage.getItem("token_student") ||
+                    ""),
+        }
+    })
+        .then((r) => r.ok ? r.json() : Promise.reject("Could not fetch feed"))
+        .then((data) => {
+            // Log a sample groupAssignment and its first group
+            if (Array.isArray(data)) {
+                const groupAssignment = data.find((x: FeedItem) => x.type === "groupAssignment");
+                if (groupAssignment) {
+                    console.log("Sample groupAssignment:", groupAssignment);
+                    if (Array.isArray(groupAssignment.groups) && groupAssignment.groups.length > 0) {
+                        console.log("Sample group in groupAssignment:", groupAssignment.groups[0]);
+                    }
+                }
             }
+            setFeed(data);
         })
-            .then((r) => r.ok ? r.json() : Promise.reject("Could not fetch feed"))
-            .then((data) => setFeed(data))
-            .catch((err) => setError(err.message || err))
-            .finally(() => setLoading(false));
-    }, [courseInstanceId, selectedTopic]);
+        .catch((err) => setError(err.message || err))
+        .finally(() => setLoading(false));
+}, [courseInstanceId, selectedTopic]);
 
-    // Apply filters
-    let filteredFeed = feed.filter((item) => typeFilter[item.type]);
+
+let filteredFeed = feed.filter((item) => {
+  if (item.type === "groupAssignment" && user && Array.isArray(item.groups)) {
+  item.groups.forEach((group: any, i: number) => {
+    const ids = (group.members || []).map((m: any) =>
+      m?._id ? m._id.toString?.() || `${m._id}` : `${m}`
+    );
+    console.log("Group", i, "member ids:", ids, "current user:", user._id || user.id);
+  });
+}
+
+  return typeFilter[item.type];
+});
+
     if (searchTerm) {
         filteredFeed = filteredFeed.filter(item =>
             item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
