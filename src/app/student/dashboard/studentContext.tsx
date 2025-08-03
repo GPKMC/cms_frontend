@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 
 export type User = {
+  _id:string;
   id: string;              // ✅ Add this line
   username: string;
   email: string;
