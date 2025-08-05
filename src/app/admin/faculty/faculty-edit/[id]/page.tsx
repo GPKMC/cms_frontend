@@ -6,7 +6,8 @@ import { Faculty } from "@/app/admin/types/type.faculty";
 
 export default function FacultyEditPage() {
   const router = useRouter();
-  const params = useParams();
+  const { id } = useParams();
+  
   const [faculty, setFaculty] = useState<Faculty | null>(null);
   const [form, setForm] = useState({
     name: "",
@@ -16,59 +17,86 @@ export default function FacultyEditPage() {
     totalSemestersOrYears: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchFaculty = async () => {
-      const token = localStorage.getItem("token");
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/faculty-api/faculties/${params.id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+      try {
+        const token = localStorage.getItem("token_admin") || "";
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/faculty-api/faculties/${id}`,
+          {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.message || `Status ${res.status}`);
         }
-      );
-      const data = await res.json();
-      const facultyData = data.faculty; // access nested faculty object
-      setFaculty(facultyData);
-      setForm({
-        name: facultyData.name || "",
-        code: facultyData.code || "",
-        type: facultyData.type || "",
-        programLevel: facultyData.programLevel || "",
-        totalSemestersOrYears: facultyData.totalSemestersOrYears || 0,
-      });
-      setLoading(false);
+        const data = await res.json();
+        const fac = data.faculty as Faculty;
+        setFaculty(fac);
+        setForm({
+          name: fac.name || "",
+          code: fac.code || "",
+          type: fac.type || "",
+          programLevel: fac.programLevel || "",
+          totalSemestersOrYears: fac.totalSemestersOrYears || 0,
+        });
+      } catch (err: any) {
+        console.error("Failed to load faculty:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    if (params.id) fetchFaculty();
-  }, [params.id]);
+    if (id) fetchFaculty();
+  }, [id]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setForm((f) => ({
+      ...f,
+      [name]:
+        name === "totalSemestersOrYears" ? parseInt(value, 10) || 0 : value,
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const token = localStorage.getItem("token");
-    await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_URL}/faculty-api/faculties/${params.id}`,
-      {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(form),
+    try {
+      const token = localStorage.getItem("token_admin") || "";
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/faculty-api/faculties/${id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(form),
+        }
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || `Status ${res.status}`);
       }
-    );
-    alert("Faculty updated successfully");
-    router.push("/admin/faculty");
+      alert("Faculty updated successfully");
+      router.push("/admin/faculty");
+    } catch (err: any) {
+      console.error("Update failed:", err);
+      alert("Error updating faculty: " + err.message);
+    }
   };
 
   if (loading) return <p className="p-4">Loading...</p>;
+  if (error) return <p className="p-4 text-red-500">Error: {error}</p>;
 
   return (
     <div className="max-w-xl mx-auto p-4">
