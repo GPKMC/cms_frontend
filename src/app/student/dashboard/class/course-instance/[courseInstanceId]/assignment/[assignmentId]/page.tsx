@@ -10,6 +10,7 @@ import toast from "react-hot-toast";
 import SubmissionPanel from "./submission";
 import AssignmentCommentSection from "./assignmentcomment";
 import PlagiarismModal from "./plagresult";
+import { useUser } from "@/app/student/dashboard/studentContext";
 
 // ---- Types (import if you have a types file) ----
 interface UserMini {
@@ -54,7 +55,7 @@ const getFileUrl = (url: string) =>
 export default function AssignmentDetail() {
   const params = useParams();
   const assignmentId = params?.assignmentId as string;
-
+  const  user = useUser();
   // State
   const [assignment, setAssignment] = useState<Assignment | null>(null);
   const [submission, setSubmission] = useState<Submission | null>(null);
@@ -70,9 +71,13 @@ const [plagiarismResult, setPlagiarismResult] = useState<any>(null);
 const [showPlagModal, setShowPlagModal] = useState(false);
 
 function handlePlagiarismCheck(result: any) {
+  console.log("Plagiarism result received in parent:", result);
   setPlagiarismResult(result);
   setShowPlagModal(true);
 }
+
+console.log("showPlagModal:", showPlagModal);
+console.log("plagiarismResult:", plagiarismResult);
 
   // --- Fetch Assignment & Submission ---
   const fetchSubmissionAndAssignment = () => {
@@ -96,7 +101,7 @@ function handlePlagiarismCheck(result: any) {
         return res.json();
       }),
       fetch(
-        `${BACKEND_URL}/student/assignment/${assignmentId}/submission`,
+        `${BACKEND_URL}/submission/by-assignment/${assignmentId}/submission`,
         {
           headers: {
             Authorization:
@@ -112,10 +117,13 @@ function handlePlagiarismCheck(result: any) {
         return res.json();
       })
     ])
-      .then(([a, s]) => {
-        setAssignment(a.assignment);
-        setSubmission(s?.submission || null);
-      })
+     .then(([assignmentData, submissionData]) => {
+  console.log("Fetched assignment:", assignmentData);
+  console.log("Fetched submission:", submissionData);
+  setAssignment(assignmentData.assignment);
+  setSubmission(submissionData?.submission || null);
+})
+
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   };
@@ -514,6 +522,7 @@ function handlePlagiarismCheck(result: any) {
               submission={submission}
               loadingUndo={loadingUndo}
               submitting={submitting}
+              setSubmitting={setSubmitting}  
               error={error}
               setError={setError}
               assignmentId={assignmentId}
@@ -525,15 +534,20 @@ function handlePlagiarismCheck(result: any) {
               isPDF={isPDF}
               setMediaPreview={setMediaPreview}
                 onPlagiarismCheck={handlePlagiarismCheck}
+                
             />
           </div>
         </div>
-        {showPlagModal && plagiarismResult && (
-  <PlagiarismModal
-    result={plagiarismResult}
-    onClose={() => setShowPlagModal(false)}
-  />
-)}
+{showPlagModal && plagiarismResult ? (
+  <>
+    {console.log("Opening plagiarism modal with result:", plagiarismResult)}
+    <PlagiarismModal
+      result={plagiarismResult}
+      onClose={() => setShowPlagModal(false)}
+    />
+  </>
+) : null}
+
 
         <AssignmentCommentSection assignmentId={assignmentId} />
       </div>

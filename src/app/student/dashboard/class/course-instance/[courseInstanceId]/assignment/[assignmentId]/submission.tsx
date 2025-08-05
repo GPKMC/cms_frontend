@@ -1,5 +1,5 @@
 "use client";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Upload, Sparkles, Loader2, Undo2 as UndoArrow, FileText, Link as LinkIcon,
   Eye, Trash2, AlertCircle, Trophy, Star, MessageSquare, ExternalLink, Plus
@@ -7,7 +7,6 @@ import {
 import toast from "react-hot-toast";
 import { useUser } from "@/app/student/dashboard/studentContext";
 
-// Types, can be imported if you use a types file:
 interface SubmissionFile {
   url: string;
   originalname: string;
@@ -28,6 +27,7 @@ interface Props {
   submission: Submission | null;
   loadingUndo: boolean;
   submitting: boolean;
+  setSubmitting: (isLoading: boolean) => void;  // new setter prop
   error: string | null;
   setError: (msg: string | null) => void;
   assignmentId: string;
@@ -44,11 +44,10 @@ interface Props {
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 
 export default function SubmissionPanel({
-  submission, loadingUndo, submitting, error, setError,
+  submission, loadingUndo, submitting,setSubmitting, error, setError,
   assignmentId, refreshSubmission, getFileUrl,
-  getFileIcon, isImage, isOfficeDoc, isPDF, setMediaPreview,onPlagiarismCheck
+  getFileIcon, isImage, isOfficeDoc, isPDF, setMediaPreview, onPlagiarismCheck
 }: Props) {
-  // Local states
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [links, setLinks] = useState<string[]>(submission?.links || []);
   const [newLink, setNewLink] = useState("");
@@ -57,7 +56,18 @@ export default function SubmissionPanel({
   const { user } = useUser();
   const [plagiarismResult, setPlagiarismResult] = useState<any>(null);
 
-  // --- Drag and Drop handlers ---
+useEffect(() => {
+  if (!submission) {
+    setSelectedFiles([]);
+    setLinks([]);
+    setNewLink("");
+    setError(null);
+    setPlagiarismResult(null);
+  } else {
+    setLinks(submission.links || []);
+  }
+}, [submission]);
+
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -75,13 +85,16 @@ export default function SubmissionPanel({
       setSelectedFiles(prev => [...prev, ...Array.from(e.dataTransfer.files)]);
     }
   };
+  console.log("Submission prop:", submission);
+  console.log("Submission status:", submission?.status);
 
-  // --- File/Link Handlers ---
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return;
-    setSelectedFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+    const files = e.target.files;
+    if (!files) return;
+    setSelectedFiles(prev => [...prev, ...Array.from(files)]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
+
   const handleAddLink = () => {
     if (!newLink.trim()) return;
     setLinks(prev => [...prev, newLink.trim()]);
@@ -90,21 +103,24 @@ export default function SubmissionPanel({
   const handleRemoveLink = (idx: number) => setLinks(prev => prev.filter((_, i) => i !== idx));
   const handleRemoveFile = (idx: number) => setSelectedFiles(prev => prev.filter((_, i) => i !== idx));
 
-  // --- Submit Work ---
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!assignmentId) return;
-    setError(null);
+async function handleSubmit(e: React.FormEvent) {
+  e.preventDefault();
+  if (!assignmentId) return;
+  setError(null);
 
-    const formData = new FormData();
-    selectedFiles.forEach(f => formData.append("files", f));
-    links.forEach(l => formData.append("links", l));
-    if (user?._id || user?.id) {
-      formData.append("student_id", user._id || user.id);
-    }
+  if (typeof setSubmitting === "function") setSubmitting(true);
 
-    fetch(
-      `${BACKEND_URL}/submission/submit-assignment`,
+  const formData = new FormData();
+  selectedFiles.forEach(f => formData.append("files", f));
+  links.forEach(l => formData.append("links", l));
+  if (user?._id || user?.id) {
+    formData.append("student", user._id || user.id);
+  }
+  formData.append("assignment", assignmentId);
+
+  try {
+    const res = await fetch(
+      `${BACKEND_URL}/submission/assignment-submission`,
       {
         method: "POST",
         headers: {
@@ -116,64 +132,87 @@ export default function SubmissionPanel({
         },
         body: formData,
       }
-    )
-      .then(async (res) => {
-        // Always log the raw response status
-        console.log("Raw response status:", res.status);
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          console.error("Submission error body:", body);
-          throw new Error(body.error || "Submission failed");
-        }
-        const data = await res.json();
-        // Console log the plagiarism API result
-        console.log("Plagiarism check result:", data);
-        return data;
-      })
-      .then((data) => {
-        setSelectedFiles([]);
-        setLinks([]);
-        toast.success("🎉 Submission successful!");
-        refreshSubmission();
-        if (onPlagiarismCheck) onPlagiarismCheck(data); // SEND RESULT TO PARENT
-      })
+    );
 
-      .catch((err) => {
-        console.error("Submission fetch error:", err);
-        setError(err.message);
-        toast.error(err.message);
-      });
-  }
+    const data = await res.json();
 
-  // --- Undo Submission ---
-  function handleUndoSubmission() {
-    if (!assignmentId || !submission) return;
-    if (!confirm("Are you sure you want to undo your submission?")) return;
-    // setLoadingUndo(true); // Don't use this here, handled by parent
-    fetch(
-      `${BACKEND_URL}/student/assignment/${assignmentId}/submission`,
-      {
-        method: "DELETE",
-        headers: {
-          Authorization:
-            "Bearer " +
-            (localStorage.getItem("token_student") ||
-              sessionStorage.getItem("token_student") ||
-              ""),
-        },
+    // Always update plagiarism result to show to user
+    if (data.plagiarismPercentage !== undefined) {
+      // Use backend status
+      const plagiarismStatus = data.status || (data.error ? "PLAGIARIZED" : "ACCEPTED");
+      const plagiarismData = {
+        status: plagiarismStatus,
+        plagiarism: data.plagiarismPercentage,
+        matches: data.matches || [],
+        message: data.message || data.error || "No plagiarism detected.",
+      };
+      setPlagiarismResult(plagiarismData);
+
+      if (typeof onPlagiarismCheck === "function") {
+        onPlagiarismCheck(plagiarismData);
       }
-    )
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to undo submission");
-        toast.success("Submission undone!");
-        refreshSubmission();
-      })
-      .catch((err) => {
-        setError(err.message);
-        toast.error(err.message);
-      });
-    // .finally(() => setLoadingUndo(false));
+
+      if (plagiarismStatus === "PLAGIARIZED") {
+        toast.error(plagiarismData.message || "Submission rejected due to plagiarism.");
+        // Do NOT setError for plagiarism!
+        return;
+      }
+
+      // Accepted
+      toast.success("🎉 Submission successful!");
+      setSelectedFiles([]);
+      setLinks([]);
+      refreshSubmission();
+      return;
+    } else {
+      // No plagiarism info returned, clear state
+      setPlagiarismResult(null);
+    }
+
+    // Success (for non-plagiarism cases)
+    toast.success("🎉 Submission successful!");
+    setSelectedFiles([]);
+    setLinks([]);
+    refreshSubmission();
+
+  } catch (err: any) {
+    setError(err.message);
+    toast.error(err.message);
+  } finally {
+    if (typeof setSubmitting === "function") setSubmitting(false);
   }
+}
+
+  async function handleUndoSubmission() {
+    if (!submission?._id) return;
+    if (!confirm("Are you sure you want to undo your submission?")) return;
+
+    try {
+      const res = await fetch(
+        `${BACKEND_URL}/submission/${submission._id}/unsubmit`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization:
+              "Bearer " +
+              (localStorage.getItem("token_student") ||
+                sessionStorage.getItem("token_student") ||
+                ""),
+          },
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to undo submission");
+      }
+      toast.success("Submission undone!");
+      refreshSubmission();
+    } catch (err: any) {
+      setError(err.message);
+      toast.error(err.message);
+    }
+  }
+
 
   // --- Main UI ---
   return (
@@ -323,6 +362,10 @@ export default function SubmissionPanel({
               )}
             </button>
           </div>
+        ) : submission ? (
+          <div className="p-4 text-center text-red-600 font-bold">
+            Submission exists but status is: "{submission.status}"
+          </div>
         ) : (
           // Submission form
           <form onSubmit={handleSubmit} className="space-y-8">
@@ -334,8 +377,8 @@ export default function SubmissionPanel({
               </label>
               <div
                 className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 ${dragActive
-                    ? 'border-indigo-400 bg-indigo-50 scale-105'
-                    : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50/50'
+                  ? 'border-indigo-400 bg-indigo-50 scale-105'
+                  : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50/50'
                   }`}
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
@@ -484,8 +527,8 @@ export default function SubmissionPanel({
               <button
                 type="submit"
                 className={`w-full inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-bold text-lg transition-all duration-300 transform shadow-lg ${submitting || (selectedFiles.length === 0 && links.length === 0)
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 hover:scale-105 hover:shadow-xl'
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 hover:scale-105 hover:shadow-xl'
                   }`}
                 disabled={submitting || (selectedFiles.length === 0 && links.length === 0)}
               >
