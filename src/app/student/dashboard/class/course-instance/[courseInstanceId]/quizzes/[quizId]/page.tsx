@@ -84,7 +84,7 @@ export default function QuizDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize: start/get submission and fetch populated data
+  // --- Initialize ---
   useEffect(() => {
     if (!quizId) return;
     const token =
@@ -96,7 +96,7 @@ export default function QuizDetail() {
       setLoading(true);
       setError(null);
       try {
-        // 1) Fetch or start submission
+        // 1) start or fetch
         const startRes = await fetch(SUB_API, {
           method: 'POST',
           headers: {
@@ -109,7 +109,7 @@ export default function QuizDetail() {
         const startBody = await startRes.json();
         const subId: string = (startBody.submission ?? startBody)._id;
 
-        // 2) Fetch fully populated submission
+        // 2) fetch populated
         const fullRes = await fetch(`${SUB_API}/${subId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -117,11 +117,10 @@ export default function QuizDetail() {
         const fetched: FullSubmission = await fullRes.json();
 
         setFullSub(fetched);
-
-        // Prefill local userAnswers if still in-progress
         if (fetched.status === 'submitted') {
           setShowResults(true);
         } else {
+          // prefill in-progress answers
           const map: Record<string, string> = {};
           fetched.answers.forEach(a => {
             map[a.question._id] = a.selectedOption;
@@ -138,13 +137,12 @@ export default function QuizDetail() {
     init();
   }, [quizId]);
 
-  // Handle option click (only if not yet answered & not showing results)
+  // --- Handlers ---
   const handleOptionClick = (qId: string, optId: string) => {
-    if (showResults || userAnswers[qId]) return;
+    if (showResults) return;
     setUserAnswers(prev => ({ ...prev, [qId]: optId }));
   };
 
-  // Submit answers and re-fetch full submission
   const handleShowResults = async () => {
     if (!fullSub) return;
     const token =
@@ -156,7 +154,6 @@ export default function QuizDetail() {
       .map(q => ({ question: q._id, selectedOption: userAnswers[q._id] }));
 
     try {
-      // PATCH answers
       await fetch(`${SUB_API}/${fullSub._id}/answers`, {
         method: 'PATCH',
         headers: {
@@ -165,12 +162,10 @@ export default function QuizDetail() {
         },
         body: JSON.stringify({ answers: answersPayload })
       });
-      // POST submit
       await fetch(`${SUB_API}/${fullSub._id}/submit`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
-      // re-fetch populated
       const fullRes = await fetch(`${SUB_API}/${fullSub._id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -182,7 +177,7 @@ export default function QuizDetail() {
     }
   };
 
-  // Derive UI metrics
+  // --- Derived State ---
   const quiz = fullSub?.quiz;
   const mcqCount = quiz?.questions.length ?? 0;
   const answeredCount = Object.keys(userAnswers).length;
@@ -196,7 +191,7 @@ export default function QuizDetail() {
       ) ?? 0;
   const percent = totalPoints ? Math.round((earnedPoints / totalPoints) * 100) : 0;
 
-  // Loading, error, or no quiz states
+  // --- Loading / Error / No Quiz ---
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -221,6 +216,7 @@ export default function QuizDetail() {
     );
   }
 
+  // --- Render ---
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       <div className="max-w-4xl mx-auto p-6">
@@ -251,9 +247,7 @@ export default function QuizDetail() {
           </div>
           <div className="mb-4">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-600">
-                Progress
-              </span>
+              <span className="text-sm font-medium text-gray-600">Progress</span>
               <span className="text-sm text-gray-500">
                 {answeredCount}/{mcqCount} answered
               </span>
@@ -269,11 +263,9 @@ export default function QuizDetail() {
           </div>
         </div>
 
-        {/* Questions */}
+        {/* Questions List */}
         <div className="space-y-6">
           {quiz.questions.map((q, idx) => {
-            const isAnswered = Boolean(userAnswers[q._id]);
-            const showAnswer = showResults || isAnswered;
             const answerRecord = fullSub?.answers.find(
               a => a.question._id === q._id
             );
@@ -303,33 +295,50 @@ export default function QuizDetail() {
                     {q.options?.map((opt, optIdx) => {
                       const isSelected = userAnswers[q._id] === opt._id;
                       const isCorrect = opt._id === q.correctOption;
+
+                      // base classes
                       let cls =
                         'w-full text-left px-6 py-4 border-2 rounded-lg flex items-center space-x-3 ';
-                      if (showAnswer) {
+
+                      if (showResults) {
+                        // post-submit styling
                         if (isSelected && isCorrect)
                           cls += 'bg-green-50 border-green-300 text-green-800';
                         else if (isSelected && !isCorrect)
                           cls += 'bg-red-50 border-red-300 text-red-800';
                         else if (isCorrect)
                           cls += 'bg-green-50 border-green-300 text-green-800';
-                        else cls += 'bg-gray-50 border-gray-200 text-gray-600';
+                        else
+                          cls += 'bg-gray-50 border-gray-200 text-gray-600';
                       } else {
-                        cls +=
-                          'border-gray-200 hover:border-blue-300 hover:bg-blue-50 text-gray-700';
+                        // before-submit: only the selected one gets a filled look
+                        if (isSelected)
+                          cls += 'bg-blue-200 border-blue-400 text-gray-800';
+                        else
+                          cls += 'border-gray-200 hover:border-blue-300 hover:bg-blue-50 text-gray-700';
                       }
+
                       return (
                         <button
                           key={opt._id}
-                          disabled={isAnswered || showResults}
+                          disabled={showResults}
                           onClick={() => handleOptionClick(q._id, opt._id)}
                           className={cls}
                         >
                           <div className="flex items-center w-full">
+                            {/* A/B/C/D bubble */}
                             <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mr-4">
                               {String.fromCharCode(65 + optIdx)}
                             </div>
                             <span className="flex-1">{opt.text}</span>
-                            {showAnswer && isSelected && (
+
+                            {/* pre-submit check icon */}
+                            {!showResults && isSelected && (
+                              <CheckCircle className="w-6 h-6 text-blue-600 ml-auto" />
+                            )}
+
+                            {/* post-submit icons */}
+                            {showResults && isSelected && (
                               <div className="ml-auto">
                                 {isCorrect ? (
                                   <CheckCircle className="w-6 h-6 text-green-600" />
@@ -338,18 +347,13 @@ export default function QuizDetail() {
                                 )}
                               </div>
                             )}
-                            {showAnswer && !isSelected && isCorrect && (
-                              <div className="ml-auto">
-                                <CheckCircle className="w-6 h-6 text-green-600" />
-                              </div>
-                            )}
                           </div>
                         </button>
                       );
                     })}
                   </div>
 
-                  {/* Feedback */}
+                  {/* Feedback (post-submit) */}
                   {showResults && answerRecord && (
                     <div className="mt-6 p-4 rounded-lg border-l-4">
                       {answerRecord.earnedPoints === q.points ? (
@@ -385,19 +389,19 @@ export default function QuizDetail() {
           })}
         </div>
 
-        {/* Submit & Show Results */}
+        {/* Submit Button */}
         {allAnswered && !showResults && (
           <div className="mt-8 text-center">
             <button
               onClick={handleShowResults}
               className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-8 py-3 rounded-lg font-semibold"
             >
-              Submit & Show Results
+              Submit &amp; Show Results
             </button>
           </div>
         )}
 
-        {/* Final Results Summary */}
+        {/* Results Summary */}
         {showResults && (
           <div className="mt-8 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
             <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-8 py-6 flex items-center space-x-4">
