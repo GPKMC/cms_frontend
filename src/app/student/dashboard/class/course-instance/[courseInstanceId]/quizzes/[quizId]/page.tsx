@@ -1,32 +1,41 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-// Simple date formatting function
+import {
+  Loader2,
+  AlertCircle,
+  Clock,
+  Award,
+  CheckCircle,
+  XCircle,
+  BookOpen
+} from 'lucide-react';
+import { useParams } from 'next/navigation';
+
+// --- Date formatting helper ---
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
   return {
-    full: date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
+    full: date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
       day: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
       hour12: true
     }),
-    short: date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short', 
+    short: date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
       day: 'numeric'
     }),
-    time: date.toLocaleTimeString('en-US', { 
+    time: date.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true
     })
   };
 };
-import { Loader2, AlertCircle, Clock, Award, CheckCircle, XCircle, BookOpen } from 'lucide-react';
-import { useParams } from 'next/navigation';
 
 // ---- Types ----
 type Option = { _id: string; text: string };
@@ -48,124 +57,166 @@ type Quiz = {
   questions: Question[];
 };
 
+type PopulatedAnswer = {
+  question: Question;
+  selectedOption: string;
+  earnedPoints: number;
+  teacherFeedback: string;
+};
+
+type FullSubmission = {
+  _id: string;
+  quiz: Quiz;
+  student: string;
+  status: 'in-progress' | 'submitted';
+  answers: PopulatedAnswer[];
+  totalScore: number;
+};
+
 export default function QuizDetail() {
-  
-  const [quiz, setQuiz] = useState<Quiz | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [userAnswers, setUserAnswers] = useState<Record<string,string>>({});
-  const [showResults, setShowResults] = useState<boolean>(false);
-
   const { quizId } = useParams() as { quizId?: string };
+  const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL!;
+  const SUB_API = `${BACKEND}/quiz-submissions`;
 
+  const [fullSub, setFullSub] = useState<FullSubmission | null>(null);
+  const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
+  const [showResults, setShowResults] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Initialize: start/get submission and fetch populated data
   useEffect(() => {
-    // Don’t run until quizId is defined
     if (!quizId) return;
+    const token =
+      localStorage.getItem('token_student') ||
+      sessionStorage.getItem('token_student') ||
+      '';
 
-    const fetchQuiz = async () => {
+    const init = async () => {
       setLoading(true);
       setError(null);
       try {
-        const token =
-          localStorage.getItem('token_student') ||
-          sessionStorage.getItem('token_student') ||
-          '';
+        // 1) Fetch or start submission
+        const startRes = await fetch(SUB_API, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ quiz: quizId })
+        });
+        if (!startRes.ok) throw new Error('Failed to start/fetch submission');
+        const startBody = await startRes.json();
+        const subId: string = (startBody.submission ?? startBody)._id;
 
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL}/quizrouter/${quizId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            cache: 'no-store',
-          }
-        );
+        // 2) Fetch fully populated submission
+        const fullRes = await fetch(`${SUB_API}/${subId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!fullRes.ok) throw new Error('Failed to load submission');
+        const fetched: FullSubmission = await fullRes.json();
 
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.message || res.statusText);
+        setFullSub(fetched);
+
+        // Prefill local userAnswers if still in-progress
+        if (fetched.status === 'submitted') {
+          setShowResults(true);
+        } else {
+          const map: Record<string, string> = {};
+          fetched.answers.forEach(a => {
+            map[a.question._id] = a.selectedOption;
+          });
+          setUserAnswers(map);
         }
-
-        const payload = await res.json();
-        // API might wrap the quiz in { quiz: {...} }
-        setQuiz(payload.quiz ?? payload);
-      } catch (err: any) {
-        setError(err.message || 'Failed to load quiz');
+      } catch (e: any) {
+        setError(e.message);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchQuiz();
+    init();
   }, [quizId]);
 
-  if (loading) return <div>Loading…</div>;
-  if (error) return <div style={{ color: 'red' }}>Error: {error}</div>;
-  if (!quiz) return <div>No quiz found.</div>;
-
-  // Handle option click
+  // Handle option click (only if not yet answered & not showing results)
   const handleOptionClick = (qId: string, optId: string) => {
-    if (userAnswers[qId]) return;
+    if (showResults || userAnswers[qId]) return;
     setUserAnswers(prev => ({ ...prev, [qId]: optId }));
   };
 
-  // Compute scores
-  const totalMcqPoints = quiz
-    ? quiz.questions
-        .filter(q => q.type === 'mcq')
-        .reduce((sum, q) => sum + q.points, 0)
-    : 0;
-  
-  const earnedPoints = quiz
-    ? quiz.questions.reduce((sum, q) => {
-        if (q.type === 'mcq' && userAnswers[q._id] === q.correctOption) {
-          return sum + q.points;
-        }
-        return sum;
-      }, 0)
-    : 0;
+  // Submit answers and re-fetch full submission
+  const handleShowResults = async () => {
+    if (!fullSub) return;
+    const token =
+      localStorage.getItem('token_student') ||
+      sessionStorage.getItem('token_student') ||
+      '';
+    const answersPayload = fullSub.quiz.questions
+      .filter(q => userAnswers[q._id])
+      .map(q => ({ question: q._id, selectedOption: userAnswers[q._id] }));
 
-  const mcqCount = quiz ? quiz.questions.filter(q => q.type === 'mcq').length : 0;
-  const answeredMcqCount = Object.keys(userAnswers).length;
-  const allMcqsAnswered = mcqCount > 0 && answeredMcqCount === mcqCount;
-  const scorePercentage = totalMcqPoints > 0 ? Math.round((earnedPoints / totalMcqPoints) * 100) : 0;
-
-  const handleShowResults = () => {
-    setShowResults(true);
+    try {
+      // PATCH answers
+      await fetch(`${SUB_API}/${fullSub._id}/answers`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ answers: answersPayload })
+      });
+      // POST submit
+      await fetch(`${SUB_API}/${fullSub._id}/submit`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      // re-fetch populated
+      const fullRes = await fetch(`${SUB_API}/${fullSub._id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const fetched: FullSubmission = await fullRes.json();
+      setFullSub(fetched);
+      setShowResults(true);
+    } catch (err) {
+      console.error('Error submitting quiz:', err);
+    }
   };
 
+  // Derive UI metrics
+  const quiz = fullSub?.quiz;
+  const mcqCount = quiz?.questions.length ?? 0;
+  const answeredCount = Object.keys(userAnswers).length;
+  const allAnswered = mcqCount > 0 && answeredCount === mcqCount;
+  const totalPoints = quiz?.questions.reduce((sum, q) => sum + q.points, 0) ?? 0;
+  const earnedPoints = showResults
+    ? fullSub?.totalScore ?? 0
+    : quiz?.questions.reduce(
+        (sum, q) => sum + (userAnswers[q._id] === q.correctOption ? q.points : 0),
+        0
+      ) ?? 0;
+  const percent = totalPoints ? Math.round((earnedPoints / totalPoints) * 100) : 0;
+
+  // Loading, error, or no quiz states
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="text-center">
-          <Loader2 className="animate-spin w-16 h-16 text-indigo-600 mx-auto mb-4" />
-          <p className="text-lg text-gray-600">Loading quiz...</p>
-        </div>
+        <Loader2 className="animate-spin w-16 h-16 text-indigo-600" />
       </div>
     );
   }
-
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-red-50 to-pink-100">
-        <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md">
-          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">Oops! Something went wrong</h2>
-          <p className="text-gray-600">Error loading quiz: {error}</p>
-        </div>
+        <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
+        <p className="text-red-600">Error: {error}</p>
       </div>
     );
   }
-
   if (!quiz) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md">
-          <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">Quiz Not Found</h2>
-          <p className="text-gray-600">The quiz you're looking for doesn't exist.</p>
-        </div>
+        <BookOpen className="w-16 h-16 text-gray-400 mb-4" />
+        <p className="text-gray-600">Quiz not found.</p>
       </div>
     );
   }
@@ -173,14 +224,16 @@ export default function QuizDetail() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       <div className="max-w-4xl mx-auto p-6">
-        {/* Header Card */}
+        {/* Header & Progress */}
         <div className="bg-white rounded-xl shadow-lg p-8 mb-8 border border-gray-100">
           <div className="flex items-start justify-between mb-6">
             <div className="flex-1">
-              <h1 className="text-4xl font-bold text-gray-800 mb-4">{quiz.title}</h1>
-              <div 
-                className="prose prose-blue max-w-none text-gray-600 mb-4" 
-                dangerouslySetInnerHTML={{ __html: quiz.description }} 
+              <h1 className="text-4xl font-bold text-gray-800 mb-4">
+                {quiz.title}
+              </h1>
+              <div
+                className="prose prose-blue max-w-none text-gray-600"
+                dangerouslySetInnerHTML={{ __html: quiz.description }}
               />
             </div>
             <div className="ml-6 text-right">
@@ -196,17 +249,21 @@ export default function QuizDetail() {
               </div>
             </div>
           </div>
-          
-          {/* Progress Bar */}
           <div className="mb-4">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-600">Progress</span>
-              <span className="text-sm text-gray-500">{answeredMcqCount}/{mcqCount} questions</span>
+              <span className="text-sm font-medium text-gray-600">
+                Progress
+              </span>
+              <span className="text-sm text-gray-500">
+                {answeredCount}/{mcqCount} answered
+              </span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
-              <div 
+              <div
                 className="bg-gradient-to-r from-blue-500 to-indigo-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${mcqCount > 0 ? (answeredMcqCount / mcqCount) * 100 : 0}%` }}
+                style={{
+                  width: `${mcqCount ? (answeredCount / mcqCount) * 100 : 0}%`
+                }}
               />
             </div>
           </div>
@@ -214,59 +271,64 @@ export default function QuizDetail() {
 
         {/* Questions */}
         <div className="space-y-6">
-          {quiz.questions.map((q, idx) => (
-            <div key={q._id} className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-              <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-white font-semibold text-lg">
-                    Question {idx + 1}
-                  </h3>
-                  <div className="bg-white/20 rounded-full px-3 py-1">
-                    <span className="text-white text-sm font-medium">
-                      {q.points} {q.points === 1 ? 'point' : 'points'}
-                    </span>
+          {quiz.questions.map((q, idx) => {
+            const isAnswered = Boolean(userAnswers[q._id]);
+            const showAnswer = showResults || isAnswered;
+            const answerRecord = fullSub?.answers.find(
+              a => a.question._id === q._id
+            );
+
+            return (
+              <div
+                key={q._id}
+                className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden"
+              >
+                <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-white font-semibold text-lg">
+                      Question {idx + 1}
+                    </h3>
+                    <div className="bg-white/20 rounded-full px-3 py-1">
+                      <span className="text-white text-sm font-medium">
+                        {q.points} point{q.points !== 1 && 's'}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              
-              <div className="p-6">
-                <p className="text-gray-800 text-lg mb-6 leading-relaxed">{q.text}</p>
+                <div className="p-6">
+                  <p className="text-gray-800 text-lg mb-6">{q.text}</p>
 
-                {q.type === 'mcq' && q.options && (
+                  {/* Options */}
                   <div className="space-y-3">
-                    {q.options.map((opt, optIdx) => {
+                    {q.options?.map((opt, optIdx) => {
                       const isSelected = userAnswers[q._id] === opt._id;
                       const isCorrect = opt._id === q.correctOption;
-                      const showAnswer = showResults || userAnswers[q._id];
-                      
-                      let btnClass = 'w-full text-left px-6 py-4 border-2 rounded-lg transition-all duration-200 flex items-center space-x-3 ';
-                      
+                      let cls =
+                        'w-full text-left px-6 py-4 border-2 rounded-lg flex items-center space-x-3 ';
                       if (showAnswer) {
-                        if (isSelected && isCorrect) {
-                          btnClass += 'bg-green-50 border-green-300 text-green-800 shadow-md';
-                        } else if (isSelected && !isCorrect) {
-                          btnClass += 'bg-red-50 border-red-300 text-red-800 shadow-md';
-                        } else if (isCorrect) {
-                          btnClass += 'bg-green-50 border-green-300 text-green-800 shadow-md';
-                        } else {
-                          btnClass += 'bg-gray-50 border-gray-200 text-gray-600';
-                        }
+                        if (isSelected && isCorrect)
+                          cls += 'bg-green-50 border-green-300 text-green-800';
+                        else if (isSelected && !isCorrect)
+                          cls += 'bg-red-50 border-red-300 text-red-800';
+                        else if (isCorrect)
+                          cls += 'bg-green-50 border-green-300 text-green-800';
+                        else cls += 'bg-gray-50 border-gray-200 text-gray-600';
                       } else {
-                        btnClass += 'border-gray-200 hover:border-blue-300 hover:bg-blue-50 hover:shadow-md text-gray-700';
+                        cls +=
+                          'border-gray-200 hover:border-blue-300 hover:bg-blue-50 text-gray-700';
                       }
-
                       return (
                         <button
                           key={opt._id}
+                          disabled={isAnswered || showResults}
                           onClick={() => handleOptionClick(q._id, opt._id)}
-                          disabled={!!userAnswers[q._id]}
-                          className={btnClass}
+                          className={cls}
                         >
                           <div className="flex items-center w-full">
-                            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm font-medium mr-4">
+                            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mr-4">
                               {String.fromCharCode(65 + optIdx)}
                             </div>
-                            <span className="flex-1 text-left">{opt.text}</span>
+                            <span className="flex-1">{opt.text}</span>
                             {showAnswer && isSelected && (
                               <div className="ml-auto">
                                 {isCorrect ? (
@@ -286,102 +348,106 @@ export default function QuizDetail() {
                       );
                     })}
                   </div>
-                )}
 
-                {/* Feedback */}
-                {userAnswers[q._id] && showResults && q.feedbackCorrect && q.feedbackIncorrect && (
-                  <div className="mt-6 p-4 rounded-lg border-l-4">
-                    {userAnswers[q._id] === q.correctOption ? (
-                      <div className="border-l-green-500 bg-green-50">
-                        <div className="flex items-start">
-                          <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 mr-3 flex-shrink-0" />
+                  {/* Feedback */}
+                  {showResults && answerRecord && (
+                    <div className="mt-6 p-4 rounded-lg border-l-4">
+                      {answerRecord.earnedPoints === q.points ? (
+                        <div className="border-l-green-500 bg-green-50 p-4 flex items-start">
+                          <CheckCircle className="w-5 h-5 text-green-600 mr-3" />
                           <div>
-                            <p className="font-medium text-green-800 mb-1">Correct!</p>
-                            <p className="text-green-700 text-sm">{q.feedbackCorrect}</p>
+                            <p className="font-medium text-green-800 mb-1">
+                              Correct!
+                            </p>
+                            <p className="text-green-700 text-sm">
+                              {q.feedbackCorrect}
+                            </p>
                           </div>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="border-l-red-500 bg-red-50">
-                        <div className="flex items-start">
-                          <XCircle className="w-5 h-5 text-red-600 mt-0.5 mr-3 flex-shrink-0" />
+                      ) : (
+                        <div className="border-l-red-500 bg-red-50 p-4 flex items-start">
+                          <XCircle className="w-5 h-5 text-red-600 mr-3" />
                           <div>
-                            <p className="font-medium text-red-800 mb-1">Incorrect</p>
-                            <p className="text-red-700 text-sm">{q.feedbackIncorrect}</p>
+                            <p className="font-medium text-red-800 mb-1">
+                              Incorrect
+                            </p>
+                            <p className="text-red-700 text-sm">
+                              {q.feedbackIncorrect}
+                            </p>
                           </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
-        {/* Results Section */}
-        {allMcqsAnswered && (
-          <div className="mt-8">
-            {!showResults ? (
-              <div className="bg-white rounded-xl shadow-lg p-8 text-center border border-gray-100">
-                <div className="mb-6">
-                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <BookOpen className="w-8 h-8 text-blue-600" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-800 mb-2">Quiz Complete!</h3>
-                  <p className="text-gray-600">You've answered all questions. Ready to see your results?</p>
-                </div>
-                <button
-                  onClick={handleShowResults}
-                  className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-8 py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl"
-                >
-                  Show Results
-                </button>
+        {/* Submit & Show Results */}
+        {allAnswered && !showResults && (
+          <div className="mt-8 text-center">
+            <button
+              onClick={handleShowResults}
+              className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-8 py-3 rounded-lg font-semibold"
+            >
+              Submit & Show Results
+            </button>
+          </div>
+        )}
+
+        {/* Final Results Summary */}
+        {showResults && (
+          <div className="mt-8 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+            <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-8 py-6 flex items-center space-x-4">
+              <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                <Award className="w-6 h-6 text-white" />
               </div>
-            ) : (
-              <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-                <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-8 py-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                        <Award className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="text-2xl font-bold text-white">Quiz Results</h3>
-                        <p className="text-green-100">Great job completing the quiz!</p>
-                      </div>
-                    </div>
+              <div>
+                <h3 className="text-2xl font-bold text-white">Quiz Results</h3>
+                <p className="text-green-100">Well done!</p>
+              </div>
+            </div>
+            <div className="p-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div className="text-center p-6 bg-blue-50 rounded-lg">
+                  <div className="text-3xl font-bold text-blue-600 mb-2">
+                    {earnedPoints}
+                  </div>
+                  <div className="text-sm text-blue-600 font-medium">
+                    Points Earned
                   </div>
                 </div>
-                
-                <div className="p-8">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                    <div className="text-center p-6 bg-blue-50 rounded-lg">
-                      <div className="text-3xl font-bold text-blue-600 mb-2">{earnedPoints}</div>
-                      <div className="text-sm text-blue-600 font-medium">Points Earned</div>
-                    </div>
-                    <div className="text-center p-6 bg-indigo-50 rounded-lg">
-                      <div className="text-3xl font-bold text-indigo-600 mb-2">{totalMcqPoints}</div>
-                      <div className="text-sm text-indigo-600 font-medium">Total Points</div>
-                    </div>
-                    <div className="text-center p-6 bg-green-50 rounded-lg">
-                      <div className="text-3xl font-bold text-green-600 mb-2">{scorePercentage}%</div>
-                      <div className="text-sm text-green-600 font-medium">Score</div>
-                    </div>
+                <div className="text-center p-6 bg-indigo-50 rounded-lg">
+                  <div className="text-3xl font-bold text-indigo-600 mb-2">
+                    {totalPoints}
                   </div>
-                  
-                  <div className="text-center">
-                    <div className="inline-flex items-center space-x-2 bg-gray-100 rounded-full px-6 py-2">
-                      <span className="text-gray-600">
-                        {scorePercentage >= 80 ? '🎉 Excellent work!' : 
-                         scorePercentage >= 60 ? '👍 Good job!' : 
-                         '📚 Keep studying!'}
-                      </span>
-                    </div>
+                  <div className="text-sm text-indigo-600 font-medium">
+                    Total Points
+                  </div>
+                </div>
+                <div className="text-center p-6 bg-green-50 rounded-lg">
+                  <div className="text-3xl font-bold text-green-600 mb-2">
+                    {percent}%
+                  </div>
+                  <div className="text-sm text-green-600 font-medium">
+                    Score
                   </div>
                 </div>
               </div>
-            )}
+              <div className="text-center">
+                <div className="inline-flex items-center space-x-2 bg-gray-100 rounded-full px-6 py-2">
+                  <span className="text-gray-600">
+                    {percent >= 80
+                      ? '🎉 Excellent!'
+                      : percent >= 60
+                      ? '👍 Good job!'
+                      : '📚 Keep studying!'}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import React, { useState } from "react";
 import dynamic from "next/dynamic";
@@ -8,7 +8,13 @@ import {
   Trash2,
   CheckCircle,
   AlertCircle,
-  X
+  X,
+  Clock,
+  FileText,
+  Hash,
+  BookOpen,
+  Sparkles,
+  Save
 } from "lucide-react";
 import type { TiptapEditorProps } from "./rtecomponent";
 
@@ -27,7 +33,6 @@ interface Option {
 interface Question {
   id: string;
   text: string;
-  type: "mcq" | "short_answer";
   points: number;
   options: Option[];
   feedbackCorrect: string;
@@ -60,7 +65,6 @@ export default function QuizForm({
       {
         id: Math.random().toString(36).substr(2, 9),
         text: "",
-        type: "mcq",
         points: 1,
         options: [],
         feedbackCorrect: "",
@@ -74,6 +78,7 @@ export default function QuizForm({
     setQuestions(qs =>
       qs.map(q => (q.id === qid ? { ...q, [field]: val } : q))
     );
+
   // Helpers to manage options
   const addOption = (qid: string) =>
     setQuestions(qs =>
@@ -127,51 +132,35 @@ export default function QuizForm({
     questions.every(q =>
       q.text.trim() !== "" &&
       q.points > 0 &&
-      (q.type === "short_answer" ||
-        (q.options.length >= 2 && q.options.some(o => o.isCorrect)))
+      q.options.length >= 2 &&
+      q.options.some(o => o.isCorrect)
     );
 
   async function handleSubmit() {
-  if (!canSubmit) {
-    toast.error("Fix validation errors before submitting.");
-    return;
-  }
-  setIsSubmitting(true);
-
-  const token =
-    localStorage.getItem("token_teacher") ||
-    sessionStorage.getItem("token_teacher") ||
-    "";
-
-  try {
-    // 1) Create the quiz itself
-    const quizRes = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_URL}/quizrouter`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          title,
-          description,
-          dueDate,
-          courseInstance: courseInstanceId,
-        }),
-      }
-    );
-    if (!quizRes.ok) {
-      const err = await quizRes.json();
-      throw new Error(err.errors?.[0]?.msg || "Failed to create quiz");
+    if (!canSubmit) {
+      toast.error("Fix validation errors before submitting.");
+      return;
     }
-    const { _id: quizId } = await quizRes.json();
 
-    // 2) For each question, do a 2‑step create & patch
-    for (const q of questions) {
-      // 2a) POST without correctOption
-      const createQRes = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/quizrouter/${quizId}/questions`,
+    // dueDate must be in the future
+    if (dueDate) {
+      const ts = new Date(dueDate).getTime();
+      if (isNaN(ts) || ts <= Date.now()) {
+        toast.error("Due date must be in the future.");
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+    const token =
+      localStorage.getItem("token_teacher") ||
+      sessionStorage.getItem("token_teacher") ||
+      "";
+
+    try {
+      // 1) Create the quiz itself
+      const quizRes = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/quizrouter`,
         {
           method: "POST",
           headers: {
@@ -179,67 +168,107 @@ export default function QuizForm({
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            text: q.text,
-            type: q.type,
-            points: q.points,
-            options: q.options.map(o => ({ text: o.text })),
-            feedbackCorrect: q.feedbackCorrect,
-            feedbackIncorrect: q.feedbackIncorrect,
+            title,
+            description,
+            dueDate,
+            courseInstance: courseInstanceId,
           }),
         }
       );
-      if (!createQRes.ok) {
-        const err = await createQRes.json();
-        throw new Error(err.errors?.[0]?.msg || "Failed to create question");
+      if (!quizRes.ok) {
+        const err = await quizRes.json();
+        throw new Error(err.errors?.[0]?.msg || "Failed to create quiz");
       }
-      const updatedQuiz = await createQRes.json();
+      const { _id: quizId } = await quizRes.json();
 
-      // 2b) Locate the newly‐added question by matching its text
-      const newlyAdded = updatedQuiz.questions.find((qq: any) => qq.text === q.text);
-      if (!newlyAdded) {
-        throw new Error("Cannot find newly created question");
-      }
-
-      // 2c) Find the real ObjectId of the user‐marked correct option
-      const correctIdx = q.options.findIndex(o => o.isCorrect);
-      if (correctIdx >= 0) {
-        const correctOptionId = newlyAdded.options[correctIdx]._id;
-
-        // 2d) PATCH to set correctOption
-        const patchRes = await fetch(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL}/quizrouter/${quizId}/questions/${newlyAdded._id}`,
+      // 2) For each question, do a 2-step create & patch
+      for (const q of questions) {
+        // 2a) POST without correctOption
+        const createQRes = await fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/quizrouter/${quizId}/questions`,
           {
-            method: "PATCH",
+            method: "POST",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ correctOption: correctOptionId }),
+            body: JSON.stringify({
+              text: q.text,
+              type: "mcq",
+              points: q.points,
+              options: q.options.map(o => ({ text: o.text })),
+              feedbackCorrect: q.feedbackCorrect,
+              feedbackIncorrect: q.feedbackIncorrect,
+            }),
           }
         );
-        if (!patchRes.ok) {
-          const err = await patchRes.json();
-          throw new Error(err.errors?.[0]?.msg || "Failed to set correct option");
+        if (!createQRes.ok) {
+          const err = await createQRes.json();
+          throw new Error(err.errors?.[0]?.msg || "Failed to create question");
+        }
+        const updatedQuiz = await createQRes.json();
+
+        // 2b) Find that new question by text
+        const newlyAdded = updatedQuiz.questions.find((qq: any) => qq.text === q.text);
+        if (!newlyAdded) {
+          throw new Error("Cannot find newly created question");
+        }
+
+        // 2c) Get the correct option’s real _id
+        const correctIdx = q.options.findIndex(o => o.isCorrect);
+        if (correctIdx >= 0) {
+          const correctOptionId = newlyAdded.options[correctIdx]._id;
+
+          // 2d) PATCH to set correctOption
+          const patchRes = await fetch(
+            `${process.env.NEXT_PUBLIC_BACKEND_URL}/quizrouter/${quizId}/questions/${newlyAdded._id}`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ correctOption: correctOptionId }),
+            }
+          );
+          if (!patchRes.ok) {
+            const err = await patchRes.json();
+            throw new Error(err.errors?.[0]?.msg || "Failed to set correct option");
+          }
         }
       }
+
+      toast.success("Quiz created successfully! 🎉");
+      // reset form state
+      setTitle("");
+      setDescription("");
+      setDueDate("");
+      setQuestions([]);
+      onSuccess();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Something went wrong");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    toast.success("Quiz created!");
-    // reset form state
-    setTitle("");
-    setDescription("");
-    setDueDate("");
-    setQuestions([]);
-    onSuccess();
-  } catch (err: any) {
-    console.error(err);
-    toast.error(err.message || "Something went wrong");
-  } finally {
-    setIsSubmitting(false);
   }
-}
 
-  // Render modal + form
+  // Calculate progress
+  const totalFields = 3 + questions.length * 3;
+  const completedFields =
+    (title.trim() ? 1 : 0) +
+    (description.trim() ? 1 : 0) +
+    (dueDate ? 1 : 0) +
+    questions.reduce((acc, q) =>
+      acc +
+      (q.text.trim() ? 1 : 0) +
+      (q.points > 0 ? 1 : 0) +
+      (q.options.length >= 2 && q.options.some(o => o.isCorrect) ? 1 : 0)
+    , 0);
+  const completionPercent = totalFields > 0
+    ? Math.round((completedFields / totalFields) * 100)
+    : 0;
+
   return (
     <>
       {/* Overlay */}
@@ -248,177 +277,204 @@ export default function QuizForm({
         onClick={onClose}
       />
 
-      {/* Modal Content */}
+      {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-auto">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[95vh] overflow-auto">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b">
-            <h2 className="text-xl font-semibold">Create Quiz</h2>
-            <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
-              <X size={24} />
-            </button>
+          <div className="relative bg-gradient-to-r from-blue-600 to-purple-600 p-6 text-white rounded-t-2xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Sparkles size={24} />
+                <div>
+                  <h2 className="text-2xl font-bold">Create New Quiz</h2>
+                  <p className="text-blue-200 text-sm">for {courseName}</p>
+                </div>
+              </div>
+              <button onClick={onClose} className="hover:text-gray-200">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="mt-4 flex items-center gap-3">
+              <div className="flex-1 bg-white/20 h-2 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-green-400"
+                  style={{ width: `${completionPercent}%` }}
+                />
+              </div>
+              <span className="font-medium">{completionPercent}%</span>
+            </div>
           </div>
 
           {/* Body */}
-          <div className="p-6 max-w-3xl mx-auto space-y-8">
-            <h2 className="text-2xl font-semibold">Create New Quiz</h2>
-
-            {/* Metadata */}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium">Quiz Title</label>
-                <input
-                  type="text"
-                  className="mt-1 w-full border rounded px-3 py-2"
-                  value={title}
-                  onChange={e => setTitle(e.target.value)}
-                  placeholder="Enter quiz title…"
-                  required
-                />
+          <div className="p-8 space-y-10">
+            {/* Quiz Details */}
+            <div>
+              <div className="flex items-center gap-3 mb-6">
+                <BookOpen size={20} className="text-blue-600" />
+                <h3 className="text-xl font-semibold">Quiz Details</h3>
               </div>
-              <div>
-                <label className="block text-sm font-medium">Description</label>
-                <TiptapEditor
-                  content={description}
-                  onChange={setDescription}
-                  placeholder="Optional description…"
-                  className="min-h-[120px] border rounded p-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">Due Date</label>
-                <input
-                  type="datetime-local"
-                  className="mt-1 w-full border rounded px-3 py-2"
-                  value={dueDate}
-                  onChange={e => setDueDate(e.target.value)}
-                />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="lg:col-span-2">
+                  <label className="block text-sm font-medium mb-2">Title *</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded-xl px-4 py-3 focus:border-blue-500"
+                    value={title}
+                    onChange={e => setTitle(e.target.value)}
+                  />
+                </div>
+                <div className="lg:col-span-2">
+                  <label className="block text-sm font-medium mb-2">Description</label>
+                  <div className="border rounded-xl">
+                    <TiptapEditor
+                      content={description}
+                      onChange={setDescription}
+                      placeholder="Optional description…"
+                      className="min-h-[120px] p-4"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Due Date</label>
+                  <input
+                    type="datetime-local"
+                    className="w-full border rounded-xl px-4 py-3 focus:border-blue-500"
+                    value={dueDate}
+                    onChange={e => setDueDate(e.target.value)}
+                  />
+                </div>
               </div>
             </div>
 
             {/* Questions */}
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xl font-semibold">Questions</h3>
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <Hash size={20} className="text-purple-600" />
+                  <h3 className="text-xl font-semibold">Questions</h3>
+                  <span className="text-sm text-gray-500">{questions.length}</span>
+                </div>
                 <button
-                  type="button"
                   onClick={addQuestion}
-                  className="flex items-center gap-1 bg-blue-600 text-white px-3 py-1 rounded"
+                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700"
                 >
                   <Plus size={16} /> Add Question
                 </button>
               </div>
 
               {questions.length === 0 && (
-                <p className="text-gray-500">
+                <div className="text-center py-12 border-2 border-dashed rounded-xl text-gray-500">
+                  <Hash size={32} className="mx-auto mb-2" />
                   No questions yet. Click “Add Question” to start.
-                </p>
+                </div>
               )}
 
               {questions.map((q, idx) => (
-                <div key={q.id} className="border rounded-lg p-4 space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium">Question {idx + 1}</span>
-                    <button onClick={() => removeQuestion(q.id)}>
-                      <Trash2 size={18} className="text-red-600 hover:text-red-800" />
+                <div key={q.id} className="border rounded-2xl p-6 mb-6 shadow-sm">
+                  <div className="flex justify-between items-center mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center text-white">
+                        {idx + 1}
+                      </div>
+                      <span className="font-semibold">Question {idx + 1}</span>
+                    </div>
+                    <button onClick={() => removeQuestion(q.id)} className="text-red-600 hover:text-red-800">
+                      <Trash2 size={18} />
                     </button>
                   </div>
 
-                  {/* Text */}
-                  <div>
-                    <label className="block text-sm">Text</label>
+                  {/* Question Text */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-2">Text *</label>
                     <input
                       type="text"
-                      className="mt-1 w-full border rounded px-3 py-2"
+                      className="w-full border rounded-xl px-4 py-3 focus:border-blue-500"
                       value={q.text}
                       onChange={e => updateQuestion(q.id, "text", e.target.value)}
                     />
                   </div>
 
-                  {/* Type & Points */}
-                  <div className="flex gap-4">
-                    <div>
-                      <label className="block text-sm">Type</label>
-                      <select
-                        className="mt-1 border rounded px-2 py-1"
-                        value={q.type}
-                        onChange={e => updateQuestion(q.id, "type", e.target.value as any)}
-                      >
-                        <option value="mcq">MCQ</option>
-                        <option value="short_answer">Short Answer</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm">Points</label>
-                      <input
-                        type="number"
-                        min={1}
-                        className="mt-1 w-24 border rounded px-2 py-1"
-                        value={q.points}
-                        onChange={e => updateQuestion(q.id, "points", +e.target.value)}
-                      />
-                    </div>
+                  {/* Points */}
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium mb-2">Points *</label>
+                    <input
+                      type="number"
+                      min={1}
+                      className="w-32 border rounded-xl px-4 py-3 focus:border-blue-500"
+                      value={q.points}
+                      onChange={e => updateQuestion(q.id, "points", +e.target.value)}
+                    />
                   </div>
 
                   {/* MCQ Options */}
-                  {q.type === "mcq" && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">Options</span>
-                        <button
-                          type="button"
-                          onClick={() => addOption(q.id)}
-                          className="text-green-600 hover:underline text-sm"
-                        >
-                          + Add Option
+                  <div className="space-y-4 mb-6">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">Options *</span>
+                      <button
+                        onClick={() => addOption(q.id)}
+                        className="text-green-600 hover:text-green-700"
+                      >
+                        <Plus size={16} /> Add
+                      </button>
+                    </div>
+                    {q.options.map((o, optIdx) => (
+                      <div key={o.id} className="flex items-center gap-3">
+                        <input
+                          type="radio"
+                          name={`correct-${q.id}`}
+                          checked={o.isCorrect}
+                          onChange={() => toggleCorrect(q.id, o.id)}
+                          className="w-4 h-4 text-green-600"
+                        />
+                        <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
+                          {String.fromCharCode(65 + optIdx)}
+                        </div>
+                        <input
+                          type="text"
+                          className="flex-1 border rounded-xl px-3 py-2"
+                          value={o.text}
+                          onChange={e => updateOption(q.id, o.id, e.target.value)}
+                          placeholder={`Option ${String.fromCharCode(65 + optIdx)}`}
+                        />
+                        <button onClick={() => removeOption(q.id, o.id)} className="text-red-600">
+                          <Trash2 size={16} />
                         </button>
                       </div>
-                      {q.options.map(o => (
-                        <div key={o.id} className="flex items-center gap-2">
-                          <input
-                            type="radio"
-                            name={`correct-${q.id}`}
-                            checked={o.isCorrect}
-                            onChange={() => toggleCorrect(q.id, o.id)}
-                          />
-                          <input
-                            type="text"
-                            className="flex-1 border rounded px-2 py-1"
-                            value={o.text}
-                            onChange={e => updateOption(q.id, o.id, e.target.value)}
-                            placeholder="Option text…"
-                          />
-                          <button onClick={() => removeOption(q.id, o.id)}>
-                            <Trash2 size={16} className="text-red-600" />
-                          </button>
-                        </div>
-                      ))}
-                      {!q.options.some(o => o.isCorrect) && (
-                        <p className="text-sm text-red-600 flex items-center gap-1">
-                          <AlertCircle size={14} /> Mark one option as correct
-                        </p>
-                      )}
-                    </div>
-                  )}
+                    ))}
+                    {q.options.length < 2 && (
+                      <p className="text-sm text-red-600 flex items-center gap-2">
+                        <AlertCircle size={14} />
+                        At least two options required
+                      </p>
+                    )}
+                    {!q.options.some(o => o.isCorrect) && q.options.length >= 2 && (
+                      <p className="text-sm text-amber-600 flex items-center gap-2">
+                        <AlertCircle size={14} />
+                        Mark one correct answer
+                      </p>
+                    )}
+                  </div>
 
                   {/* Feedback */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm">Feedback (Correct)</label>
+                      <label className="block text-sm font-medium mb-2">Feedback (Correct)</label>
                       <input
                         type="text"
-                        className="mt-1 w-full border rounded px-2 py-1"
+                        className="w-full border rounded-xl px-4 py-3 focus:border-green-500"
                         value={q.feedbackCorrect}
                         onChange={e => updateQuestion(q.id, "feedbackCorrect", e.target.value)}
+                        placeholder="Well done!"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm">Feedback (Incorrect)</label>
+                      <label className="block text-sm font-medium mb-2">Feedback (Incorrect)</label>
                       <input
                         type="text"
-                        className="mt-1 w-full border rounded px-2 py-1"
+                        className="w-full border rounded-xl px-4 py-3 focus:border-red-500"
                         value={q.feedbackIncorrect}
                         onChange={e => updateQuestion(q.id, "feedbackIncorrect", e.target.value)}
+                        placeholder="Try again."
                       />
                     </div>
                   </div>
@@ -426,44 +482,35 @@ export default function QuizForm({
               ))}
             </div>
 
-            {/* Submit */}
-            <div className="flex items-center justify-between">
+            {/* Submit Footer */}
+            <div className="sticky bottom-0 bg-white/90 p-6 border-t flex items-center justify-between">
+              <div>
+                {!canSubmit && (
+                  <div className="flex items-center gap-2 text-amber-600 mb-1">
+                    <AlertCircle size={16} />
+                    <span>Please complete all required fields</span>
+                  </div>
+                )}
+                <p className="text-sm text-gray-500">
+                  {questions.length} question{questions.length !== 1 && 's'} • {completionPercent}% complete
+                </p>
+              </div>
               <button
                 onClick={handleSubmit}
                 disabled={!canSubmit || isSubmitting}
-                className={`flex items-center gap-2 px-6 py-2 rounded text-white ${
+                className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white transition ${
                   canSubmit
-                    ? "bg-blue-600 hover:bg-blue-700"
-                    : "bg-gray-400 cursor-not-allowed"
+                    ? "bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                    : "bg-gray-300 cursor-not-allowed"
                 }`}
               >
                 {isSubmitting ? (
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      fill="none"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8v8H4z"
-                    />
-                  </svg>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                 ) : (
-                  <CheckCircle size={18} />
+                  <Save size={20} />
                 )}
                 {isSubmitting ? "Creating…" : "Create Quiz"}
               </button>
-              {!canSubmit && (
-                <p className="text-sm text-red-600">
-                  Please fix errors above before submitting.
-                </p>
-              )}
             </div>
           </div>
         </div>
