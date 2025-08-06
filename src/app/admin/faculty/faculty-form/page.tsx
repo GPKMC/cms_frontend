@@ -11,31 +11,41 @@ export default function AddFacultyPage() {
     totalSemestersOrYears: 1,
     description: ''
   });
-
   const [error, setError] = useState('');
   const router = useRouter();
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) => {
     const { name, value } = e.target;
-    setForm({ ...form, [name]: name === 'totalSemestersOrYears' ? parseInt(value) : value });
+    setForm(prev => ({
+      ...prev,
+      [name]:
+        name === 'totalSemestersOrYears'
+          ? parseInt(value, 10) || 0
+          : value
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('token_admin') || '';
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/faculty-api/faculties`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(form),
-      });
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/faculty-api/faculties`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(form),
+        }
+      );
 
       if (!res.ok) {
-        const errData = await res.json();
+        const errData = await res.json().catch(() => ({}));
         setError(errData.message || 'Failed to add faculty');
         return;
       }
@@ -73,14 +83,24 @@ export default function AddFacultyPage() {
         />
 
         <div className="flex gap-4">
-          <select name="programLevel" value={form.programLevel} onChange={handleChange} className="w-1/2 p-2 border rounded">
+          <select
+            name="programLevel"
+            value={form.programLevel}
+            onChange={handleChange}
+            className="w-1/2 p-2 border rounded"
+          >
             <option value="bachelor">Bachelor</option>
             <option value="master">Master</option>
           </select>
 
-          <select name="type" value={form.type} onChange={handleChange} className="w-1/2 p-2 border rounded">
+          <select
+            name="type"
+            value={form.type}
+            onChange={handleChange}
+            className="w-1/2 p-2 border rounded"
+          >
             <option value="semester">Semester</option>
-            <option value="yearly">Yearly</option>
+            <option value="yearly">Year</option>
           </select>
         </div>
 
@@ -103,7 +123,10 @@ export default function AddFacultyPage() {
           className="w-full p-2 border rounded h-24"
         />
 
-        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded w-full">
+        <button
+          type="submit"
+          className="bg-blue-600 text-white px-4 py-2 rounded w-full"
+        >
           Add Faculty
         </button>
       </form>

@@ -11,57 +11,66 @@ import { useRouter } from "next/navigation";
 import { Faculty } from "../types/type.faculty";
 
 export default function FacultyManagement() {
+  const router = useRouter();
   const [faculties, setFaculties] = useState<Faculty[]>([]);
   const [selectedFaculty, setSelectedFaculty] = useState<Faculty | null>(null);
   const [showModal, setShowModal] = useState(false);
 
-  const handleView = (faculty: Faculty) => {
-    setSelectedFaculty(faculty);
-    setShowModal(true);
-  };
-  const router = useRouter();
+  // Get the admin token once
+  const adminToken =
+    typeof window !== "undefined"
+      ? localStorage.getItem("token_admin") || ""
+      : "";
 
   useEffect(() => {
     fetchFaculties();
   }, []);
 
   const fetchFaculties = async () => {
-    const token = localStorage.getItem("token_admin"); // or wherever you store it
-
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_URL}/faculty-api/faculties`,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
-
-    const data = await res.json();
-    console.log("Fetched faculties:", data);
-    if (Array.isArray(data)) {
-      setFaculties(data);
-    } else {
-      console.error("Unexpected response:", data);
-      setFaculties([]); // prevent reduce error
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/faculty-api/faculties`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${adminToken}`,
+          },
+        }
+      );
+      if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+      const data = await res.json();
+      console.log("Fetched faculties:", data);
+      setFaculties(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error loading faculties:", error);
+      setFaculties([]);
     }
   };
 
   const handleDelete = async (id: string) => {
-    const token = localStorage.getItem("token");
+    if (!confirm("Are you sure you want to delete this faculty?")) return;
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/faculty-api/faculties/${id}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${adminToken}`,
+          },
+        }
+      );
+      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+      // Refresh list
+      fetchFaculties();
+    } catch (error) {
+      console.error("Error deleting faculty:", error);
+    }
+  };
 
-    await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_URL}/faculty-api/faculties/${id}`,
-      {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
-
-    fetchFaculties();
+  const handleView = (faculty: Faculty) => {
+    setSelectedFaculty(faculty);
+    setShowModal(true);
   };
 
   const groupedFaculties = faculties.reduce(
@@ -118,7 +127,6 @@ export default function FacultyManagement() {
                       >
                         <FaEdit />
                       </button>
-
                       <button
                         onClick={() => handleDelete(f._id!)}
                         className="text-red-500 hover:text-red-600"
@@ -146,6 +154,7 @@ export default function FacultyManagement() {
           </div>
         </div>
       ))}
+
       {showModal && selectedFaculty && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
@@ -163,7 +172,8 @@ export default function FacultyManagement() {
               <strong>Level:</strong> {selectedFaculty.programLevel}
             </p>
             <p>
-              <strong>Total:</strong> {selectedFaculty.totalSemestersOrYears}
+              <strong>Total:</strong>{" "}
+              {selectedFaculty.totalSemestersOrYears}
             </p>
 
             <div className="mt-4 flex justify-end">
