@@ -143,17 +143,19 @@ export default function CourseTaskFeed() {
 
 
 let filteredFeed = feed.filter((item) => {
-  if (item.type === "groupAssignment" && user && Array.isArray(item.groups)) {
-  item.groups.forEach((group: any, i: number) => {
-    const ids = (group.members || []).map((m: any) =>
-      m?._id ? m._id.toString?.() || `${m._id}` : `${m}`
+  if (item.type === "groupAssignment") {
+    if (!user || !Array.isArray(item.groups)) return false;
+    const userId = user._id || user.id;
+    return item.groups.some((group: any) =>
+      (group.members || []).some((m: any) =>
+        (m._id || m.id)?.toString?.() === userId?.toString?.()
+      )
     );
-    console.log("Group", i, "member ids:", ids, "current user:", user._id || user.id);
-  });
-}
-
+  }
+  // All other types: filter by checkbox
   return typeFilter[item.type];
 });
+
 
     if (searchTerm) {
         filteredFeed = filteredFeed.filter(item =>

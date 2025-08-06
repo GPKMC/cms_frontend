@@ -69,7 +69,13 @@ export default function PlagiarismModal({
 
   const statusConfig = getStatusConfig(result.status || "unknown");
   const StatusIcon = statusConfig.icon;
-  const similarityScore = Number(result.plagiarism || 0);
+// Try all possible keys sent from backend
+const similarityScore =
+  typeof result.plagiarismPercentage === "number"
+    ? result.plagiarismPercentage
+    : typeof result.plagiarism === "number"
+    ? result.plagiarism * 100
+    : 0;
 
   const getSimilarityColor = (score: number) => {
     if (score >= 80) return "text-red-600";
