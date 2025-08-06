@@ -8,6 +8,7 @@ import QuestionCommentSection from "./questioncomment";
 import SubmissionPanel from "./submission";
 import { useUser } from "@/app/student/dashboard/studentContext";
 import QuestionSubmissionPanel from "./submission";
+import PlagiarismModal from "./plagresult";
 
 // --- Helpers ---
 function getFileUrl(url: string) {
@@ -108,6 +109,13 @@ const [submission, setSubmission] = useState(null);
 const [submitting, setSubmitting] = useState(false);
 const [submissionError, setSubmissionError] = useState<string | null>(null);
 const [refreshFlag, setRefreshFlag] = useState(0); // for forcing refresh after submit
+const [plagiarismResult, setPlagiarismResult] = useState<any>(null);
+const [showPlagiarismModal, setShowPlagiarismModal] = useState(false);
+
+function handlePlagiarismCheck(result: any) {
+  setPlagiarismResult(result);
+  setShowPlagiarismModal(true);
+}
 
 
   useEffect(() => {
@@ -127,28 +135,69 @@ const [refreshFlag, setRefreshFlag] = useState(0); // for forcing refresh after 
       .catch((e) => setErr(e.message))
       .finally(() => setLoading(false));
   }, [questionId]);
+console.log("questionId:", questionId);
+console.log("user:", user);
+
 useEffect(() => {
-  if (!questionId || !user?._id) return;
+  console.log("HOOK FIRED", { questionId, user });
+  if (!questionId || !user?.id) {
+    console.log("NO QUESTION ID OR USER ID, SKIPPING FETCH");
+    return;
+  }
   setSubmitting(true);
   setSubmissionError(null);
 
-  fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/submission/${questionId}/student/${user._id}`, {
-    headers: {
-      Authorization: "Bearer " +
-        (localStorage.getItem("token_student") ||
-         sessionStorage.getItem("token_student") ||
-         ""),
-      "Content-Type": "application/json"
+  const token =
+    localStorage.getItem("token_student") ||
+    sessionStorage.getItem("token_student") ||
+    "";
+  console.log("FETCHING SUBMISSION FOR:", questionId, user.id, "TOKEN:", !!token);
+
+  fetch(
+    `${process.env.NEXT_PUBLIC_BACKEND_URL}/questionsubmission/by-question/${questionId}/submission`,
+    {
+      headers: {
+        Authorization: "Bearer " + token,
+        "Content-Type": "application/json",
+      },
     }
-  })
+  )
     .then(async (res) => {
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
+      }
+      console.log("Fetched submission data:", data, "Status:", res.status);
+
+      if (res.status === 404 || data.error === "Submission not found.") {
+        // Not found means no previous submission: treat as "none"
+        setSubmission(null);
+        setSubmissionError(null);
+        return;
+      }
+
       if (!res.ok) throw new Error(data.error || "Failed to fetch submission");
-      setSubmission(data.submission || null);
+
+      if (data.submission) {
+        setSubmission({
+          ...data.submission,
+          content: data.submission.answerText || "",
+          status: data.submission.status || "submitted",
+        });
+      } else {
+        setSubmission(null);
+      }
     })
-    .catch((e) => setSubmissionError(e.message))
+    .catch((e) => {
+      setSubmissionError(e.message);
+      console.error("SUBMISSION FETCH ERROR:", e);
+    })
     .finally(() => setSubmitting(false));
-}, [questionId, user?._id, refreshFlag]);
+}, [questionId, user?.id, refreshFlag]);
+
+
 
   const getDaysUntilDue = (dueDate: string) => {
     return Math.ceil((new Date(dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
@@ -486,14 +535,22 @@ function refreshSubmission() {
           
         )}
   
- <QuestionSubmissionPanel
+<QuestionSubmissionPanel
   submission={submission}
   submitting={submitting}
   error={submissionError}
   setError={setSubmissionError}
   questionId={questionId}
   refreshSubmission={refreshSubmission}
+  onPlagiarismCheck={handlePlagiarismCheck}
 />
+{showPlagiarismModal && plagiarismResult && (
+  <PlagiarismModal
+    result={plagiarismResult}
+    onClose={() => setShowPlagiarismModal(false)}
+  />
+)}
+
 
         <div>
              <QuestionCommentSection questionId={questionId} />
