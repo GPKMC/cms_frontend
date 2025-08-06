@@ -104,9 +104,10 @@ function ImageModal({ src, alt, onClose }: { src: string; alt?: string; onClose:
 // ----------- Main Component -----------
 export default function GroupAssignmentDetail() {
     const params = useParams();
-    const groupId = params?.groupId as string;
+    const groupAssignmentId = params?.groupId as string;
     const { user } = useUser() || {};
     const myUserId = user?.id || user?._id || "";
+    const [submitting, setSubmitting] = useState(false);
 
     const [assignment, setAssignment] = useState<Assignment | null>(null);
     const [loading, setLoading] = useState(true);
@@ -129,9 +130,9 @@ export default function GroupAssignmentDetail() {
     }
     // --- Fetch assignment from real API ---
     const fetchAssignment = () => {
-        if (!groupId) return;
+        if (!groupAssignmentId) return;
         setLoading(true);
-        fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/group-assignment/${groupId}`, {
+        fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/group-assignment/${groupAssignmentId}`, {
             headers: {
                 Authorization: "Bearer " + (localStorage.getItem("token_student") || sessionStorage.getItem("token_student") || ""),
             },
@@ -151,7 +152,7 @@ export default function GroupAssignmentDetail() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(fetchAssignment, [groupId, myUserId]);
+    useEffect(fetchAssignment, [groupAssignmentId, myUserId]);
 
     // --- Post to discussion ---
     const handlePost = async (groupIdx: number, group: GroupObj) => {
@@ -160,7 +161,7 @@ export default function GroupAssignmentDetail() {
         setPosting((p) => ({ ...p, [group._id]: true }));
         try {
             const res = await fetch(
-                `${process.env.NEXT_PUBLIC_BACKEND_URL}/group-assignment/${groupId}/group/${groupIdx}/discussion`,
+                `${process.env.NEXT_PUBLIC_BACKEND_URL}/group-assignment/${groupAssignmentId}/group/${groupIdx}/discussion`,
                 {
                     method: "POST",
                     headers: {
@@ -380,8 +381,8 @@ export default function GroupAssignmentDetail() {
                                             <div className="flex flex-wrap gap-2">
                                                 {group.members.map((member, idx) => (
                                                     <div key={member._id || member.id || idx} className={`px-3 py-2 rounded-full text-sm font-medium ${(member._id || member.id) === myUserId
-                                                            ? 'bg-emerald-100 text-emerald-800 border-2 border-emerald-300'
-                                                            : 'bg-gray-100 text-gray-700'
+                                                        ? 'bg-emerald-100 text-emerald-800 border-2 border-emerald-300'
+                                                        : 'bg-gray-100 text-gray-700'
                                                         }`}>
                                                         {member.username || member.email || member._id || member.id}
                                                         {(member._id || member.id) === myUserId && <span className="ml-1">(You)</span>}
@@ -430,21 +431,22 @@ export default function GroupAssignmentDetail() {
                                                     : null}
                                             </div>
                                         ) : null}
-  {isUserInGroup && (
+                                        {isUserInGroup && (
                                             <div className="mb-8">
                                                 <GroupSubmissionPanel
-                                                    submission={group.submissions?.[0] || null} // (adjust for your schema!)
+                                                    submission={group.submissions?.[0] || null}
                                                     groupAssignmentId={assignment._id}
                                                     groupId={group._id}
                                                     loadingUndo={!!groupUndoState[group._id]?.loading}
                                                     setLoadingUndo={(loading) => setLoadingUndo(group._id, loading)}
                                                     error={groupUndoState[group._id]?.error || null}
                                                     setError={(error) => setUndoError(group._id, error)}
+                                                    submitting={submitting}             // <-- add this!
+                                                    setSubmitting={setSubmitting}       // <-- add this!
                                                     refreshSubmission={fetchAssignment}
                                                     getFileUrl={getFileUrl}
                                                     getFileIcon={(name) => <FileText className="w-5 h-5" />}
                                                     isImage={isImage}
-                                                    user={user}
                                                     isOfficeDoc={isOfficeDoc}
                                                     isPDF={(name) => /\.pdf$/i.test(name)}
                                                     setMediaPreview={setImgModal}
@@ -545,7 +547,7 @@ export default function GroupAssignmentDetail() {
                             </div>
                         );
                     })}
-                   
+
                     {activeGroupForModal && (
                         <PlagiarismModal
                             result={plagResults[activeGroupForModal]!}
