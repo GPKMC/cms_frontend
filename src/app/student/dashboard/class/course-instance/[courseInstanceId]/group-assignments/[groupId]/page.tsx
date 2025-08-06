@@ -123,11 +123,13 @@ export default function GroupAssignmentDetail() {
         setGroupUndoState((prev) => ({ ...prev, [groupId]: { ...(prev[groupId] || {}), error } }));
     const [plagResults, setPlagResults] = useState<Record<string, any>>({});
     const [activeGroupForModal, setActiveGroupForModal] = useState<string | null>(null);
+const [groupSubmissions, setGroupSubmissions] = useState<Record<string, Submission | null>>({});
 
     function onGroupPlagCheck(groupId: string, result: any) {
         setPlagResults(r => ({ ...r, [groupId]: result }));
         setActiveGroupForModal(groupId);
     }
+    
     // --- Fetch assignment from real API ---
     const fetchAssignment = () => {
         if (!groupAssignmentId) return;
@@ -153,6 +155,45 @@ export default function GroupAssignmentDetail() {
     };
 
     useEffect(fetchAssignment, [groupAssignmentId, myUserId]);
+useEffect(() => {
+  if (!assignment || !myUserId) return;
+
+  const fetchAllGroupSubmissions = async () => {
+    const newGroupSubs: Record<string, Submission | null> = {};
+    await Promise.all(
+      myGroups.map(async (group) => {
+        try {
+          const res = await fetch(
+            `${process.env.NEXT_PUBLIC_BACKEND_URL}/groupsubmission/by-assignment/${assignment._id}/${group._id}`,
+            {
+              headers: {
+                Authorization:
+                  "Bearer " +
+                  (localStorage.getItem("token_student") ||
+                    sessionStorage.getItem("token_student") ||
+                    ""),
+              },
+            }
+          );
+          if (res.ok) {
+            const data = await res.json();
+            newGroupSubs[group._id] = data.submission;
+          } else {
+            newGroupSubs[group._id] = null; // no submission found
+          }
+        } catch {
+          newGroupSubs[group._id] = null;
+        }
+      })
+    );
+    setGroupSubmissions(newGroupSubs);
+  };
+
+  fetchAllGroupSubmissions();
+}, [assignment, myUserId]);
+const myGroups = assignment?.groups?.filter(
+  (g) => myUserId && g.members.some((m) => (m._id || m.id) === myUserId)
+) || [];
 
     // --- Post to discussion ---
     const handlePost = async (groupIdx: number, group: GroupObj) => {
@@ -214,9 +255,9 @@ export default function GroupAssignmentDetail() {
     }
 
     const daysUntilDue = assignment.dueDate ? getDaysUntilDue(assignment.dueDate) : null;
-    const myGroups = assignment.groups?.filter(
-        (g) => myUserId && g.members.some((m) => (m._id || m.id) === myUserId)
-    ) || [];
+    // const myGroups = assignment.groups?.filter(
+    //     (g) => myUserId && g.members.some((m) => (m._id || m.id) === myUserId)
+    // ) || [];
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
@@ -431,29 +472,30 @@ export default function GroupAssignmentDetail() {
                                                     : null}
                                             </div>
                                         ) : null}
-                                        {isUserInGroup && (
-                                            <div className="mb-8">
-                                                <GroupSubmissionPanel
-                                                    submission={group.submissions?.[0] || null}
-                                                    groupAssignmentId={assignment._id}
-                                                    groupId={group._id}
-                                                    loadingUndo={!!groupUndoState[group._id]?.loading}
-                                                    setLoadingUndo={(loading) => setLoadingUndo(group._id, loading)}
-                                                    error={groupUndoState[group._id]?.error || null}
-                                                    setError={(error) => setUndoError(group._id, error)}
-                                                    submitting={submitting}             // <-- add this!
-                                                    setSubmitting={setSubmitting}       // <-- add this!
-                                                    refreshSubmission={fetchAssignment}
-                                                    getFileUrl={getFileUrl}
-                                                    getFileIcon={(name) => <FileText className="w-5 h-5" />}
-                                                    isImage={isImage}
-                                                    isOfficeDoc={isOfficeDoc}
-                                                    isPDF={(name) => /\.pdf$/i.test(name)}
-                                                    setMediaPreview={setImgModal}
-                                                    onPlagiarismCheck={result => onGroupPlagCheck(group._id, result)}
-                                                />
-                                            </div>
-                                        )}
+                              {isUserInGroup && (
+  <div className="mb-8">
+    <GroupSubmissionPanel
+      submission={groupSubmissions[group._id] || null}  // <<--- USE THIS!
+      groupAssignmentId={assignment._id}
+      groupId={group._id}
+      loadingUndo={!!groupUndoState[group._id]?.loading}
+      setLoadingUndo={(loading) => setLoadingUndo(group._id, loading)}
+      error={groupUndoState[group._id]?.error || null}
+      setError={(error) => setUndoError(group._id, error)}
+      submitting={submitting}
+      setSubmitting={setSubmitting}
+      refreshSubmission={fetchAssignment}
+      getFileUrl={getFileUrl}
+      getFileIcon={(name) => <FileText className="w-5 h-5" />}
+      isImage={isImage}
+      isOfficeDoc={isOfficeDoc}
+      isPDF={(name) => /\.pdf$/i.test(name)}
+      setMediaPreview={setImgModal}
+      onPlagiarismCheck={result => onGroupPlagCheck(group._id, result)}
+    />
+  </div>
+)}
+
                                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                             {/* Discussion Section */}
                                             <div className="bg-gray-50 rounded-xl p-4">

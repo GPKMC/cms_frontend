@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Upload, Sparkles, Loader2, Undo2 as UndoArrow, FileText, Link as LinkIcon,
   Eye, Trash2, AlertCircle, Trophy, Star, MessageSquare, ExternalLink, Plus
@@ -31,13 +31,13 @@ type User = {
 
 interface Props {
   submission: Submission | null;
-    groupId: string; 
+  groupId: string; 
   loadingUndo: boolean;
   submitting: boolean;
-  setSubmitting: (isLoading: boolean) => void;  // new setter prop
-   setLoadingUndo: (loading: boolean) => void; // <-- Add this!
+  setSubmitting: (isLoading: boolean) => void;
+  setLoadingUndo: (loading: boolean) => void;
   error: string | null;
-  setError: (msg: string | null) => void;     // <-- Add this!
+  setError: (msg: string | null) => void;
   groupAssignmentId: string;
   refreshSubmission: () => void;
   getFileUrl: (url: string) => string;
@@ -52,72 +52,38 @@ interface Props {
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 
 export default function SubmissionPanel({
-  groupId,submission, loadingUndo, submitting,setSubmitting, error, setError,
+  groupId, submission, loadingUndo, submitting, setSubmitting, setLoadingUndo, error, setError,
   groupAssignmentId, refreshSubmission, getFileUrl,
   getFileIcon, isImage, isOfficeDoc, isPDF, setMediaPreview, onPlagiarismCheck
 }: Props) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [links, setLinks] = useState<string[]>(submission?.links || []);
+  const [links, setLinks] = useState<string[]>([]);
   const [newLink, setNewLink] = useState("");
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useUser();
   const [plagiarismResult, setPlagiarismResult] = useState<any>(null);
- const [submission, setSubmission] = useState(null);
-  const [loading, setLoading] = useState(true);
 
-  // Fetch logic (no argument needed, uses props)
-  const fetchSubmission = async () => {
-    if (!groupAssignmentId || !groupId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/submission/by-assignment/${groupAssignmentId}/${groupId}`,
-        {
-          headers: {
-            Authorization: "Bearer " + (localStorage.getItem("token_student") || ""),
-          },
-        }
-      );
-      if (res.status === 404) {
-        setSubmission(null);
-      } else if (!res.ok) {
-        throw new Error((await res.json()).error || "Failed to fetch submission");
-      } else {
-        const data = await res.json();
-        setSubmission(data.submission || null);
-      }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Always update links from submission prop when it changes
   useEffect(() => {
-    fetchSubmission();
-  }, [groupAssignmentId, groupId]);
-useEffect(() => {
-  if (!submission) {
-    setSelectedFiles([]);
-    setLinks([]);
-    setNewLink("");
-    setError(null);
-    setPlagiarismResult(null);
-  } else {
-    setLinks(submission.links || []);
-  }
-}, [submission]);
+    if (!submission) {
+      setLinks([]);
+      setSelectedFiles([]);
+      setNewLink("");
+      setPlagiarismResult(null);
+      setError(null);
+    } else {
+      setLinks(submission.links || []);
+      setSelectedFiles([]); // Always clear upload list after successful submit/undo
+    }
+    // eslint-disable-next-line
+  }, [submission]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
+    if (e.type === "dragenter" || e.type === "dragover") setDragActive(true);
+    else if (e.type === "dragleave") setDragActive(false);
   };
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -127,16 +93,12 @@ useEffect(() => {
       setSelectedFiles(prev => [...prev, ...Array.from(e.dataTransfer.files)]);
     }
   };
-  console.log("Submission prop:", submission);
-  console.log("Submission status:", submission?.status);
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
     setSelectedFiles(prev => [...prev, ...Array.from(files)]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
-
   const handleAddLink = () => {
     if (!newLink.trim()) return;
     setLinks(prev => [...prev, newLink.trim()]);
@@ -145,119 +107,103 @@ useEffect(() => {
   const handleRemoveLink = (idx: number) => setLinks(prev => prev.filter((_, i) => i !== idx));
   const handleRemoveFile = (idx: number) => setSelectedFiles(prev => prev.filter((_, i) => i !== idx));
 
-async function handleSubmit(e: React.FormEvent) {
-  e.preventDefault();
-  if (!groupAssignmentId) return;
-  setError(null);
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!groupAssignmentId) return;
+    setError(null);
+    setSubmitting(true);
 
-  if (typeof setSubmitting === "function") setSubmitting(true);
-
-  const formData = new FormData();
-  selectedFiles.forEach(f => formData.append("files", f));
-  links.forEach(l => formData.append("links", l));
-  if (user?._id || user?.id) {
-    formData.append("submittedBy", user._id || user.id);
-  }
-  formData.append("groupAssignmentId", groupAssignmentId);
-  formData.append("groupId", groupId);
-
-  // === CRUCIAL: This ensures the submission is NOT saved as draft! ===
-  formData.append("status", "submitted");
-
-  try {
-    const res = await fetch(
-      `${BACKEND_URL}/submission/group-assignment-submission`,
-      {
-        method: "POST",
-        headers: {
-          Authorization:
-            "Bearer " +
-            (localStorage.getItem("token_student") ||
-              sessionStorage.getItem("token_student") ||
-              ""),
-          // DO NOT set Content-Type, browser will handle it for FormData!
-        },
-        body: formData,
-      }
-    );
-
-    const data = await res.json();
-
-    if (data.plagiarismPercentage !== undefined) {
-      const plagiarismStatus = data.status || (data.error ? "PLAGIARIZED" : "ACCEPTED");
-      const plagiarismData = {
-        status: plagiarismStatus,
-        plagiarism: data.plagiarismPercentage,
-        matches: data.matches || [],
-        message: data.message || data.error || "No plagiarism detected.",
-      };
-      setPlagiarismResult(plagiarismData);
-
-      if (typeof onPlagiarismCheck === "function") {
-        onPlagiarismCheck(plagiarismData);
-      }
-
-      if (plagiarismStatus === "PLAGIARIZED") {
-        toast.error(plagiarismData.message || "Submission rejected due to plagiarism.");
-        return;
-      }
-
-      // Success!
-      toast.success("🎉 Submission successful!");
-      setSelectedFiles([]);
-      setLinks([]);
-      refreshSubmission();
-      return;
-    } else {
-      // No plagiarism info returned, clear state
-      setPlagiarismResult(null);
+    const formData = new FormData();
+    selectedFiles.forEach(f => formData.append("files", f));
+    links.forEach(l => formData.append("links", l));
+    if (user?._id || user?.id) {
+      formData.append("submittedBy", user._id || user.id);
     }
-
-    // Success (for non-plagiarism cases)
-    toast.success("🎉 Submission successful!");
-    setSelectedFiles([]);
-    setLinks([]);
-    refreshSubmission();
-
-  } catch (err: any) {
-    setError(err.message);
-    toast.error(err.message);
-  } finally {
-    if (typeof setSubmitting === "function") setSubmitting(false);
-  }
-}
-
-
-  async function handleUndoSubmission() {
-    if (!submission?._id) return;
-    if (!confirm("Are you sure you want to undo your submission?")) return;
+    formData.append("groupAssignmentId", groupAssignmentId);
+    formData.append("groupId", groupId);
+    formData.append("status", "submitted");
 
     try {
       const res = await fetch(
-        `${BACKEND_URL}/submission/${submission._id}/unsubmit`,
+        `${BACKEND_URL}/groupsubmission/group-assignment-submission`,
         {
-          method: "DELETE",
+          method: "POST",
           headers: {
-            Authorization:
-              "Bearer " +
-              (localStorage.getItem("token_student") ||
-                sessionStorage.getItem("token_student") ||
-                ""),
+            Authorization: "Bearer " + (localStorage.getItem("token_student") || (sessionStorage.getItem("token_student"))+""),
           },
+          body: formData,
         }
       );
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to undo submission");
+
+      if (data.plagiarismPercentage !== undefined) {
+        const plagiarismStatus = data.status || (data.error ? "PLAGIARIZED" : "ACCEPTED");
+        const plagiarismData = {
+          status: plagiarismStatus,
+          plagiarism: data.plagiarismPercentage,
+          matches: data.matches || [],
+          message: data.message || data.error || "No plagiarism detected.",
+        };
+        setPlagiarismResult(plagiarismData);
+
+        if (typeof onPlagiarismCheck === "function") onPlagiarismCheck(plagiarismData);
+
+        if (plagiarismStatus === "PLAGIARIZED") {
+          toast.error(plagiarismData.message || "Submission rejected due to plagiarism.");
+          setSubmitting(false);
+          return;
+        }
+        toast.success("🎉 Submission successful!");
+        refreshSubmission();
+        setSubmitting(false);
+        return;
+      } else {
+        setPlagiarismResult(null);
       }
-      toast.success("Submission undone!");
+      toast.success("🎉 Submission successful!");
       refreshSubmission();
     } catch (err: any) {
       setError(err.message);
       toast.error(err.message);
+    } finally {
+      setSubmitting(false);
     }
   }
 
+  async function handleUndoSubmission() {
+  if (!submission?._id) return;
+  if (!confirm("Are you sure you want to undo your submission?")) return;
+
+  setLoadingUndo(true);
+  try {
+    const url = `${BACKEND_URL}/groupsubmission/${submission._id}/unsubmit`;
+    console.log("Undo Submission URL:", url);
+
+    const res = await fetch(url, {
+      method: "DELETE",
+      headers: {
+        Authorization: "Bearer " +
+          (localStorage.getItem("token_student") ||
+            (sessionStorage.getItem("token_student")) + ""),
+      },
+    });
+    const data = await res.json();
+
+    console.log("Undo Submission Response Status:", res.status);
+    console.log("Undo Submission Response Data:", data);
+
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to undo submission");
+    }
+    toast.success("Submission undone!");
+    refreshSubmission();
+  } catch (err: any) {
+    setError(err.message);
+    toast.error(err.message);
+  } finally {
+    setLoadingUndo(false);
+  }
+}
 
   // --- Main UI ---
   return (

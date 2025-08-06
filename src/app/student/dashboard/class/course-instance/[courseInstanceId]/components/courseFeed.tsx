@@ -188,13 +188,18 @@ export default function CourseFeed({ courseInstanceId }: Props) {
   }, [previewDoc]);
 
   // Filter group assignments to only those where user is a group member
-  const filteredFeed = feed.filter(item => {
-    if (item.type !== "groupAssignment") return true;
-    if (!user || !item.groups) return false;
-    return item.groups.some(
-      group => Array.isArray(group.members) && group.members.some(m => m._id === user._id || user.id)
-    );
-  });
+let filteredFeed = feed.filter((item) => {
+if (item.type === "groupAssignment") {
+  if (!user || !Array.isArray(item.groups)) return false;
+  const userId = user._id || user.id;
+  return item.groups.some(group =>
+    group.members.some(memberId => memberId.toString() === userId.toString())
+  );
+}
+
+  // All other types: show all
+  return true;
+});
 
   if (loading) {
     return (
