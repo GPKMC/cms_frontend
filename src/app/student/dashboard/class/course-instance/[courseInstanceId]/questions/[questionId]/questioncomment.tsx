@@ -4,6 +4,7 @@ import { MessageCircle, MoreVertical, Edit2, Trash2, Send, X } from "lucide-reac
 import TiptapEditor from "@/app/student/dashboard/class/course-instance/[courseInstanceId]/components/rtecomponet";
 import { formatDistanceToNow } from "date-fns";
 import { useUser } from "@/app/student/dashboard/studentContext";
+import { useSearchParams } from "next/navigation";
 
 type CommentObj = {
   _id: string;
@@ -28,6 +29,9 @@ export default function QuestionCommentSection({ questionId }: Props) {
   const [editContent, setEditContent] = useState<string>("");
   const [editPosting, setEditPosting] = useState(false);
 
+  const searchParams = useSearchParams();
+  const highlightCommentId = searchParams.get("commentId");
+
   // Fetch comments on mount/questionId change
   useEffect(() => {
     if (!questionId) return;
@@ -38,6 +42,22 @@ export default function QuestionCommentSection({ questionId }: Props) {
       .catch(() => setComments([]))
       .finally(() => setLoading(false));
   }, [questionId]);
+
+  // Highlight + scroll to comment if needed
+  useEffect(() => {
+    if (highlightCommentId && comments.length > 0) {
+      setTimeout(() => {
+        const el = document.getElementById(`comment-${highlightCommentId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          el.classList.add("ring-2", "ring-blue-500", "bg-blue-50", "transition");
+          setTimeout(() => {
+            el.classList.remove("ring-2", "ring-blue-500", "bg-blue-50", "transition");
+          }, 2000);
+        }
+      }, 300);
+    }
+  }, [comments, highlightCommentId]);
 
   // Post new comment
   async function handlePostComment() {
@@ -127,12 +147,11 @@ export default function QuestionCommentSection({ questionId }: Props) {
       setEditPosting(false);
     }
   }
-function getUserId(user: any): string | undefined {
-  return user?._id || user?.id;
-}
+  function getUserId(user: any): string | undefined {
+    return user?._id || user?.id;
+  }
 
- const myUserId = getUserId(user);
-
+  const myUserId = getUserId(user);
 
   return (
     <div className="mt-12 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
@@ -153,7 +172,11 @@ function getUserId(user: any): string | undefined {
             const commentUserId = c.postedBy?._id;
             const isEditing = editId === c._id;
             return (
-              <div key={c._id || i} className="border-b last:border-0 pb-4 relative group">
+              <div
+                key={c._id || i}
+                id={`comment-${c._id}`}
+                className="border-b last:border-0 pb-4 relative group"
+              >
                 <div className="flex gap-2 items-center text-sm mb-1">
                   <span className="font-semibold text-blue-700">{c.postedBy?.username || "Unknown"}</span>
                   <span className="text-gray-400 text-xs">
