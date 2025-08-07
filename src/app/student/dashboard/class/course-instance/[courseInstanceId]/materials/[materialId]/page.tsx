@@ -8,7 +8,7 @@ import {
     Edit2,
     Trash2
 } from "lucide-react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import TiptapEditor from "@/app/student/dashboard/class/course-instance/[courseInstanceId]/components/rtecomponet";
 import { formatDistanceToNow } from "date-fns";
 import { useUser } from "@/app/student/dashboard/studentContext";
@@ -84,7 +84,22 @@ export default function MaterialDetail() {
     const [editId, setEditId] = useState<string | null>(null);
     const [editContent, setEditContent] = useState<string>("");
     const [editPosting, setEditPosting] = useState(false);
-
+    const searchParams = useSearchParams();
+    const highlightCommentId = searchParams.get("commentId");
+useEffect(() => {
+    if (highlightCommentId && comments.length > 0) {
+        setTimeout(() => {
+            const el = document.getElementById(`comment-${highlightCommentId}`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.classList.add("ring-2", "ring-blue-500", "bg-blue-50", "transition");
+                setTimeout(() => {
+                    el.classList.remove("ring-2", "ring-blue-500", "bg-blue-50", "transition");
+                }, 2000);
+            }
+        }, 300);
+    }
+}, [comments, highlightCommentId]);
     useEffect(() => {
         if (!materialId) return;
         setLoading(true);
@@ -140,7 +155,7 @@ export default function MaterialDetail() {
             );
             if (!res.ok) throw new Error("Failed to post comment");
             const data = await res.json();
-           setComments((prev) => [data.comment, ...prev]);
+            setComments((prev) => [data.comment, ...prev]);
 
             setComment(""); // clear editor
         } catch (err) {
@@ -663,94 +678,98 @@ export default function MaterialDetail() {
                         {comments.length === 0 && (
                             <div className="text-gray-400 text-sm">No comments yet. Start the discussion!</div>
                         )}
-                       {comments.map((c, i) => {
-  // ... your existing stuff
-  const commentUserId = c.postedBy?._id || c.postedBy?.id;
-  const myUserId = user?.id;
-  const isEditing = editId === c._id;
+                        {comments.map((c, i) => {
+                            // ... your existing stuff
+                            const commentUserId = c.postedBy?._id || c.postedBy?.id;
+                            const myUserId = user?.id;
+                            const isEditing = editId === c._id;
 
-  return (
-    <div key={c._id || i} className="border-b last:border-0 pb-4 relative group">
-      <div className="flex gap-2 items-center text-sm mb-1">
-        <span className="font-semibold text-blue-700">{c.postedBy?.username || "Unknown"}</span>
-        <span className="text-gray-400 text-xs">
-          {c.createdAt
-            ? formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })
-            : ""}
-        </span>
-      </div>
+                            return (
+                                <div
+                                    key={c._id || i}
+                                    id={`comment-${c._id}`}  // <- Add this line
+                                    className="border-b last:border-0 pb-4 relative group"
+                                >
+                                    <div className="flex gap-2 items-center text-sm mb-1">
+                                        <span className="font-semibold text-blue-700">{c.postedBy?.username || "Unknown"}</span>
+                                        <span className="text-gray-400 text-xs">
+                                            {c.createdAt
+                                                ? formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })
+                                                : ""}
+                                        </span>
+                                    </div>
 
-      {/* Three-dot menu */}
-      {myUserId && commentUserId === myUserId && !isEditing && (
-        <div className="absolute top-2 right-2 z-10">
-          <button
-            className="p-1 rounded hover:bg-gray-200"
-            onClick={() => setMenuOpenId(menuOpenId === c._id ? null : c._id)}
-          >
-            <MoreVertical className="w-5 h-5 text-gray-400" />
-          </button>
-          {menuOpenId === c._id && (
-            <div className="absolute right-0 mt-2 z-50 bg-white border border-gray-200 rounded-lg shadow-md w-28">
-              <button
-                onClick={() => {
-                  setMenuOpenId(null);
-                  setEditId(c._id);
-                  setEditContent(c.content); // Pre-fill with current content
-                }}
-                className="flex w-full items-center gap-2 px-4 py-2 hover:bg-gray-100"
-              >
-                <Edit2 className="w-4 h-4" /> Edit
-              </button>
-              <button
-                onClick={() => {
-                  setMenuOpenId(null);
-                  setDeleteConfirmId(c._id);
-                }}
-                className="flex w-full items-center gap-2 px-4 py-2 hover:bg-gray-100 text-red-600"
-              >
-                <Trash2 className="w-4 h-4" /> Delete
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+                                    {/* Three-dot menu */}
+                                    {myUserId && commentUserId === myUserId && !isEditing && (
+                                        <div className="absolute top-2 right-2 z-10">
+                                            <button
+                                                className="p-1 rounded hover:bg-gray-200"
+                                                onClick={() => setMenuOpenId(menuOpenId === c._id ? null : c._id)}
+                                            >
+                                                <MoreVertical className="w-5 h-5 text-gray-400" />
+                                            </button>
+                                            {menuOpenId === c._id && (
+                                                <div className="absolute right-0 mt-2 z-50 bg-white border border-gray-200 rounded-lg shadow-md w-28">
+                                                    <button
+                                                        onClick={() => {
+                                                            setMenuOpenId(null);
+                                                            setEditId(c._id);
+                                                            setEditContent(c.content); // Pre-fill with current content
+                                                        }}
+                                                        className="flex w-full items-center gap-2 px-4 py-2 hover:bg-gray-100"
+                                                    >
+                                                        <Edit2 className="w-4 h-4" /> Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setMenuOpenId(null);
+                                                            setDeleteConfirmId(c._id);
+                                                        }}
+                                                        className="flex w-full items-center gap-2 px-4 py-2 hover:bg-gray-100 text-red-600"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" /> Delete
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
 
-      {/* Edit Mode */}
-      {isEditing ? (
-        <div className="mt-2">
-          <TiptapEditor
-            content={editContent}
-            onChange={setEditContent}
-            placeholder="Edit your comment..."
-          />
-          <div className="flex gap-2 mt-2">
-            <button
-              className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
-              disabled={editPosting}
-              onClick={() => handleEditSave(c._id)}
-            >
-              {editPosting ? "Saving..." : "Save"}
-            </button>
-            <button
-              className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200"
-              onClick={() => {
-                setEditId(null);
-                setEditContent("");
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div
-          className="prose max-w-none text-gray-800 announcement-content"
-          dangerouslySetInnerHTML={{ __html: c.content }}
-        />
-      )}
-    </div>
-  );
-})}
+                                    {/* Edit Mode */}
+                                    {isEditing ? (
+                                        <div className="mt-2">
+                                            <TiptapEditor
+                                                content={editContent}
+                                                onChange={setEditContent}
+                                                placeholder="Edit your comment..."
+                                            />
+                                            <div className="flex gap-2 mt-2">
+                                                <button
+                                                    className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                                                    disabled={editPosting}
+                                                    onClick={() => handleEditSave(c._id)}
+                                                >
+                                                    {editPosting ? "Saving..." : "Save"}
+                                                </button>
+                                                <button
+                                                    className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200"
+                                                    onClick={() => {
+                                                        setEditId(null);
+                                                        setEditContent("");
+                                                    }}
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div
+                                            className="prose max-w-none text-gray-800 announcement-content"
+                                            dangerouslySetInnerHTML={{ __html: c.content }}
+                                        />
+                                    )}
+                                </div>
+                            );
+                        })}
 
                     </div>
 
@@ -804,7 +823,7 @@ export default function MaterialDetail() {
                     </div>
                 </div>
             )}
-{/* editing form */}
+            {/* editing form */}
 
         </div>
     );
