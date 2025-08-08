@@ -104,7 +104,7 @@ export default function MyBatchSemesters() {
   );
   const locked = total - unlocked;
 
-  const progressPercentage = (completed / total) * 100;
+  const progressPercentage = (completed / faculty.total) * 100;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">

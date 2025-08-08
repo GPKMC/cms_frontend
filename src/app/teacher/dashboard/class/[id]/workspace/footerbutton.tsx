@@ -1,0 +1,131 @@
+"use client";
+import React from "react";
+import { useRouter } from "next/navigation"; // App Router version
+
+type Props = {
+  type: string;
+  id: string;
+  isExpanded: boolean;
+};
+
+export default function FeedItemFooter({ type, id, isExpanded }: Props) {
+  const router = useRouter();
+
+  const baseBtn =
+    "inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-semibold";
+  const ghost =
+    baseBtn + " border border-gray-300 bg-white hover:bg-gray-50";
+  const primary =
+    baseBtn + " bg-blue-600 text-white hover:bg-blue-700";
+
+  if (!isExpanded) return null;
+
+  switch (type) {
+    case "question":
+      return (
+        <div className="mt-4 border-t border-gray-200 pt-4 flex justify-end gap-3">
+          <button
+            type="button"
+            className={ghost}
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/questions/${id}`);
+            }}
+          >
+            View Question
+          </button>
+          <button
+            type="button"
+            className={primary}
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/questions/${id}/answer`);
+            }}
+          >
+            View Answer
+          </button>
+        </div>
+      );
+
+    case "assignment":
+      return (
+        <div className="mt-4 border-t border-gray-200 pt-4 flex justify-end gap-3">
+          <button
+            type="button"
+            className={ghost}
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/assignments/${id}`);
+            }}
+          >
+            View Assignment
+          </button>
+          <button
+            type="button"
+            className={primary}
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/assignments/${id}/submissions`);
+            }}
+          >
+            View Submissions
+          </button>
+        </div>
+      );
+
+    case "groupAssignment":
+      return (
+        <div className="mt-4 border-t border-gray-200 pt-4 flex justify-end gap-3">
+          <button
+            type="button"
+            className={ghost}
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/group-assignments/${id}`);
+            }}
+          >
+            View Group Assignment
+          </button>
+          <button
+            type="button"
+            className={primary}
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/group-assignments/${id}/groups`);
+            }}
+          >
+            Manage Groups
+          </button>
+        </div>
+      );
+
+    case "quiz":
+      return (
+        <div className="mt-4 border-t border-gray-200 pt-4 flex justify-end gap-3">
+          <button
+            type="button"
+            className={ghost}
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/quizzes/${id}`);
+            }}
+          >
+            View Quiz
+          </button>
+          <button
+            type="button"
+            className={primary}
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/quizzes/${id}/results`);
+            }}
+          >
+            View Results
+          </button>
+        </div>
+      );
+
+    default:
+      return null;
+  }
+}
