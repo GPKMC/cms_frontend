@@ -8,13 +8,15 @@ import {
     ExternalLink,
     Youtube,
     Image,
-    Clipboard
+    Clipboard,
+    StarsIcon
 } from "lucide-react";
 import CourseMaterialEditForm from "./editMaterialForm";
 import AssignmentEditForm from "./editAssignmentForm";
 import TopicModal from "./editTopicForm";
 import QuestionEditForm from "./question/editQuestionForm";
 import EditGroupAssignmentForm from "./groupassignment/editGroupAssignmentForm";
+import FeedItemFooter from "./footerbutton";
 
 // --- Type Definitions ---
 interface UserType { _id?: string; username?: string; email?: string; }
@@ -25,7 +27,9 @@ interface MaterialOrAssignment {
     postedBy?: UserType;
     createdAt: string;
     updatedAt?: string;
-    type: "material" | "assignment" | "question" | "groupAssignment";
+    type: "material" | "assignment" | "question" | "groupAssignment" |"quiz";
+      visibleCount?: number;   // from backend
+  groupCount?: number; 
 
     // for “global” groupAssignment:
     groups?: {
@@ -64,6 +68,7 @@ interface TopicGroup {
     assignments: MaterialOrAssignment[];
     questions: MaterialOrAssignment[];   // <-- add this
     groupAssignments: MaterialOrAssignment[];
+    quizzes: MaterialOrAssignment[];
 
 }
 
@@ -238,7 +243,15 @@ function ContentCard({
             border: "border-yellow-200",
             icon: <Users className="w-4 h-4" />,   // or another “group” icon
             label: "Group Assignment"
+        },
+         quiz: {
+            color: "from-yellow-500 to-yellow-600",
+            bg: "bg-green-50",
+            border: "border-yellow-200",
+            icon: <StarsIcon className="w-4 h-4" />,   // or another “group” icon
+            label: "quiz"
         }
+
 
     };
     const config = typeConfig[item.type || "material"];
@@ -411,6 +424,7 @@ function ContentCard({
                             <span className="font-medium">{item.links.length} links</span>
                         </div>
                     )}
+                    
                 </div>
                 {/* Expanded Content */}
                 <div className={`transition-all duration-500 overflow-hidden ${isExpanded ? 'max-h-none opacity-100 mt-6' : 'max-h-0 opacity-0'
@@ -426,11 +440,15 @@ function ContentCard({
                                 <div className="space-y-6">
                                     {/* Group Assignment Header (global info) */}
                                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                                        <div className="flex items-center gap-3 mb-4">
-                                            <div className="p-2 bg-blue-100 rounded-lg">
+                                        <div className="flex items-center justify-between gap-3 mb-4">
+                                          <div className="flex gap-3">  <div className="p-2 bg-blue-100 rounded-lg">
                                                 <Users className="w-6 h-6 text-blue-600" />
+                                                   
+
                                             </div>
                                             <h1 className="text-2xl font-bold text-gray-800">Group Assignment</h1>
+                                            </div>
+                                             <span>{(item as any).groupCount ?? item.groups?.length ?? 0} groups</span>
                                         </div>
                                         {item.content && (
                                             <div className="bg-green-50 rounded-lg p-4">
@@ -744,12 +762,14 @@ function ContentCard({
                                     {/* Documents */}
                                     {item.documents && item.documents.length > 0 && (
                                         <div className="mb-8">
+                                            
                                             <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-3 text-lg">
                                                 <span className="p-2 bg-blue-50 rounded-lg">
                                                     <FileText className="w-6 h-6 text-blue-500" />
                                                 </span>
                                                 Documents <span className="font-medium text-base">({item.documents.length})</span>
                                             </h4>
+                                            
                                             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                                                 {item.documents.map((docObj, i) => {
                                                     const docUrl = getFileUrl(docObj.url);
@@ -985,6 +1005,7 @@ function ContentCard({
                             )}
                         </div>
                     )}
+    <FeedItemFooter type={item.type} id={item._id} isExpanded={isExpanded} />
 
                 </div>
             </div>
@@ -1063,7 +1084,9 @@ export default function UnifiedFeed({
                 groupAssignments: (g.groupAssignments || []).map((x: any) => ({
                     ...x,
                     type: "groupAssignment" as const
-                }))
+                })),
+                  quizzes: (g.quizzes || g.quiz || []).map((z: any) => ({ ...z, type: "quiz" as const })), // <-- new
+
             }));
 
             // 3) now feed your React state with correctly‑typed data
@@ -1161,12 +1184,16 @@ export default function UnifiedFeed({
         assignments: MaterialOrAssignment[],
         questions: MaterialOrAssignment[],
         groupAssignments: MaterialOrAssignment[],
+          quizzes: MaterialOrAssignment[],                     // <-- add param
+
     ) {
         const all = [
             ...materials.map((m) => ({ ...m, type: "material" as const })),
             ...assignments.map((a) => ({ ...a, type: "assignment" as const })),
             ...questions.map((q) => ({ ...q, type: "question" as const })),
             ...groupAssignments.map(g => ({ ...g, type: "groupAssignment" })),
+                ...quizzes.map(qz => ({ ...qz, type: "quiz" as const })),          // <-- add
+
         ];
         return all.sort(
             (a, b) =>
@@ -1188,7 +1215,10 @@ export default function UnifiedFeed({
             url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/question/${deleteTarget._id}`;
         } else if (deleteTarget.type === "groupAssignment") {
             url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/group-assignment/${deleteTarget._id}`;
-        }
+        }else if (deleteTarget.type === "quiz") {
+  url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/quizrouter/${deleteTarget._id}`;
+}
+
         if (url) {
             await fetch(url, {
                 method: "DELETE",
@@ -1247,7 +1277,9 @@ export default function UnifiedFeed({
                     group.materials || [],
                     group.assignments || [],
                     group.questions || [],
-                    group.groupAssignments || []      // ← new
+                    group.groupAssignments || [] ,
+                      group.quizzes || []                     // <-- pass quizzes
+
                 );
 
 
@@ -1492,6 +1524,25 @@ export default function UnifiedFeed({
                     />
                 </>
             )}
+{/* {editTarget && editTarget.type === "quiz" && (
+  <Modal
+    onClose={() => setEditTarget(null)}
+    isFull={false}
+    onToggleFull={() => {}}
+    showHeader={false}
+  >
+    <QuizEditForm
+      quizId={editTarget._id}
+      courseInstanceId={courseInstanceId}
+      courseName={courseName}
+      onSuccess={() => {
+        setEditTarget(null);
+        fetchFeed();
+      }}
+      onCancel={() => setEditTarget(null)}
+    />
+  </Modal>
+)} */}
 
 
 
