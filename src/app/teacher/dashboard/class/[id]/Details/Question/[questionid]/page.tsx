@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import QuestionEditForm from "../../../workspace/question/editQuestionForm";
+import QuestionDetail from "./questiondetails";
 
 // ⬇️ Adjust this import to your actual path
 
@@ -261,137 +262,12 @@ export default function QuestionDetailsPage() {
       </div>
 
       {/* Body */}
-      <div className="max-w-5xl mx-auto px-4 py-6">
+      <div className="">
         {activeTab === "question" ? (
-          <div className="bg-white rounded-2xl border p-5">
+          <div className="">
             {/* Header */}
-            <div className="flex items-start gap-4">
-              <div className="shrink-0 rounded-full bg-blue-100 p-3">
-                <HelpCircle className="w-6 h-6 text-blue-600" />
-              </div>
-
-              <div className="flex-1">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h1 className="text-2xl font-semibold">
-                      {loadingQ ? "Loading..." : q?.title ?? "Untitled"}
-                    </h1>
-                    <div className="text-sm text-gray-600 mt-1">
-                      {author} • {date || ""}
-                    </div>
-                  </div>
-
-                  {/* Kebab menu */}
-                  <div className="relative" ref={menuRef}>
-                    <button
-                      className="p-2 rounded-full hover:bg-gray-100"
-                      onClick={() => setMenuOpen((v) => !v)}
-                    >
-                      <MoreVertical className="w-5 h-5 text-gray-600" />
-                    </button>
-                    {menuOpen && (
-                      <div className="absolute right-0 mt-2 w-40 bg-white border rounded-xl shadow-lg overflow-hidden z-10">
-                        <button
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
-                          onClick={() => {
-                            setMenuOpen(false);
-                            setShowEdit(true);
-                          }}
-                        >
-                          <Pencil className="w-4 h-4" />
-                          Edit
-                        </button>
-                        <button
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-red-50 text-red-600 flex items-center gap-2"
-                          onClick={() => {
-                            setMenuOpen(false);
-                            setConfirmOpen(true);
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Delete
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <hr className="my-4" />
-
-                {/* Body */}
-                {loadingQ ? (
-                  <RowLoading text="Loading question..." />
-                ) : errQ ? (
-                  <p className="text-red-600">{errQ}</p>
-                ) : (
-                  <>
-                    {/* Description */}
-                    <div className="text-gray-800">
-                      {q?.content ? (
-                        <div
-                          className="prose max-w-none"
-                          dangerouslySetInnerHTML={{ __html: q.content }}
-                        />
-                      ) : (
-                        <p className="text-gray-600">No description.</p>
-                      )}
-                    </div>
-
-                    {/* Media */}
-                    {!!q?.media?.length && (
-                      <div className="mt-6">
-                        <div className="text-sm font-semibold mb-2">Media</div>
-                        <ul className="list-disc ml-5 text-sm">
-                          {q.media.map((m, i) => (
-                            <li key={i}>
-                              <a className="underline" href={m.url} target="_blank" rel="noreferrer">
-                                {m.originalname || m.url}
-                              </a>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Documents */}
-                    {!!q?.documents?.length && (
-                      <div className="mt-4">
-                        <div className="text-sm font-semibold mb-2">Documents</div>
-                        <ul className="list-disc ml-5 text-sm">
-                          {q.documents.map((d, i) => (
-                            <li key={i}>
-                              <a className="underline" href={d.url} target="_blank" rel="noreferrer">
-                                {d.originalname || d.url}
-                              </a>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Class comments (UI only) */}
-                    <div className="mt-8">
-                      <div className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-                        <Users className="w-4 h-4" />
-                        Class comments
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-gray-200" />
-                        <div className="flex-1 relative">
-                          <input
-                            placeholder="Add class comment..."
-                            className="w-full rounded-full border px-4 py-2 pr-10 outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                          <button className="absolute right-1 top-1/2 -translate-y-1/2 p-2 rounded-full hover:bg-gray-100">
-                            <Send className="w-4 h-4 text-gray-500" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
+            <QuestionDetail questionId = {questionid}  classId={classId}/>
+          
           </div>
         ) : (
           // ===== Student Answers Tab =====
