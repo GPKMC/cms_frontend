@@ -16,11 +16,11 @@ import { Home, Users } from "lucide-react";
 const sidebarTeacherItems = [
   { id: 1, label: "Home", icon: <Home />, page: "/student/dashboard" },
   { id: 2, label: "My Classes", icon: <FaBookOpen />, page: "/student/dashboard/class" },
-  { id: 3, label: "Assignments", icon: <FaClipboardList />, page: "/student/dashboard/assignments" },
+  { id: 3, label: "Assignments", icon: <FaClipboardList />, page: "/student/dashboard/myAssignment" },
   { id: 4, label: "Attendance", icon: <FaCalendarCheck />, page: "/student/dashboard/attendance" },
   { id: 5, label: "Results", icon: <FaStar />, page: "/student/dashboard/grades" },
   { id: 6, label: "Activities", icon: <FaBullhorn />, page: "/student/dashboard/announcements" },
-  { id: 7, label: "Profile", icon: <FaUser />, page: "/student/dashboard/profile" },
+  { id: 7, label: "Profile", icon: <FaUser />, page: "/student/dashboard/myProfile" },
 ];
 
 export default function SidebarTeacher() {

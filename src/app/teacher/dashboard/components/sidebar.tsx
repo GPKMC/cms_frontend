@@ -20,7 +20,7 @@ const sidebarTeacherItems = [
   { id: 4, label: "Attendance", icon: <FaCalendarCheck />, page: "/teacher/dashboard/attendance" },
   { id: 5, label: "Grades", icon: <FaStar />, page: "/teacher/dashboard/grades" },
   { id: 6, label: "Announcements", icon: <FaBullhorn />, page: "/teacher/dashboard/announcements" },
-  { id: 7, label: "Profile", icon: <FaUser />, page: "/teacher/dashboard/profile" },
+  { id: 7, label: "Profile", icon: <FaUser />, page: "/teacher/dashboard/myProfile" },
 ];
 
 export default function SidebarTeacher() {
