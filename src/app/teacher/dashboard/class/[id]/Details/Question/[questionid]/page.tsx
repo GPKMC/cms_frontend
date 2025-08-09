@@ -17,15 +17,14 @@ import {
 import toast from "react-hot-toast";
 import QuestionEditForm from "../../../workspace/question/editQuestionForm";
 import QuestionDetail from "./questiondetails";
+import TeacherStudentWork from "./studentAnswer";
 
 // ⬇️ Adjust this import to your actual path
 
 /** ====== Config ====== */
 const API = process.env.NEXT_PUBLIC_BACKEND_URL;
 const QUESTION_URL = (id: string) => `${API}/question/${id}`;
-const ANSWERS_URL = (id: string) => `${API}/question/${id}/answers`; // change if your route differs
-const CLASS_URL = (id: string) => `${API}/course-instance/${id}`; // URL to fetch class name
-
+const CLASS_URL    = (id: string) => `${API}/course-api/courseInstance/${id}`;
 /** ====== Types ====== */
 type User = { _id?: string; username?: string; name?: string; email?: string; role?: string };
 type FileObj = { url: string; originalname?: string };
@@ -135,59 +134,56 @@ export default function QuestionDetailsPage() {
     }
   };
 
-  // Fetch Answers
-  const loadAnswers = async () => {
-    try {
-      setLoadingA(true);
-      setErrA(null);
-      const res = await fetch(ANSWERS_URL(questionid), {
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        cache: "no-store",
-      });
-      const text = await res.text();
-      if (!res.ok) {
-        let msg = text;
-        try {
-          const j = JSON.parse(text);
-          msg = j?.error || j?.message || msg;
-        } catch {}
-        throw new Error(msg);
-      }
-      const data = JSON.parse(text);
-      const list = (data as any)?.answers ?? data ?? [];
-      setAnswers(Array.isArray(list) ? list : []);
-    } catch (e: any) {
-      setErrA(e?.message || "Failed to load answers.");
-    } finally {
-      setLoadingA(false);
-    }
-  };
 
-  // Fetch Class Name
-  const loadClassName = async () => {
-    try {
-      const res = await fetch(CLASS_URL(className), {
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-      });
-      const text = await res.text();
-      if (!res.ok) {
-        let msg = text;
-        try {
-          const j = JSON.parse(text);
-          msg = j?.error || j?.message || msg;
-        } catch {}
-        throw new Error(msg);
-      }
-      const data = JSON.parse(text);
-      setClassName(data?.className || "Unknown Class");
-    } catch (e: any) {
-      setClassName("Failed to load class name.");
+
+
+const loadClassName = async () => {
+  try {
+    if (!classId) {
+      setClassName("Unknown Class");
+      return;
     }
-  };
+
+    const res = await fetch(CLASS_URL(classId), {
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      cache: "no-store",
+    });
+
+    const text = await res.text();
+    if (!res.ok) {
+      let msg = text;
+      try {
+        const j = JSON.parse(text);
+        msg = j?.error || j?.message || msg;
+      } catch {}
+      throw new Error(msg);
+    }
+
+    const data = JSON.parse(text);
+
+    // Robustly pull the instance and name from various API shapes
+    const ci =
+      data?.instance ||
+      data?.courseInstance ||
+      data?.data ||
+      data;
+
+    const name =
+      ci?.course?.name ??
+      ci?.course?.title ?? // in case your course uses 'title'
+      ci?.name ??
+      (ci?.batch && ci?.semester ? `Batch ${ci.batch} • Sem ${ci.semester}` : null) ??
+      "Unknown Class";
+
+    setClassName(name);
+  } catch (e) {
+    setClassName("Failed to load class name.");
+  }
+};
+
 
   useEffect(() => {
     loadQuestion();
-    loadAnswers();
     loadClassName();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [questionid]);
@@ -262,71 +258,20 @@ export default function QuestionDetailsPage() {
       </div>
 
       {/* Body */}
-      <div className="">
-        {activeTab === "question" ? (
-          <div className="">
-            {/* Header */}
-            <QuestionDetail questionId = {questionid}  classId={classId}/>
-          
-          </div>
-        ) : (
-          // ===== Student Answers Tab =====
-          <div className="bg-white rounded-2xl border p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <Users className="w-5 h-5 text-gray-700" />
-              <div className="font-medium">Student answers</div>
-            </div>
+     <div className="">
+  {activeTab === "question" ? (
+    <div className="">
+      {/* Question tab content */}
+      <QuestionDetail questionId={questionid} classId={classId} />
+    </div>
+  ) : (
+    <div className="">
+      {/* Student answers tab content */}
+<TeacherStudentWork questionId={questionid} token={getTeacherToken()} />
+    </div>
+  )}
+</div>
 
-            {loadingA ? (
-              <RowLoading text="Loading answers..." />
-            ) : errA ? (
-              <p className="text-red-600">{errA}</p>
-            ) : answers.length ? (
-              <ul className="space-y-4">
-                {answers.map((a) => (
-                  <li key={a._id} className="border rounded-xl p-4">
-                    <div className="flex justify-between items-start">
-                      <div className="text-sm text-gray-700">
-                        <span className="font-medium">
-                          {a.student?.username || a.student?.name || a.student?.email || "Student"}
-                        </span>
-                        {a.createdAt && (
-                          <span className="text-gray-500">
-                            {" "}
-                            • {new Date(a.createdAt).toLocaleString()}
-                          </span>
-                        )}
-                      </div>
-                      {typeof a.pointsAwarded === "number" && (
-                        <span className="text-sm font-semibold">{a.pointsAwarded} pts</span>
-                      )}
-                    </div>
-
-                    {a.text && <p className="mt-2 text-gray-900 whitespace-pre-wrap">{a.text}</p>}
-
-                    {!!a.attachments?.length && (
-                      <div className="mt-3">
-                        <div className="text-sm font-medium mb-1">Attachments</div>
-                        <ul className="list-disc ml-5 text-sm">
-                          {a.attachments.map((f, i) => (
-                            <li key={i}>
-                              <a href={f.url} target="_blank" rel="noreferrer" className="underline">
-                                {f.originalname || f.url}
-                              </a>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-gray-600">No student answers yet.</p>
-            )}
-          </div>
-        )}
-      </div>
 
       {/* ===== Edit Modal (uses YOUR QuestionEditForm) ===== */}
       {showEdit && q && (
