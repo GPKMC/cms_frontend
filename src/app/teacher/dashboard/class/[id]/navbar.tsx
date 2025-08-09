@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const tabs = ["Class", "workspace", "People", "Grades", "Notifications"];
+const tabs = ["Class", "workspace", "People", "Grades", "Notifications","Attendance"];
 
 export default function CourseNavbar() {
   const pathname = usePathname();
