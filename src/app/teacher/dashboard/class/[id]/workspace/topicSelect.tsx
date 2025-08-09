@@ -15,7 +15,7 @@ import CourseMaterialEditForm from "./editMaterialForm";
 import AssignmentEditForm from "./editAssignmentForm";
 import TopicModal from "./editTopicForm";
 import QuestionEditForm from "./question/editQuestionForm";
-import EditGroupAssignmentForm from "./groupassignment/editGroupAssignmentForm";
+import EditGroupAssignmentForm from "./groupAssignment/editGroupAssignmentForm";
 import FeedItemFooter from "./footerbutton";
 
 // --- Type Definitions ---

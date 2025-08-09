@@ -1,5 +1,7 @@
 "use client";
 import React from "react";
+import { useParams } from "next/navigation";
+
 import { useRouter } from "next/navigation"; // App Router version
 
 type Props = {
@@ -10,7 +12,8 @@ type Props = {
 
 export default function FeedItemFooter({ type, id, isExpanded }: Props) {
   const router = useRouter();
-
+ const params = useParams();
+  const classid = params.id as string;
   const baseBtn =
     "inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-semibold";
   const ghost =
@@ -29,7 +32,7 @@ export default function FeedItemFooter({ type, id, isExpanded }: Props) {
             className={ghost}
             onClick={(e) => {
               e.stopPropagation();
-              router.push(`/questions/${id}`);
+              router.push(`/teacher/dashboard/class/${classid}/Details/Question/${id}`);
             }}
           >
             View Question
@@ -39,7 +42,7 @@ export default function FeedItemFooter({ type, id, isExpanded }: Props) {
             className={primary}
             onClick={(e) => {
               e.stopPropagation();
-              router.push(`/questions/${id}/answer`);
+              router.push(`/dashboard/class/${id}/Details/Assignment/{assignmentId}`);
             }}
           >
             View Answer
