@@ -42,7 +42,7 @@ export default function FeedItemFooter({ type, id, isExpanded }: Props) {
             className={primary}
             onClick={(e) => {
               e.stopPropagation();
-              router.push(`/dashboard/class/${id}/Details/Assignment/{assignmentId}`);
+              router.push(`/teacher/dashboard/class/${classid}/Details/Question/${id}`);
             }}
           >
             View Answer
@@ -58,7 +58,7 @@ export default function FeedItemFooter({ type, id, isExpanded }: Props) {
             className={ghost}
             onClick={(e) => {
               e.stopPropagation();
-              router.push(`/assignments/${id}`);
+              router.push(`/teacher/dashboard/class/${classid}/Details/Assignment/${id}`);
             }}
           >
             View Assignment

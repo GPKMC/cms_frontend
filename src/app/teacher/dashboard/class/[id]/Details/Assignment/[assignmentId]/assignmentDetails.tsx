@@ -1,16 +1,16 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import {
+import { 
   Loader2, AlertCircle, User, Calendar, BookOpen, FileText, FileImage, Youtube,
-  Clock, Play, ExternalLink, ChevronRight, X
+  Clock, Play, ExternalLink, ChevronRight, X, MoreVertical, Pencil, Trash2
 } from "lucide-react";
 
+
 import toast from "react-hot-toast";
-import SubmissionPanel from "./submission";
-import AssignmentCommentSection from "./assignmentcomment";
-import PlagiarismModal from "./plagresult";
-import { useUser } from "@/app/student/dashboard/studentContext";
+import { useUser } from "@/app/teacher/dashboard/teacherContext";
+import AssignmentCommentSection from "./comment";
+import { useRouter } from "next/navigation";
+import AssignmentEditForm from "../../../workspace/editAssignmentForm";
 
 // ---- Types (import if you have a types file) ----
 interface UserMini {
@@ -31,8 +31,6 @@ interface Assignment {
   dueDate?: string;
   youtubeLinks?: string[];
   links?: string[];
-  acceptingSubmissions?: boolean;
-  closeAt?: string | null;
 }
 interface SubmissionFile {
   url: string;
@@ -54,87 +52,45 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:500
 const getFileUrl = (url: string) =>
   url?.startsWith("http") ? url : `${BACKEND_URL}${url || ""}`;
 
-export default function AssignmentDetail() {
-  const params = useParams();
-  const assignmentId = params?.assignmentId as string;
+type AssignmentDetailProps ={
+    classId : string,
+    assignmentId: string
+}
+export default function AssignmentDetail( {classId , assignmentId}: AssignmentDetailProps) {
+//   const params = useParams();
+//   const assignmentId = params?.assignmentId as string;
   const  user = useUser();
   // State
   const [assignment, setAssignment] = useState<Assignment | null>(null);
-  const [submission, setSubmission] = useState<Submission | null>(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [loadingUndo, setLoadingUndo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mediaPreview, setMediaPreview] = useState<{
     url: string; type: "img" | "pdf" | "office" | "youtube";
     originalname?: string; yt?: string;
   } | null>(null);
-const [plagiarismResult, setPlagiarismResult] = useState<any>(null);
-const [showPlagModal, setShowPlagModal] = useState(false);
+const [menuOpen, setMenuOpen] = useState(false);
+const [confirmDelete, setConfirmDelete] = useState(false);
+const menuRef = React.useRef<HTMLDivElement | null>(null);
+const [showEdit, setShowEdit] = useState(false);
+const [refreshTick, setRefreshTick] = useState(0);
 
-function handlePlagiarismCheck(result: any) {
-  console.log("Plagiarism result received in parent:", result);
-  setPlagiarismResult(result);
-  setShowPlagModal(true);
-}
-
-console.log("showPlagModal:", showPlagModal);
-console.log("plagiarismResult:", plagiarismResult);
-
-  // --- Fetch Assignment & Submission ---
-  const fetchSubmissionAndAssignment = () => {
-    setLoading(true);
-    setError(null);
-
-    Promise.all([
-      fetch(
-        `${BACKEND_URL}/assignment/${assignmentId}`,
-        {
-          headers: {
-            Authorization:
-              "Bearer " +
-              (localStorage.getItem("token_student") ||
-                sessionStorage.getItem("token_student") ||
-                ""),
-          }
-        }
-      ).then(async (res) => {
-        if (!res.ok) throw new Error("Failed to fetch assignment");
-        return res.json();
-      }),
-      fetch(
-        `${BACKEND_URL}/submission/by-assignment/${assignmentId}/submission`,
-        {
-          headers: {
-            Authorization:
-              "Bearer " +
-              (localStorage.getItem("token_student") ||
-                sessionStorage.getItem("token_student") ||
-                ""),
-          }
-        }
-      ).then(async (res) => {
-        if (res.status === 404) return null;
-        if (!res.ok) throw new Error("Failed to fetch submission");
-        return res.json();
-      })
-    ])
-     .then(([assignmentData, submissionData]) => {
-  console.log("Fetched assignment:", assignmentData);
-  console.log("Fetched submission:", submissionData);
-  setAssignment(assignmentData.assignment);
-  setSubmission(submissionData?.submission || null);
-})
-
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+ const router = useRouter();
+// close on outside click
+useEffect(() => {
+  function onDocClick(e: MouseEvent) {
+    if (!menuRef.current) return;
+    if (!menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+  }
+  function onKey(e: KeyboardEvent) {
+    if (e.key === "Escape") setMenuOpen(false);
+  }
+  document.addEventListener("mousedown", onDocClick);
+  document.addEventListener("keydown", onKey);
+  return () => {
+    document.removeEventListener("mousedown", onDocClick);
+    document.removeEventListener("keydown", onKey);
   };
-
-  useEffect(() => {
-    if (!assignmentId) return;
-    fetchSubmissionAndAssignment();
-    // eslint-disable-next-line
-  }, [assignmentId]);
+}, []);
 
   // --- File icon helpers (pass to SubmissionPanel) ---
   const getFileIcon = (name: string) => {
@@ -144,6 +100,48 @@ console.log("plagiarismResult:", plagiarismResult);
     if (["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext)) return <FileText className="w-5 h-5 text-blue-500" />;
     return <FileText className="w-5 h-5 text-gray-500" />;
   };
+  useEffect(() => {
+  const ctrl = new AbortController();
+  (async () => {
+    try {
+      if (!assignmentId) throw new Error("Missing assignmentId");
+      setLoading(true);
+      setError(null);
+
+      const res = await fetch(`${BACKEND_URL}/assignment/${assignmentId}`, {
+        signal: ctrl.signal,
+        headers: {
+          Authorization:
+            "Bearer " +
+            (localStorage.getItem("token_teacher") ||
+              sessionStorage.getItem("token_teacher") ||
+              ""),
+        },
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
+      }
+
+      const json = await res.json();
+      const data: Assignment = json.assignment ?? json.data ?? json;
+      setAssignment(data);
+    } catch (e: any) {
+      if (e.name !== "AbortError") {
+        console.error(e);
+        setError(e.message || "Failed to load assignment.");
+        toast.error("Failed to load assignment");
+      }
+    } finally {
+      setLoading(false);
+    }
+  })();
+  return () => ctrl.abort();
+}, [assignmentId, refreshTick]); // 👈 add refreshTick
+
+
   const isOfficeDoc = (name: string) => /\.(docx?|pptx?|xlsx?)$/i.test(name);
   const isPDF = (name: string) => /\.pdf$/i.test(name);
   const isImage = (name: string) => /\.(jpg|jpeg|png|gif|webp)$/i.test(name);
@@ -221,6 +219,39 @@ console.log("plagiarismResult:", plagiarismResult);
     );
 
   const dueDateStatus = getDueDateStatus(assignment.dueDate);
+const handleEdit = () => {
+  setMenuOpen(false);
+  setShowEdit(true);      // 👈 this opens the edit form
+};
+
+
+const handleDelete = async () => {
+  setMenuOpen(false);
+  setConfirmDelete(false);
+  try {
+    const res = await fetch(`${BACKEND_URL}/assignment/${assignmentId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization:
+          "Bearer " +
+          (localStorage.getItem("token_teacher") ||
+            sessionStorage.getItem("token_teacher") ||
+            ""),
+      },
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(t || res.statusText);
+    }
+    toast.success("Assignment deleted");
+    // Optionally redirect back
+    // router.back();
+          router.push(`http://localhost:3000/teacher/dashboard/class/${classId}/workspace`);
+
+  } catch (err: any) {
+    toast.error(err?.message || "Failed to delete");
+  }
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 relative overflow-hidden">
@@ -285,37 +316,84 @@ console.log("plagiarismResult:", plagiarismResult);
         </div>
       )}
 
-      <div className="relative container mx-auto px-6 py-12 max-w-7xl">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 items-start">
+      <div className="">
+        <div className="">
           {/* LEFT: Assignment Details */}
-          <div className="lg:col-span-2">
+          <div className="">
             <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl overflow-hidden mb-8 border border-white/20">
               {/* Assignment Header */}
-              <div className="relative bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white p-10 overflow-hidden">
-                <div className="relative z-10">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
-                      <BookOpen className="w-6 h-6" />
-                    </div>
-                    <span className="text-sm font-medium bg-white/20 px-3 py-1 rounded-full">Assignment</span>
-                  </div>
-                  <h1 className="text-4xl font-bold mb-6 leading-tight">{assignment.title}</h1>
-                  <div className="flex flex-wrap gap-6 text-indigo-100">
-                    {assignment.postedBy && (
-                      <div className="flex items-center gap-3 bg-white/10 rounded-full px-4 py-2 backdrop-blur-sm">
-                        <User className="w-5 h-5" />
-                        <span className="font-medium">{assignment.postedBy.username}</span>
-                      </div>
-                    )}
-                    {assignment.createdAt && (
-                      <div className="flex items-center gap-3 bg-white/10 rounded-full px-4 py-2 backdrop-blur-sm">
-                        <Calendar className="w-5 h-5" />
-                        <span>Posted {new Date(assignment.createdAt).toLocaleDateString()}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+             {/* Assignment Header */}
+<div className="relative bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white p-10 overflow-hidden">
+  <div className="relative z-10">
+    <div className="flex items-center gap-3 mb-4">
+      <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
+        <BookOpen className="w-6 h-6" />
+      </div>
+      <span className="text-sm font-medium bg-white/20 px-3 py-1 rounded-full">
+        Assignment
+      </span>
+    </div>
+
+    {/* Title + menu row */}
+    <div className="flex items-start justify-between gap-4">
+      <h1 className="text-4xl font-bold leading-tight">{assignment.title}</h1>
+
+      {/* 3-dot menu */}
+      <div className="relative" ref={menuRef}>
+        <button
+          type="button"
+          onClick={() => setMenuOpen((s) => !s)}
+          className="rounded-xl bg-white/15 hover:bg-white/25 transition p-2"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          aria-label="More actions"
+        >
+          <MoreVertical className="h-5 w-5" />
+        </button>
+
+        {menuOpen && (
+          <div
+            role="menu"
+            className="absolute right-0 mt-2 w-44 rounded-xl border border-white/20 bg-white/90 text-gray-800 shadow-2xl backdrop-blur-xl overflow-hidden"
+          >
+            <button
+              onClick={handleEdit}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-gray-100"
+              role="menuitem"
+            >
+              <Pencil className="h-4 w-4" />
+              Edit
+            </button>
+            <button
+              onClick={() => { setMenuOpen(false); setConfirmDelete(true); }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+              role="menuitem"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+
+    <div className="mt-6 flex flex-wrap gap-6 text-indigo-100">
+      {assignment.postedBy && (
+        <div className="flex items-center gap-3 bg-white/10 rounded-full px-4 py-2 backdrop-blur-sm">
+          <User className="w-5 h-5" />
+          <span className="font-medium">{assignment.postedBy.username}</span>
+        </div>
+      )}
+      {assignment.createdAt && (
+        <div className="flex items-center gap-3 bg-white/10 rounded-full px-4 py-2 backdrop-blur-sm">
+          <Calendar className="w-5 h-5" />
+          <span>Posted {new Date(assignment.createdAt).toLocaleDateString()}</span>
+        </div>
+      )}
+    </div>
+  </div>
+</div>
+
               {/* Due Date Banner */}
               {assignment.dueDate && dueDateStatus && (
                 <div className={`px-10 py-6 border-b border-gray-200/50 ${dueDateStatus.bg} ${dueDateStatus.border} border-l-4`}>
@@ -518,42 +596,49 @@ console.log("plagiarismResult:", plagiarismResult);
             </div>
           </div>
 
-          {/* RIGHT: Submission Section (1/3 width) */}
-          <div className="lg:col-span-1">
-            <SubmissionPanel
-              submission={submission}
-              loadingUndo={loadingUndo}
-              submitting={submitting}
-              setSubmitting={setSubmitting}  
-              error={error}
-              setError={setError}
-              assignmentId={assignmentId}
-              refreshSubmission={fetchSubmissionAndAssignment}
-              getFileUrl={getFileUrl}
-              getFileIcon={getFileIcon}
-              isImage={isImage}
-              isOfficeDoc={isOfficeDoc}
-              isPDF={isPDF}
-              setMediaPreview={setMediaPreview}
-                onPlagiarismCheck={handlePlagiarismCheck}
-                  acceptingSubmissions={assignment.acceptingSubmissions ?? true}
-  closeAt={assignment.closeAt ?? null}
-            />
-          </div>
+     
         </div>
-{showPlagModal && plagiarismResult ? (
-  <>
-    {console.log("Opening plagiarism modal with result:", plagiarismResult)}
-    <PlagiarismModal
-      result={plagiarismResult}
-      onClose={() => setShowPlagModal(false)}
-    />
-  </>
-) : null}
-
-
         <AssignmentCommentSection assignmentId={assignmentId} />
       </div>
+      {confirmDelete && (
+  <div className="fixed inset-0 z-50 grid place-items-center p-4">
+    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setConfirmDelete(false)} />
+    <div className="relative w-full max-w-md rounded-2xl border bg-white p-6 shadow-2xl">
+      <h3 className="text-lg font-semibold">Delete assignment?</h3>
+      <p className="mt-1 text-sm text-gray-600">
+        This action cannot be undone.
+      </p>
+      <div className="mt-5 flex justify-end gap-2">
+        <button
+          className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50"
+          onClick={() => setConfirmDelete(false)}
+        >
+          Cancel
+        </button>
+        <button
+          className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 inline-flex items-center gap-2"
+          onClick={handleDelete}
+        >
+          <Trash2 className="h-4 w-4" />
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+{showEdit && (
+  <AssignmentEditForm
+    assignmentId={assignmentId}
+    courseInstanceId={classId}
+    courseName={/* use what you have, or a fallback: */ (assignment as any)?.course?.name || "Course"}
+    onSuccess={() => {
+      setShowEdit(false);
+      setRefreshTick(t => t + 1); // re-fetch details
+    }}
+    onCancel={() => setShowEdit(false)}
+  />
+)}
+
     </div>
   );
 }
