@@ -84,7 +84,7 @@ export default function FeedItemFooter({ type, id, isExpanded }: Props) {
             className={ghost}
             onClick={(e) => {
               e.stopPropagation();
-              router.push(`/group-assignments/${id}`);
+              router.push(`/teacher/dashboard/class/${classid}/Details/groupAssignment/${id}`);
             }}
           >
             View Group Assignment
@@ -94,7 +94,7 @@ export default function FeedItemFooter({ type, id, isExpanded }: Props) {
             className={primary}
             onClick={(e) => {
               e.stopPropagation();
-              router.push(`/group-assignments/${id}/groups`);
+              router.push(`/teacher/dashboard/class/${classid}/Details/groupAssignment/${id}`);
             }}
           >
             Manage Groups
