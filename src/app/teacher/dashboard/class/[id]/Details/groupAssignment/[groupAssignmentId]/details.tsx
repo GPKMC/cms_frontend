@@ -4,10 +4,7 @@ import {
     Loader2, AlertCircle, User, FileText, ExternalLink as LinkIcon, Image as ImageIcon, Youtube,
     Users, MessageCircle, Send, Calendar, BookOpen, Clock, Award, MessageSquare, Eye, ChevronDown, ChevronUp, X
 } from "lucide-react";
-import { useParams } from "next/navigation";
-import { useUser } from "@/app/student/dashboard/studentContext";
-import GroupSubmissionPanel from "./submission";
-import PlagiarismModal from "./plagResult";
+import { useUser } from "@/app/teacher/dashboard/teacherContext";
 
 // ---------- Types ----------
 type UserObj = { _id?: string; id?: string; username?: string; email?: string };
@@ -104,11 +101,13 @@ function ImageModal({ src, alt, onClose }: { src: string; alt?: string; onClose:
         </div>
     );
 }
-
+type GroupAssignmentProps = {
+    classId : string;
+    groupAssignmentId : string ;
+}
 // ----------- Main Component -----------
-export default function GroupAssignmentDetail() {
-    const params = useParams();
-    const groupAssignmentId = params?.groupId as string;
+export default function GroupAssignmentDetail({classId, groupAssignmentId}: GroupAssignmentProps) {
+    
     const { user } = useUser() || {};
     const myUserId = user?.id || user?._id || "";
     const [submitting, setSubmitting] = useState(false);
@@ -140,7 +139,7 @@ const [groupSubmissions, setGroupSubmissions] = useState<Record<string, Submissi
         setLoading(true);
         fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/group-assignment/${groupAssignmentId}`, {
             headers: {
-                Authorization: "Bearer " + (localStorage.getItem("token_student") || sessionStorage.getItem("token_student") || ""),
+                Authorization: "Bearer " + (localStorage.getItem("token_teacher") || sessionStorage.getItem("token_teacher") || ""),
             },
         })
             .then(async (res) => {
@@ -173,8 +172,8 @@ useEffect(() => {
               headers: {
                 Authorization:
                   "Bearer " +
-                  (localStorage.getItem("token_student") ||
-                    sessionStorage.getItem("token_student") ||
+                  (localStorage.getItem("token_teacher") ||
+                    sessionStorage.getItem("token_teacher") ||
                     ""),
               },
             }
@@ -218,7 +217,7 @@ const myGroups = assignment?.groups?.filter(
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
-                        Authorization: "Bearer " + (localStorage.getItem("token_student") || sessionStorage.getItem("token_student") || ""),
+                        Authorization: "Bearer " + (localStorage.getItem("token_teacher") || sessionStorage.getItem("token_teacher") || ""),
                     },
                     body: JSON.stringify({ message: msg }),
                 }
@@ -368,247 +367,7 @@ const myGroups = assignment?.groups?.filter(
                     </div>
                 </div>
 
-                {/* Groups Section */}
-                <div className="space-y-6">
-                    <div className="flex items-center gap-3 mb-6">
-                        <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full p-3">
-                            <Users className="w-6 h-6 text-white" />
-                        </div>
-                        <h2 className="text-2xl font-bold text-gray-900">Your Project Group(s)</h2>
-                    </div>
-                    {myGroups.length === 0 ? (
-                        <div className="text-gray-500 bg-white border border-dashed rounded-xl px-8 py-8 text-center">
-                            You are not a member of any group for this assignment.
-                        </div>
-                    ) : null}
-                    {myGroups.map((group, i) => {
-                        const isExpanded = expandedGroups[group._id];
-                        const isUserInGroup = group.members.some((m) => (m._id || m.id) === myUserId);
-                        return (
-                            <div key={group._id || i} className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-                                <div className={`p-6 ${isUserInGroup ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white' : 'bg-gradient-to-r from-gray-600 to-gray-700 text-white'}`}>
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-4">
-                                            <div className="bg-white/20 backdrop-blur-sm rounded-full p-2">
-                                                <Users className="w-6 h-6" />
-                                            </div>
-                                            <div>
-                                                <h3 className="text-xl font-bold">{group.name}</h3>
-                                                <p className="text-white/80">{group.task}</p>
-                                                {group.title && (
-                                                    <p className="text-sm text-white/70 mt-1">{group.title}</p>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            {group.points && (
-                                                <div className="text-right">
-                                                    <div className="text-2xl font-bold">{group.points}</div>
-                                                    <div className="text-sm text-white/80">points</div>
-                                                </div>
-                                            )}
-                                            <button
-                                                onClick={() => toggleGroup(group._id)}
-                                                className="bg-white/20 hover:bg-white/30 rounded-full p-2 transition-colors"
-                                            >
-                                                {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                                {isExpanded && (
-                                    <div className="p-6">
-                                        {group.content && (
-                                            <div
-                                                className="prose prose-sm max-w-none mb-6 text-gray-700"
-                                                dangerouslySetInnerHTML={{ __html: group.content }}
-                                            />
-                                        )}
-                                        {/* Members */}
-                                        <div className="mb-6">
-                                            <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                                                <User className="w-4 h-4" />
-                                                Team Members ({group.members.length})
-                                            </h4>
-                                            <div className="flex flex-wrap gap-2">
-                                                {group.members.map((member, idx) => (
-                                                    <div key={member._id || member.id || idx} className={`px-3 py-2 rounded-full text-sm font-medium ${(member._id || member.id) === myUserId
-                                                        ? 'bg-emerald-100 text-emerald-800 border-2 border-emerald-300'
-                                                        : 'bg-gray-100 text-gray-700'
-                                                        }`}>
-                                                        {member.username || member.email || member._id || member.id}
-                                                        {(member._id || member.id) === myUserId && <span className="ml-1">(You)</span>}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        {/* Group Resources */}
-                                        {/* Group Resources */}
-                                        {(group.media?.length || 0) > 0 ||
-                                            (group.documents?.length || 0) > 0 ||
-                                            (group.youtubeLinks?.length || 0) > 0 ||
-                                            (group.links?.length || 0) > 0 ? (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                                                {group.media?.length
-                                                    ? <ResourceCard
-                                                        icon={<ImageIcon className="w-4 h-4" />}
-                                                        title="Group Media"
-                                                        items={group.media.map(f => ({ url: getFileUrl(f.url), label: f.originalname }))}
-                                                        type="media"
-                                                        onImageClick={setImgModal}
-                                                    />
-                                                    : null}
-                                                {group.documents?.length
-                                                    ? <ResourceCard
-                                                        icon={<FileText className="w-4 h-4" />}
-                                                        title="Group Documents"
-                                                        items={group.documents.map(f => ({ url: getFileUrl(f.url), label: f.originalname }))}
-                                                        type="doc"
-                                                    />
-                                                    : null}
-                                                {group.youtubeLinks?.length
-                                                    ? <ResourceCard
-                                                        icon={<Youtube className="w-4 h-4 text-red-600" />}
-                                                        title="Group YouTube Links"
-                                                        items={group.youtubeLinks.map((l, i) => ({ url: l, label: `Video ${i + 1}` }))}
-                                                        type="youtube"
-                                                    />
-                                                    : null}
-                                                {group.links?.length
-                                                    ? <ResourceCard
-                                                        icon={<LinkIcon className="w-4 h-4 text-green-600" />}
-                                                        title="Group Links"
-                                                        items={group.links.map((l) => ({ url: l, label: l }))}
-                                                    />
-                                                    : null}
-                                            </div>
-                                        ) : null}
-                              {isUserInGroup && (
-  <div className="mb-8">
-    <GroupSubmissionPanel
-      submission={groupSubmissions[group._id] || null}  // <<--- USE THIS!
-      groupAssignmentId={assignment._id}
-      groupId={group._id}
-      loadingUndo={!!groupUndoState[group._id]?.loading}
-      setLoadingUndo={(loading) => setLoadingUndo(group._id, loading)}
-      error={groupUndoState[group._id]?.error || null}
-      setError={(error) => setUndoError(group._id, error)}
-      submitting={submitting}
-      setSubmitting={setSubmitting}
-      refreshSubmission={fetchAssignment}
-      getFileUrl={getFileUrl}
-      getFileIcon={(name) => <FileText className="w-5 h-5" />}
-      isImage={isImage}
-      isOfficeDoc={isOfficeDoc}
-      isPDF={(name) => /\.pdf$/i.test(name)}
-      setMediaPreview={setImgModal}
-      onPlagiarismCheck={result => onGroupPlagCheck(group._id, result)}
-       canSubmit={canSubmit}          // ← ADD THIS
-    />
-  </div>
-)}
-
-                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                            {/* Discussion Section */}
-                                            <div className="bg-gray-50 rounded-xl p-4">
-                                                <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                                                    <MessageCircle className="w-4 h-4" />
-                                                    Discussion ({(group.discussion ?? []).length} messages)
-                                                </h4>
-                                                <div className="bg-white border rounded-lg p-3 max-h-60 overflow-y-auto space-y-3 mb-3">
-                                                    {(group.discussion ?? []).length === 0 && (
-                                                        <div className="text-gray-400 text-sm text-center py-4">No messages yet. Start the conversation!</div>
-                                                    )}
-                                                    {(group.discussion ?? []).map((d, k) => (
-                                                        <div key={k} className="flex gap-3">
-                                                            <div className="bg-indigo-100 rounded-full p-2 flex-shrink-0">
-                                                                <User className="w-3 h-3 text-indigo-600" />
-                                                            </div>
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="flex items-center gap-2 mb-1">
-                                                                    <span className="font-semibold text-indigo-700 text-sm">
-                                                                        {d.user?.username || d.user?.email || d.user?._id || d.user?.id || "Unknown"}
-                                                                    </span>
-                                                                    <span className="text-gray-400 text-xs">
-                                                                        {new Date(d.createdAt).toLocaleString()}
-                                                                    </span>
-                                                                </div>
-                                                                <p className="text-gray-700 text-sm leading-relaxed">{d.message}</p>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                                {isUserInGroup && (
-                                                    <div className="flex gap-2">
-                                                        <input
-                                                            type="text"
-                                                            value={newMsg[group._id] || ""}
-                                                            onChange={e => setNewMsg(n => ({ ...n, [group._id]: e.target.value }))}
-                                                            placeholder="Write a message..."
-                                                            className="flex-1 border border-gray-200 px-3 py-2 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
-                                                            onKeyPress={e => e.key === 'Enter' && handlePost(i, group)}
-                                                        />
-                                                        <button
-                                                            onClick={() => handlePost(i, group)}
-                                                            disabled={posting[group._id] || !newMsg[group._id]?.trim()}
-                                                            className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-                                                        >
-                                                            {posting[group._id] ? (
-                                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                                            ) : (
-                                                                <Send className="w-4 h-4" />
-                                                            )}
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            {/* Participation Section */}
-                                            <div className="bg-gray-50 rounded-xl p-4">
-                                                <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                                                    <Clock className="w-4 h-4" />
-                                                    Participation Metrics
-                                                </h4>
-                                                <div className="space-y-3">
-                                                    {(group.participation ?? []).map((p, idx) => (
-                                                        <div key={p.user?._id || p.user?.id || idx} className="bg-white rounded-lg p-3 border">
-                                                            <div className="flex items-center justify-between mb-2">
-                                                                <span className="font-semibold text-gray-800">
-                                                                    {p.user?.username || p.user?.email || p.user?._id || p.user?.id}
-                                                                </span>
-                                                                {p.contribution && (
-                                                                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
-                                                                        {p.contribution}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            <div className="grid grid-cols-2 gap-4 text-sm">
-                                                                <div className="flex items-center gap-2">
-                                                                    <MessageSquare className="w-3 h-3 text-gray-500" />
-                                                                    <span className="text-gray-600">Messages: {p.messageCount || 0}</span>
-                                                                </div>
-                                                                <div className="flex items-center gap-2">
-                                                                    <Clock className="w-3 h-3 text-gray-500" />
-                                                                    <span className="text-gray-600">Time: {p.discussionMinutes || 0}m</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
-
-                    {activeGroupForModal && (
-                        <PlagiarismModal
-                            result={plagResults[activeGroupForModal]!}
-                            onClose={() => setActiveGroupForModal(null)}
-                        />
-                    )}
-                </div>
+             
                 {/* Footer */}
                 {assignment.createdAt && (
                     <div className="text-center text-gray-400 text-sm mt-12 py-4">

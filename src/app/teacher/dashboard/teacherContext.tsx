@@ -3,7 +3,8 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 
 export type User = {
-  id: string;              // ✅ Add this line
+  id: string;   
+  _id :string;           // ✅ Add this line
   username: string;
   email: string;
   role: string;

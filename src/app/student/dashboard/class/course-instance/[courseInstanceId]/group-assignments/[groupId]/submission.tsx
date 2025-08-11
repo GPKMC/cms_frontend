@@ -31,7 +31,7 @@ type User = {
 
 interface Props {
   submission: Submission | null;
-  groupId: string; 
+  groupId: string;
   loadingUndo: boolean;
   submitting: boolean;
   setSubmitting: (isLoading: boolean) => void;
@@ -47,6 +47,8 @@ interface Props {
   isPDF: (name: string) => boolean;
   setMediaPreview: (preview: any) => void;
   onPlagiarismCheck?: (result: any) => void;
+  canSubmit?: boolean; // ← ADD
+
 }
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
@@ -54,7 +56,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:500
 export default function SubmissionPanel({
   groupId, submission, loadingUndo, submitting, setSubmitting, setLoadingUndo, error, setError,
   groupAssignmentId, refreshSubmission, getFileUrl,
-  getFileIcon, isImage, isOfficeDoc, isPDF, setMediaPreview, onPlagiarismCheck
+  getFileIcon, isImage, isOfficeDoc, isPDF, setMediaPreview, onPlagiarismCheck, canSubmit = true
 }: Props) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [links, setLinks] = useState<string[]>([]);
@@ -80,20 +82,26 @@ export default function SubmissionPanel({
   }, [submission]);
 
   const handleDrag = (e: React.DragEvent) => {
+
     e.preventDefault();
     e.stopPropagation();
+    if (!canSubmit) return;              // NEW
+
     if (e.type === "dragenter" || e.type === "dragover") setDragActive(true);
     else if (e.type === "dragleave") setDragActive(false);
   };
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!canSubmit) return;              // NEW
+
     setDragActive(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       setSelectedFiles(prev => [...prev, ...Array.from(e.dataTransfer.files)]);
     }
   };
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canSubmit) return;              // NEW
     const files = e.target.files;
     if (!files) return;
     setSelectedFiles(prev => [...prev, ...Array.from(files)]);
@@ -110,6 +118,12 @@ export default function SubmissionPanel({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!groupAssignmentId) return;
+
+    if (!canSubmit) {
+      setError("Submissions are closed for this assignment.");
+      toast.error("Submissions are closed for this assignment.");
+      return;
+    }
     setError(null);
     setSubmitting(true);
 
@@ -129,7 +143,7 @@ export default function SubmissionPanel({
         {
           method: "POST",
           headers: {
-            Authorization: "Bearer " + (localStorage.getItem("token_student") || (sessionStorage.getItem("token_student"))+""),
+            Authorization: "Bearer " + (localStorage.getItem("token_student") || (sessionStorage.getItem("token_student")) + ""),
           },
           body: formData,
         }
@@ -171,39 +185,43 @@ export default function SubmissionPanel({
   }
 
   async function handleUndoSubmission() {
-  if (!submission?._id) return;
-  if (!confirm("Are you sure you want to undo your submission?")) return;
+    if (!submission?._id) return;
+    const confirmMsg = !canSubmit
+      ? "Submissions are currently CLOSED. If you undo now, you will NOT be able to submit again. Continue?"
+      : "Are you sure you want to undo your submission?";
+    if (!confirm(confirmMsg)) return;
 
-  setLoadingUndo(true);
-  try {
-    const url = `${BACKEND_URL}/groupsubmission/${submission._id}/unsubmit`;
-    console.log("Undo Submission URL:", url);
 
-    const res = await fetch(url, {
-      method: "DELETE",
-      headers: {
-        Authorization: "Bearer " +
-          (localStorage.getItem("token_student") ||
-            (sessionStorage.getItem("token_student")) + ""),
-      },
-    });
-    const data = await res.json();
+    setLoadingUndo(true);
+    try {
+      const url = `${BACKEND_URL}/groupsubmission/${submission._id}/unsubmit`;
+      console.log("Undo Submission URL:", url);
 
-    console.log("Undo Submission Response Status:", res.status);
-    console.log("Undo Submission Response Data:", data);
+      const res = await fetch(url, {
+        method: "DELETE",
+        headers: {
+          Authorization: "Bearer " +
+            (localStorage.getItem("token_student") ||
+              (sessionStorage.getItem("token_student")) + ""),
+        },
+      });
+      const data = await res.json();
 
-    if (!res.ok) {
-      throw new Error(data.error || "Failed to undo submission");
+      console.log("Undo Submission Response Status:", res.status);
+      console.log("Undo Submission Response Data:", data);
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to undo submission");
+      }
+      toast.success("Submission undone!");
+      refreshSubmission();
+    } catch (err: any) {
+      setError(err.message);
+      toast.error(err.message);
+    } finally {
+      setLoadingUndo(false);
     }
-    toast.success("Submission undone!");
-    refreshSubmission();
-  } catch (err: any) {
-    setError(err.message);
-    toast.error(err.message);
-  } finally {
-    setLoadingUndo(false);
   }
-}
 
   // --- Main UI ---
   return (
@@ -223,6 +241,13 @@ export default function SubmissionPanel({
       </div>
 
       <div className="p-8">
+        {/* SUBMISSION CLOSED BANNER */}
+        {!submission && !canSubmit && (
+          <div className="mb-6 p-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-800">
+            Submissions are closed for this assignment. You can no longer submit new work.
+          </div>
+        )}
+
         {submission && submission.status === "submitted" ? (
           <div className="space-y-6">
             {/* Success Header */}
@@ -235,6 +260,12 @@ export default function SubmissionPanel({
                 {submission.submittedAt && new Date(submission.submittedAt).toLocaleString()}
               </p>
             </div>
+            {submission && submission.status === "submitted" && !canSubmit && (
+  <div className="p-4 rounded-xl border border-red-300 bg-red-50 text-red-700">
+    Heads up: submissions are currently closed. If you undo now, you won’t be able to submit again.
+  </div>
+)}
+
             {/* Feedback/Grade */}
             {(submission.grade !== undefined || submission.feedback) && (
               <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-200">
@@ -366,16 +397,17 @@ export default function SubmissionPanel({
                 <Upload className="w-5 h-5 text-indigo-600" />
                 Upload Files
               </label>
-              <div
-                className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 ${dragActive
-                  ? 'border-indigo-400 bg-indigo-50 scale-105'
-                  : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50/50'
-                  }`}
-                onDragEnter={handleDrag}
-                onDragLeave={handleDrag}
-                onDragOver={handleDrag}
-                onDrop={handleDrop}
-              >
+           <div
+  className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 ${dragActive
+    ? 'border-indigo-400 bg-indigo-50 scale-105'
+    : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50/50'
+    } ${!canSubmit ? 'opacity-60 pointer-events-none' : ''}`}
+  onDragEnter={handleDrag}
+  onDragLeave={handleDrag}
+  onDragOver={handleDrag}
+  onDrop={handleDrop}
+>
+
                 <input
                   type="file"
                   multiple
@@ -391,14 +423,20 @@ export default function SubmissionPanel({
                     <p className="text-gray-700 font-medium mb-2">Drop files here or click to browse</p>
                     <p className="text-sm text-gray-500">Support for images, PDFs, and documents</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 font-semibold"
-                  >
-                    <Plus className="w-5 h-5" />
-                    Choose Files
-                  </button>
+                <button
+  type="button"
+  onClick={() => fileInputRef.current?.click()}
+  disabled={!canSubmit}
+  className={`inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all duration-300 transform ${
+    !canSubmit
+      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+      : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 hover:scale-105'
+  }`}
+>
+  <Plus className="w-5 h-5" />
+  Choose Files
+</button>
+
                 </div>
               </div>
 
@@ -515,14 +553,16 @@ export default function SubmissionPanel({
                   )}
                 </div>
               </div>
-              <button
-                type="submit"
-                className={`w-full inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-bold text-lg transition-all duration-300 transform shadow-lg ${submitting || (selectedFiles.length === 0 && links.length === 0)
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 hover:scale-105 hover:shadow-xl'
-                  }`}
-                disabled={submitting || (selectedFiles.length === 0 && links.length === 0)}
-              >
+          <button
+  type="submit"
+  className={`w-full inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-bold text-lg transition-all duration-300 transform shadow-lg ${
+    submitting || !canSubmit || (selectedFiles.length === 0 && links.length === 0)
+      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+      : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 hover:scale-105 hover:shadow-xl'
+  }`}
+  disabled={submitting || !canSubmit || (selectedFiles.length === 0 && links.length === 0)}
+>
+
                 {submitting ? (
                   <>
                     <Loader2 className="animate-spin w-6 h-6" />
