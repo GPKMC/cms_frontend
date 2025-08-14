@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, User, BookOpen } from "lucide-react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams, usePathname } from "next/navigation";
 import dynamic from "next/dynamic";
 import GroupAssignmentGroupsPanel from "./groupSubmission";
 
@@ -24,19 +24,35 @@ const tabs = [
 
 export default function GroupAssignmentDetailsPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const params = useParams<{ id: string; groupAssignmentId: string }>();
 
-  // Coerce params to strings (in case Next returns something union-y)
+  // Coerce params to strings
   const classId = String(params.id ?? "");
   const groupAssignmentId = String(params.groupAssignmentId ?? "");
 
-  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]["key"]>("question");
+  // Initial tab from URL (?tab=answer) else "question"
+  const initialTab =
+    (searchParams?.get("tab") === "answer" || searchParams?.get("tab") === "question")
+      ? (searchParams!.get("tab") as (typeof tabs)[number]["key"])
+      : "question";
+
+  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]["key"]>(initialTab);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  // Keep state in sync if URL tab changes (e.g., via back/forward or external links)
+  useEffect(() => {
+    const t = searchParams?.get("tab");
+    if (t === "answer" || t === "question") {
+      setActiveTab(t);
+    }
+  }, [searchParams]);
 
   // Pull token + backend once (memoized)
   const token = useMemo(() => {
     if (typeof window === "undefined") return undefined;
-    return localStorage.getItem("token") || undefined;
+    return localStorage.getItem("token") || undefined; // use your teacher token key if different
   }, []);
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -54,10 +70,19 @@ export default function GroupAssignmentDetailsPage() {
     router.back();
   };
 
+  // Helper: set tab AND reflect in the URL (?tab=...)
+  const selectTab = (key: (typeof tabs)[number]["key"]) => {
+    setActiveTab(key);
+    const sp = new URLSearchParams(searchParams ? Array.from(searchParams.entries()) : []);
+    sp.set("tab", key);
+    // Replace so tab switching doesn’t spam history
+    router.replace(`${pathname}?${sp.toString()}`);
+  };
+
   return (
     <div>
       {/* Sticky toolbar */}
-      <div className="sticky top-14 z-20 -mx-6 mb-6 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+      <div className=" top-14 z-20 -mx-6 mb-6 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60">
         <div className="mx-auto max-w-6xl px-6 py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button
@@ -76,7 +101,7 @@ export default function GroupAssignmentDetailsPage() {
                 return (
                   <button
                     key={tab.key}
-                    onClick={() => setActiveTab(tab.key)}
+                    onClick={() => selectTab(tab.key)}
                     className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
                       active ? "bg-blue-600 text-white shadow" : "text-gray-600 hover:bg-gray-50"
                     }`}
@@ -100,7 +125,6 @@ export default function GroupAssignmentDetailsPage() {
             <GroupAssignmentDetail
               classId={classId}
               groupAssignmentId={groupAssignmentId}
-           
             />
           </div>
         ) : (

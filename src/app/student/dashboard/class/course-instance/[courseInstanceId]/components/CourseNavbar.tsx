@@ -9,7 +9,8 @@ const tabs = [
   { label: "Assignment", slug: "assignment" },
   { label: "People", slug: "people" },
   { label: "Grades", slug: "grades" },
-  { label: "Notifications", slug: "notifications" }
+  { label: "Notifications", slug: "notifications" },
+  { label: "Attendance", slug: "attendance" }
 ];
 
 export default function CourseNavbar() {

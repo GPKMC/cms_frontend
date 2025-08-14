@@ -243,7 +243,7 @@ export default function StudentLogin() {
       </div>
 
       {/* --- Right Rotated Panel --- */}
-      <div className=" w-[50%] min-w-[420px] h-full overflow-hidden">
+      <div className=" hidden md:block w-[50%] min-w-[420px] h-full overflow-hidden">
       <div
         className="absolute top-20 right-[7%] h-[90%] w-[45%] bg-[#F9D92F] flex flex-col items-center justify-center"
         style={{ transform: 'skewX(-20deg) skewY(10deg)' }}

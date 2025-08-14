@@ -202,6 +202,7 @@ const closeAt = assignment?.closeAt ? new Date(assignment.closeAt) : null;
 const isPastClose = closeAt ? now > closeAt : false;
 const canSubmit = accepting && !isPastClose;
 
+
 const myGroups = assignment?.groups?.filter(
   (g) => myUserId && g.members.some((m) => (m._id || m.id) === myUserId)
 ) || [];
