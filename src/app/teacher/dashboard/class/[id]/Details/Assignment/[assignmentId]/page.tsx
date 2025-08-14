@@ -1,11 +1,11 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { ArrowLeft, User, BookOpen } from "lucide-react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams, usePathname } from "next/navigation";
 import dynamic from "next/dynamic";
 import TeacherAssignmentManager from "./studentSubmissiom";
 
-// Load client-only to avoid SSR clashes if the child uses client APIs
+// Client-only to avoid SSR clashes if child uses browser APIs
 const AssignmentDetail = dynamic(() => import("./assignmentDetails"), {
   ssr: false,
   loading: () => (
@@ -24,13 +24,32 @@ const tabs = [
 
 export default function AssignmentDetailsPage() {
   const router = useRouter();
-  const { id: classId, assignmentId } = useParams<{ id: string; assignmentId: string }>();
-  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]["key"]>("question");
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const urlParams = useParams<{ id: string; assignmentId: string }>();
+
+  // Ensure clean strings from params
+  const classId = String(urlParams.id ?? "");
+  const assignmentId = String(urlParams.assignmentId ?? "");
+
+  // Initial tab from URL (?tab=answer) else "question"
+  const initialTab =
+    (searchParams?.get("tab") === "answer" || searchParams?.get("tab") === "question")
+      ? (searchParams!.get("tab") as (typeof tabs)[number]["key"])
+      : "question";
+
+  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]["key"]>(initialTab);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  // Sync state if URL changes (back/forward or external link)
+  useEffect(() => {
+    const t = searchParams?.get("tab");
+    if (t === "answer" || t === "question") setActiveTab(t);
+  }, [searchParams]);
 
   // Close modal on Escape
   useEffect(() => {
-    function onKeyDown(e: globalThis.KeyboardEvent) {
+    function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") setShowConfirm(false);
     }
     window.addEventListener("keydown", onKeyDown);
@@ -40,6 +59,15 @@ export default function AssignmentDetailsPage() {
   const handleBack = () => {
     setShowConfirm(false);
     router.back();
+  };
+
+  // Select a tab AND reflect it in the URL (?tab=...)
+  const selectTab = (key: (typeof tabs)[number]["key"]) => {
+    setActiveTab(key);
+    const sp = new URLSearchParams(searchParams ? Array.from(searchParams.entries()) : []);
+    sp.set("tab", key);
+    // Replace so tab switching doesn’t spam history
+    router.replace(`${pathname}?${sp.toString()}`);
   };
 
   return (
@@ -64,7 +92,7 @@ export default function AssignmentDetailsPage() {
                 return (
                   <button
                     key={tab.key}
-                    onClick={() => setActiveTab(tab.key)}
+                    onClick={() => selectTab(tab.key)}
                     className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition
                       ${active ? "bg-blue-600 text-white shadow" : "text-gray-600 hover:bg-gray-50"}`}
                   >
@@ -83,13 +111,12 @@ export default function AssignmentDetailsPage() {
       <div className="rounded-2xl border bg-white p-0 shadow-sm">
         {activeTab === "question" ? (
           <div className="p-2 sm:p-2 lg:p-2">
-            {/* Let the child own its layout; we just give it breathing room */}
             <AssignmentDetail classId={classId} assignmentId={assignmentId} />
           </div>
         ) : (
           <div className="p-6 lg:p-8">
             <h2 className="mb-4 text-xl font-semibold tracking-tight">Student Answer</h2>
-          < TeacherAssignmentManager assignmentId={assignmentId}/>
+            <TeacherAssignmentManager assignmentId={assignmentId} />
           </div>
         )}
       </div>
@@ -97,7 +124,10 @@ export default function AssignmentDetailsPage() {
       {/* Confirm modal */}
       {showConfirm && (
         <div className="fixed inset-0 z-50 grid place-items-center p-4">
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setShowConfirm(false)} />
+          <div
+            className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+            onClick={() => setShowConfirm(false)}
+          />
           <div className="relative w-full max-w-md rounded-2xl border bg-white p-6 shadow-2xl">
             <h3 className="text-lg font-semibold">Leave this page?</h3>
             <p className="mt-1 text-sm text-gray-600">You’ll return to the workspace.</p>
