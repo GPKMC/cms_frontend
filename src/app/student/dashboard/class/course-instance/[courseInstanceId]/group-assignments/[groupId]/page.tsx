@@ -64,6 +64,10 @@ type Assignment = {
     links?: string[];
     youtubeLinks?: string[];
     groups: GroupObj[];
+    // add these fields to Assignment
+acceptingSubmissions?: boolean;   // NEW
+closeAt?: string | null;          // NEW
+
     points?: number;
     createdAt?: string;
 };
@@ -191,6 +195,14 @@ useEffect(() => {
 
   fetchAllGroupSubmissions();
 }, [assignment, myUserId]);
+// ADD
+const now = new Date();
+const accepting = assignment?.acceptingSubmissions !== false;
+const closeAt = assignment?.closeAt ? new Date(assignment.closeAt) : null;
+const isPastClose = closeAt ? now > closeAt : false;
+const canSubmit = accepting && !isPastClose;
+
+
 const myGroups = assignment?.groups?.filter(
   (g) => myUserId && g.members.some((m) => (m._id || m.id) === myUserId)
 ) || [];
@@ -492,6 +504,7 @@ const myGroups = assignment?.groups?.filter(
       isPDF={(name) => /\.pdf$/i.test(name)}
       setMediaPreview={setImgModal}
       onPlagiarismCheck={result => onGroupPlagCheck(group._id, result)}
+       canSubmit={canSubmit}          // ← ADD THIS
     />
   </div>
 )}

@@ -1,16 +1,14 @@
 "use client";
 import { useEffect, useState, useRef, JSX } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   AlertCircle, Loader2, Megaphone, FileText, BookOpenCheck, HelpCircle, ListChecks, User,
-  Users2Icon, Download, Eye, Calendar, FileText as FileTextIcon, FileImage as FileImageIcon,
+  Users2Icon, Download, Eye, FileText as FileTextIcon, FileImage as FileImageIcon,
   FileSpreadsheet as FileSpreadsheetIcon, FileJson as FileJsonIcon, FileArchive as FileArchiveIcon,
   FileAudio as FileAudioIcon, FileVideo as FileVideoIcon, FileCode as FileCodeIcon, FileIcon,
 } from "lucide-react";
 import { FaFilePowerpoint } from "react-icons/fa";
 import Image from "next/image";
-
-// CHANGE THIS PATH TO YOUR CONTEXT IF NEEDED!
 import { useUser } from "@/app/student/dashboard/studentContext";
 
 function timeAgo(dateString: string) {
@@ -52,7 +50,7 @@ interface FeedItem {
   youtubeLinks?: string[];
   groups?: {
     _id: string;
-    members: { _id: string }[];
+    members: { _id: string }[] | string[];
     name?: string;
     [key: string]: any;
   }[];
@@ -70,17 +68,17 @@ const getOriginalFileName = (path: string) => {
 
 const fileTypeFromUrl = (url: string) => {
   const lower = url.toLowerCase();
-  if (lower.match(/\.(jpg|jpeg|png|gif)$/)) return "image";
+  if (/\.(jpg|jpeg|png|gif)$/.test(lower)) return "image";
   if (lower.endsWith(".pdf")) return "pdf";
-  if (lower.endsWith(".ppt") || lower.endsWith(".pptx")) return "ppt";
-  if (lower.endsWith(".doc") || lower.endsWith(".docx")) return "word";
-  if (lower.endsWith(".xls") || lower.endsWith(".xlsx") || lower.endsWith(".csv")) return "excel";
+  if (/\.(ppt|pptx)$/.test(lower)) return "ppt";
+  if (/\.(doc|docx)$/.test(lower)) return "word";
+  if (/\.(xls|xlsx|csv)$/.test(lower)) return "excel";
   if (lower.endsWith(".txt")) return "txt";
   if (lower.endsWith(".json")) return "json";
-  if (lower.endsWith(".zip") || lower.endsWith(".rar")) return "zip";
-  if (lower.endsWith(".mp3") || lower.endsWith(".wav")) return "audio";
-  if (lower.endsWith(".mp4") || lower.endsWith(".avi") || lower.endsWith(".mov")) return "video";
-  if (lower.endsWith(".js") || lower.endsWith(".ts")) return "code";
+  if (/\.(zip|rar)$/.test(lower)) return "zip";
+  if (/\.(mp3|wav)$/.test(lower)) return "audio";
+  if (/\.(mp4|avi|mov)$/.test(lower)) return "video";
+  if (/\.(js|ts)$/.test(lower)) return "code";
   return "other";
 };
 
@@ -118,9 +116,9 @@ function TxtPreview({ url }: { url: string }) {
 
 function openFullscreen(elem: HTMLImageElement | HTMLIFrameElement | null) {
   if (!elem) return;
-  if ((elem as any).requestFullscreen) (elem as any).requestFullscreen();
-  else if ((elem as any).webkitRequestFullscreen) (elem as any).webkitRequestFullscreen();
-  else if ((elem as any).msRequestFullscreen) (elem as any).msRequestFullscreen();
+  (elem as any).requestFullscreen?.() ||
+    (elem as any).webkitRequestFullscreen?.() ||
+    (elem as any).msRequestFullscreen?.();
 }
 
 const typeMeta: Record<FeedItemType, { icon: JSX.Element, route: string }> = {
@@ -143,7 +141,14 @@ export default function CourseFeed({ courseInstanceId }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const router = useRouter();
-  const { user } = useUser(); // Get current user from context
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const { user } = useUser();
+
+  // One-time auto-scroll control + highlight id
+  const didAutoScrollRef = useRef(false);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!courseInstanceId) return;
@@ -157,8 +162,9 @@ export default function CourseFeed({ courseInstanceId }: Props) {
           sessionStorage.getItem("token_student");
         if (!token) throw new Error("Token missing");
 
+        const base = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
         const res = await fetch(
-          `http://localhost:5000/student/course-instance/${courseInstanceId}/feed`,
+          `${base}/student/course-instance/${courseInstanceId}/feed`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -188,18 +194,44 @@ export default function CourseFeed({ courseInstanceId }: Props) {
   }, [previewDoc]);
 
   // Filter group assignments to only those where user is a group member
-let filteredFeed = feed.filter((item) => {
-if (item.type === "groupAssignment") {
-  if (!user || !Array.isArray(item.groups)) return false;
-  const userId = user._id || user.id;
-  return item.groups.some(group =>
-    group.members.some(memberId => memberId.toString() === userId.toString())
-  );
-}
+  const filteredFeed = feed.filter((item) => {
+    if (item.type === "groupAssignment") {
+      if (!user || !Array.isArray(item.groups)) return false;
+      const userId = (user._id || (user as any).id || "").toString();
+      return item.groups.some(group =>
+        (group.members || []).some((m: any) => {
+          const mid = typeof m === "string" ? m : m?._id;
+          return (mid || "").toString() === userId;
+        })
+      );
+    }
+    return true;
+  });
 
-  // All other types: show all
-  return true;
-});
+  // 🔗 Deep-link: scroll once to an announcement & highlight, then remove effect
+  useEffect(() => {
+    if (loading || didAutoScrollRef.current) return;
+
+    const type = (searchParams.get("type") || "").toLowerCase();
+    const targetId = searchParams.get("highlight") || "";
+
+    if (type === "announcement" && targetId) {
+      const el = document.getElementById(`announcement-${targetId}`);
+      if (el) {
+        didAutoScrollRef.current = true;
+        setHighlightedId(targetId);
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+
+        // Remove highlight after a moment so page returns to normal
+        const t = setTimeout(() => setHighlightedId(null), 4500);
+
+        // Clean the URL to avoid future auto-scrolls (keeps the same route)
+        router.replace(pathname);
+
+        return () => clearTimeout(t);
+      }
+    }
+  }, [loading, filteredFeed, searchParams, pathname, router]);
 
   if (loading) {
     return (
@@ -234,10 +266,17 @@ if (item.type === "groupAssignment") {
 
         // Announcements: Inline full content and all attachments!
         if (item.type === "announcement") {
+          const isHL = highlightedId === item._id;
           return (
             <div
               key={item._id}
-              className="border border-indigo-100 rounded-lg p-4 bg-white shadow-sm"
+              id={`announcement-${item._id}`}
+              className={
+                "border rounded-lg p-4 bg-white shadow-sm transition-all " +
+                (isHL
+                  ? "border-indigo-400 ring-4 ring-indigo-300/60 bg-indigo-50/40 animate-pulse"
+                  : "border-indigo-100")
+              }
               title="Announcement"
             >
               <div className="flex items-center justify-between mb-2">
@@ -266,7 +305,7 @@ if (item.type === "groupAssignment") {
                   {item.images.map((url, idx) => {
                     const src = url.startsWith("http")
                       ? url
-                      : process.env.NEXT_PUBLIC_BACKEND_URL + url;
+                      : (process.env.NEXT_PUBLIC_BACKEND_URL || "") + url;
                     return (
                       <div key={idx} className="relative group">
                         <img
@@ -294,7 +333,7 @@ if (item.type === "groupAssignment") {
                   {item.documents.map((url, idx) => {
                     const fileUrl = url.startsWith("http")
                       ? url
-                      : process.env.NEXT_PUBLIC_BACKEND_URL + url;
+                      : (process.env.NEXT_PUBLIC_BACKEND_URL || "") + url;
                     const originalName = getOriginalFileName(url);
                     const fileType = fileTypeFromUrl(fileUrl);
                     const isPreviewable =

@@ -1,17 +1,17 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, User, BookOpen } from "lucide-react";
 import { useParams, useRouter, useSearchParams, usePathname } from "next/navigation";
 import dynamic from "next/dynamic";
-import TeacherAssignmentManager from "./studentSubmissiom";
+import GroupAssignmentGroupsPanel from "./groupSubmission";
 
-// Client-only to avoid SSR clashes if child uses browser APIs
-const AssignmentDetail = dynamic(() => import("./assignmentDetails"), {
+// Load client-only to avoid SSR clashes if the child uses client APIs
+const GroupAssignmentDetail = dynamic(() => import("./details"), {
   ssr: false,
   loading: () => (
     <div className="rounded-2xl border bg-white p-6 shadow-sm">
-      <div className="h-5 w-40 animate-pulse rounded bg-gray-200 mb-4" />
-      <div className="h-4 w-full animate-pulse rounded bg-gray-100 mb-2" />
+      <div className="mb-4 h-5 w-40 animate-pulse rounded bg-gray-200" />
+      <div className="mb-2 h-4 w-full animate-pulse rounded bg-gray-100" />
       <div className="h-4 w-5/6 animate-pulse rounded bg-gray-100" />
     </div>
   ),
@@ -22,15 +22,15 @@ const tabs = [
   { label: "Student Answer", key: "answer", icon: User },
 ] as const;
 
-export default function AssignmentDetailsPage() {
+export default function GroupAssignmentDetailsPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const urlParams = useParams<{ id: string; assignmentId: string }>();
+  const params = useParams<{ id: string; groupAssignmentId: string }>();
 
-  // Ensure clean strings from params
-  const classId = String(urlParams.id ?? "");
-  const assignmentId = String(urlParams.assignmentId ?? "");
+  // Coerce params to strings
+  const classId = String(params.id ?? "");
+  const groupAssignmentId = String(params.groupAssignmentId ?? "");
 
   // Initial tab from URL (?tab=answer) else "question"
   const initialTab =
@@ -41,11 +41,20 @@ export default function AssignmentDetailsPage() {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]["key"]>(initialTab);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  // Sync state if URL changes (back/forward or external link)
+  // Keep state in sync if URL tab changes (e.g., via back/forward or external links)
   useEffect(() => {
     const t = searchParams?.get("tab");
-    if (t === "answer" || t === "question") setActiveTab(t);
+    if (t === "answer" || t === "question") {
+      setActiveTab(t);
+    }
   }, [searchParams]);
+
+  // Pull token + backend once (memoized)
+  const token = useMemo(() => {
+    if (typeof window === "undefined") return undefined;
+    return localStorage.getItem("token") || undefined; // use your teacher token key if different
+  }, []);
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
 
   // Close modal on Escape
   useEffect(() => {
@@ -61,7 +70,7 @@ export default function AssignmentDetailsPage() {
     router.back();
   };
 
-  // Select a tab AND reflect it in the URL (?tab=...)
+  // Helper: set tab AND reflect in the URL (?tab=...)
   const selectTab = (key: (typeof tabs)[number]["key"]) => {
     setActiveTab(key);
     const sp = new URLSearchParams(searchParams ? Array.from(searchParams.entries()) : []);
@@ -71,9 +80,9 @@ export default function AssignmentDetailsPage() {
   };
 
   return (
-    <div className="">
+    <div>
       {/* Sticky toolbar */}
-      <div className="sticky top-14 z-20 -mx-6 mb-6 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+      <div className=" top-14 z-20 -mx-6 mb-6 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60">
         <div className="mx-auto max-w-6xl px-6 py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button
@@ -93,8 +102,9 @@ export default function AssignmentDetailsPage() {
                   <button
                     key={tab.key}
                     onClick={() => selectTab(tab.key)}
-                    className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition
-                      ${active ? "bg-blue-600 text-white shadow" : "text-gray-600 hover:bg-gray-50"}`}
+                    className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
+                      active ? "bg-blue-600 text-white shadow" : "text-gray-600 hover:bg-gray-50"
+                    }`}
                   >
                     <Icon className="h-4 w-4" />
                     {tab.label}
@@ -108,15 +118,24 @@ export default function AssignmentDetailsPage() {
       </div>
 
       {/* Main surface */}
-      <div className="rounded-2xl border bg-white p-0 shadow-sm">
+      <div className="rounded-2xl p-0 shadow-sm">
         {activeTab === "question" ? (
           <div className="p-2 sm:p-2 lg:p-2">
-            <AssignmentDetail classId={classId} assignmentId={assignmentId} />
+            {/* Pass props to details */}
+            <GroupAssignmentDetail
+              classId={classId}
+              groupAssignmentId={groupAssignmentId}
+            />
           </div>
         ) : (
           <div className="p-6 lg:p-8">
             <h2 className="mb-4 text-xl font-semibold tracking-tight">Student Answer</h2>
-            <TeacherAssignmentManager assignmentId={assignmentId} />
+            {/* Pass props to the submissions/groups panel */}
+            <GroupAssignmentGroupsPanel
+              groupAssignmentId={groupAssignmentId}
+              token={token}
+              backendUrl={backendUrl}
+            />
           </div>
         )}
       </div>

@@ -6,14 +6,20 @@ import {
   Bell, CheckCircle, Clock, User, Archive, Inbox,
   Check, X, Search, Settings
 } from 'lucide-react';
-import { useUser } from '@/app/student/dashboard/studentContext';
+import { useUser } from '../../../teacherContext';
 
-type NotificationType = 'assignment' | 'groupAssignment' | 'material' | 'quiz' | 'question';
+type NotificationType =
+  | 'assignment'
+  | 'groupAssignment'
+  | 'material'
+  | 'quiz'
+  | 'question'
+  | 'announcement';
 
 type Notification = {
   _id: string;
   courseInstance: string;
-  type: string;                  // 'assignment', 'group-assignment', 'comment', 'announcement', '...-submission'
+  type: string;                  // 'assignment','group-assignment','comment','...-submission','announcement'
   refId: string;
   title?: string;
   message?: string;
@@ -22,8 +28,7 @@ type Notification = {
   recipients?: string[];
   readBy?: string[];
   archivedBy?: string[];
-  // Enriched context from backend (e.g. for comments/submissions)
-  targetType?: string;           // e.g., 'group-assignment'
+  targetType?: string;           // enriched type (may be hyphenated)
   targetTitle?: string;
   targetId?: string;
   commentPreview?: string;
@@ -39,6 +44,7 @@ function normalizeType(raw?: string): NotificationType | null {
     case 'material': return 'material';
     case 'quiz': return 'quiz';
     case 'question': return 'question';
+    case 'announcement': return 'announcement';
     default: return null;
   }
 }
@@ -56,7 +62,7 @@ const isInteractive = (el: HTMLElement | null): boolean => {
 
 export default function NotificationsPage() {
   const params = useParams();
-  const courseInstanceId = params?.courseInstanceId as string;
+  const courseInstanceId = params?.id as string; // teacher route: /class/[id]
   const { user } = useUser();
   const userId = user?._id || (user as any)?.id || '';
   const router = useRouter();
@@ -69,16 +75,17 @@ export default function NotificationsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'unread' | 'read'>('all');
 
-  // Fetch notifications from backend
+  // Fetch notifications
   useEffect(() => {
-    if (!courseInstanceId || !userId) return;
+    if (!courseInstanceId) return;
     (async () => {
       try {
         setLoading(true);
         setError(null);
         const token =
-          localStorage.getItem('token_student') ||
-          sessionStorage.getItem('token_student');
+          localStorage.getItem('token_teacher') ||
+          sessionStorage.getItem('token_teacher') ||
+          '';
         const res = await fetch(
           `${process.env.NEXT_PUBLIC_BACKEND_URL}/notification?courseInstance=${courseInstanceId}`,
           { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
@@ -92,22 +99,25 @@ export default function NotificationsPage() {
         setLoading(false);
       }
     })();
-  }, [courseInstanceId, userId]);
+  }, [courseInstanceId]);
 
   // Mark single notification as read (optimistic)
   const markAsRead = async (notifId: string) => {
-    if (!notifId || !userId) return;
-    setNotifications(prev =>
-      prev.map(n =>
-        n._id === notifId && !n.readBy?.includes(userId)
-          ? { ...n, readBy: [...(n.readBy || []), userId] }
-          : n
-      )
-    );
+    if (!notifId) return;
+    if (userId) {
+      setNotifications(prev =>
+        prev.map(n =>
+          n._id === notifId && !n.readBy?.includes(userId)
+            ? { ...n, readBy: [...(n.readBy || []), userId] }
+            : n
+        )
+      );
+    }
     try {
       const token =
-        localStorage.getItem('token_student') ||
-        sessionStorage.getItem('token_student');
+        localStorage.getItem('token_teacher') ||
+        sessionStorage.getItem('token_teacher') ||
+        '';
       await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/notification/${notifId}/mark-read`,
         { method: 'PATCH', headers: { Authorization: `Bearer ${token}` } }
@@ -117,46 +127,45 @@ export default function NotificationsPage() {
 
   // Navigate based on normalized type + enriched target
   function handleNotificationClick(notif: Notification) {
-    // Mark as read when clicked (even if we don't navigate)
-    if (!notif.readBy?.includes(userId)) {
+    if (userId && !notif.readBy?.includes(userId)) {
       markAsRead(notif._id);
     }
 
-    // Submission notifications are informational only for students
-    const isSubmission = /-submission$/i.test(notif.type);
-    if (isSubmission) return;
-
-    // Announcements open the course feed, auto-scroll & highlight
-    const effectiveType = (notif.targetType || notif.type || '').toLowerCase();
-    if (effectiveType === 'announcement') {
-      const highlightId = notif.targetId || notif.refId || notif._id;
-      router.push(
-        `/student/dashboard/class/course-instance/${courseInstanceId}?highlight=${highlightId}&type=announcement`
-      );
-      return;
-    }
-
-    // Everything else → details page route
     const rawType = notif.targetType || notif.type;
     const id = notif.targetId || notif.refId;
     const normalized = normalizeType(rawType);
-    if (!normalized || !id) return;
+    if (!normalized) return;
 
-    const routeMap: Record<NotificationType, string> = {
-      assignment: 'assignment',
-      groupAssignment: 'group-assignments',
-      material: 'materials',
+    // Announcements go to the feed and highlight the card
+    if (normalized === 'announcement' && id) {
+      router.push(`/teacher/dashboard/class/${courseInstanceId}?highlight=${id}&type=announcement`);
+      return;
+    }
+
+    // Keep teacher details routes for other types
+    const routeMap: Record<Exclude<NotificationType, 'announcement'>, string> = {
+      assignment: 'Assignment',
+      groupAssignment: 'groupAssignment',
+      material: 'workspace',
       quiz: 'quizzes',
-      question: 'questions',
-    };
+      question: 'Question',
+    } as const;
 
-    const route = routeMap[normalized];
+    if (!id) return;
+    const route = (routeMap as any)[normalized];
     if (!route) return;
 
+    const base = `/teacher/dashboard/class/${courseInstanceId}/Details/${route}/${id}`;
+
+    // any *-submission notification should open the Student Answer tab
+    const isSubmission = /-submission$/i.test(notif.type);
+
     const url =
-      notif.type === 'comment' && notif.refId
-        ? `/student/dashboard/class/course-instance/${courseInstanceId}/${route}/${id}?commentId=${notif.refId}`
-        : `/student/dashboard/class/course-instance/${courseInstanceId}/${route}/${id}`;
+      isSubmission
+        ? `${base}?tab=answer`
+        : (notif.type === 'comment' && notif.refId)
+          ? `${base}?commentId=${notif.refId}`
+          : base;
 
     router.push(url);
   }
@@ -167,25 +176,41 @@ export default function NotificationsPage() {
     handleNotificationClick(notif);
   };
 
+  // Handle bulk actions (read / archive)
+  const handleBulkAction = async (action: 'read' | 'archive') => {
+    const ids = Array.from(selectedNotifications);
+    if (ids.length === 0) return;
+
+    if (action === 'read') {
+      await Promise.all(ids.map((id) => markAsRead(id)));
+    } else {
+      await Promise.all(ids.map((id) => toggleArchive(id, true)));
+    }
+    setSelectedNotifications(new Set());
+  };
+
   // Archive or unarchive (optimistic)
   const toggleArchive = async (notifId: string, archive: boolean) => {
-    if (!notifId || !userId) return;
-    setNotifications(prev =>
-      prev.map(n =>
-        n._id === notifId
-          ? {
-              ...n,
-              archivedBy: archive
-                ? [...(n.archivedBy || []), userId]
-                : (n.archivedBy || []).filter(id => id !== userId),
-            }
-          : n
-      )
-    );
+    if (!notifId) return;
+    if (userId) {
+      setNotifications(prev =>
+        prev.map(n =>
+          n._id === notifId
+            ? {
+                ...n,
+                archivedBy: archive
+                  ? [...(n.archivedBy || []), userId]
+                  : (n.archivedBy || []).filter(id => id !== userId),
+              }
+            : n
+        )
+      );
+    }
     try {
       const token =
-        localStorage.getItem('token_student') ||
-        sessionStorage.getItem('token_student');
+        localStorage.getItem('token_teacher') ||
+        sessionStorage.getItem('token_teacher') ||
+        '';
       await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/notification/${notifId}/archive`,
         {
@@ -199,18 +224,20 @@ export default function NotificationsPage() {
 
   // Mark all read (optimistic)
   const markAllAsRead = async () => {
-    if (!userId) return;
-    setNotifications(prev =>
-      prev.map(n =>
-        !n.readBy?.includes(userId)
-          ? { ...n, readBy: [...(n.readBy || []), userId] }
-          : n
-      )
-    );
+    if (userId) {
+      setNotifications(prev =>
+        prev.map(n =>
+          !n.readBy?.includes(userId)
+            ? { ...n, readBy: [...(n.readBy || []), userId] }
+            : n
+        )
+      );
+    }
     try {
       const token =
-        localStorage.getItem('token_student') ||
-        sessionStorage.getItem('token_student');
+        localStorage.getItem('token_teacher') ||
+        sessionStorage.getItem('token_teacher') ||
+        '';
       await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/notification/mark-all-read?courseInstance=${courseInstanceId}`,
         { method: 'PATCH', headers: { Authorization: `Bearer ${token}` } }
@@ -220,18 +247,20 @@ export default function NotificationsPage() {
 
   // Archive all (optimistic)
   const archiveAll = async () => {
-    if (!userId) return;
-    setNotifications(prev =>
-      prev.map(n =>
-        !n.archivedBy?.includes(userId)
-          ? { ...n, archivedBy: [...(n.archivedBy || []), userId] }
-          : n
-      )
-    );
+    if (userId) {
+      setNotifications(prev =>
+        prev.map(n =>
+          !n.archivedBy?.includes(userId)
+            ? { ...n, archivedBy: [...(n.archivedBy || []), userId] }
+            : n
+        )
+      );
+    }
     try {
       const token =
-        localStorage.getItem('token_student') ||
-        sessionStorage.getItem('token_student');
+        localStorage.getItem('token_teacher') ||
+        sessionStorage.getItem('token_teacher') ||
+        '';
       await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/notification/mark-all-archived?courseInstance=${courseInstanceId}`,
         { method: 'PATCH', headers: { Authorization: `Bearer ${token}` } }
@@ -248,42 +277,23 @@ export default function NotificationsPage() {
     });
   };
 
-  // Bulk actions
-  const handleBulkAction = async (action: 'read' | 'archive') => {
-    const ids = Array.from(selectedNotifications);
-    if (ids.length === 0) return;
-
-    if (action === 'read') {
-      await Promise.all(ids.map((id) => markAsRead(id)));
-    } else {
-      await Promise.all(ids.map((id) => toggleArchive(id, true)));
-    }
-    setSelectedNotifications(new Set());
-  };
-
-  // Only show notifications the student is a recipient/author of
-  const visible = notifications.filter(
-    (n) =>
-      ((n.recipients && n.recipients.includes(userId)) ||
-        (n.createdBy && (typeof n.createdBy === 'string'
-          ? n.createdBy === userId
-          : n.createdBy._id === userId)))
-  );
+  // Teacher view: show everything returned by the API
+  const visible = notifications;
 
   // Apply UI filters/search/archived toggle
   const filtered = visible.filter(n => {
     const matchesArchive = showArchived
-      ? (n.archivedBy && n.archivedBy.includes(userId))
-      : (!n.archivedBy || !n.archivedBy.includes(userId));
+      ? (userId ? !!n.archivedBy?.includes(userId) : false)
+      : !userId || !n.archivedBy || !n.archivedBy.includes(userId);
 
-    const q = searchTerm.trim().toLowerCase();
+    const q = searchTerm.toLowerCase();
     const matchesSearch =
       !q ||
       n.title?.toLowerCase().includes(q) ||
       n.message?.toLowerCase().includes(q) ||
       n.targetTitle?.toLowerCase().includes(q);
 
-    const isUnread = !n.readBy?.includes(userId);
+    const isUnread = userId ? !n.readBy?.includes(userId) : false;
     const matchesFilter =
       filterType === 'all' ||
       (filterType === 'unread' && isUnread) ||
@@ -292,9 +302,6 @@ export default function NotificationsPage() {
     return matchesArchive && matchesSearch && matchesFilter;
   });
 
-  const unreadCount = filtered.filter(n => !n.readBy?.includes(userId)).length;
-
-  // Pretty time
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -306,10 +313,9 @@ export default function NotificationsPage() {
     if (diffMinutes < 60) return `${diffMinutes}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
-    return new Date(dateString).toLocaleDateString();
+    return date.toLocaleDateString();
   };
 
-  // Type styling
   const getNotificationStyle = (type: string) => {
     const styles: any = {
       assignment: { icon: '📝', color: 'bg-blue-100 text-blue-600', border: 'border-blue-200' },
@@ -321,6 +327,8 @@ export default function NotificationsPage() {
     };
     return styles[type] || styles.default;
   };
+
+  const unreadCount = filtered.filter(n => userId && !n.readBy?.includes(userId)).length;
 
   return (
     <div className="max-w-4xl mx-auto p-6 bg-gray-50 min-h-screen">
@@ -357,7 +365,7 @@ export default function NotificationsPage() {
           </div>
         </div>
 
-        {/* Search + filter */}
+        {/* Search and Filters */}
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1 relative">
             <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -433,7 +441,7 @@ export default function NotificationsPage() {
         )}
       </div>
 
-      {/* List */}
+      {/* Notifications List */}
       {loading ? (
         <div className="bg-white rounded-xl shadow-sm p-12 text-center">
           <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
@@ -462,10 +470,11 @@ export default function NotificationsPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((notif) => {
-            const isUnread = !notif.readBy?.includes(userId);
-            const isArchived = !!notif.archivedBy?.includes(userId);
+            const isUnread = userId ? !notif.readBy?.includes(userId) : false;
+            const isArchived = userId ? !!notif.archivedBy?.includes(userId) : false;
             const isSelected = selectedNotifications.has(notif._id);
             const style = getNotificationStyle(notif.type);
+
             const isComment = notif.type === 'comment';
             const creator =
               typeof notif.createdBy === 'object'
@@ -482,7 +491,7 @@ export default function NotificationsPage() {
               >
                 <div className="p-6">
                   <div className="flex items-start gap-4">
-                    {/* Selection checkbox (no navigation when toggling) */}
+                    {/* Selection checkbox (stop propagation so row doesn't navigate) */}
                     <input
                       type="checkbox"
                       checked={isSelected}
@@ -492,7 +501,6 @@ export default function NotificationsPage() {
                         toggleSelection(notif._id);
                       }}
                       className="mt-1 w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                      aria-label="Select notification"
                     />
 
                     {/* Notification type icon */}
@@ -544,7 +552,6 @@ export default function NotificationsPage() {
                               isUnread ? 'text-blue-600 hover:bg-blue-100' : 'text-gray-400'
                             }`}
                             disabled={!isUnread}
-                            aria-label="Mark as read"
                           >
                             <Check className="w-4 h-4" />
                           </button>
@@ -556,7 +563,6 @@ export default function NotificationsPage() {
                             className={`p-1 rounded-md transition-colors ${
                               isArchived ? 'text-blue-600 hover:bg-blue-100' : 'text-gray-600 hover:bg-gray-100'
                             }`}
-                            aria-label={isArchived ? 'Unarchive' : 'Archive'}
                           >
                             {isArchived ? <Inbox className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
                           </button>
@@ -575,11 +581,13 @@ export default function NotificationsPage() {
       {filtered.length > 0 && (
         <div className="mt-8 p-4 bg-white rounded-xl shadow-sm">
           <div className="flex items-center justify-between text-sm text-gray-600">
-            <div>Showing {filtered.length} of {visible.length} notifications</div>
+            <div>
+              Showing {filtered.length} of {visible.length} notifications
+            </div>
             <div className="flex items-center gap-4">
-              <span>{filtered.filter(n => !n.readBy?.includes(userId)).length} unread</span>
+              <span>{unreadCount} unread</span>
               <span>•</span>
-              <span>{visible.filter(n => n.archivedBy?.includes(userId)).length} archived</span>
+              <span>{visible.filter(n => userId && n.archivedBy?.includes(userId)).length} archived</span>
             </div>
           </div>
         </div>
@@ -588,7 +596,7 @@ export default function NotificationsPage() {
   );
 }
 
-// Helper for capitalizing a type label for display
+// Display helper
 function capitalize(str?: string) {
   if (!str) return '';
   return str.charAt(0).toUpperCase() + str.slice(1);
