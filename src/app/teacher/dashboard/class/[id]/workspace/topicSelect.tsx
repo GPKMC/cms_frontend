@@ -1305,12 +1305,12 @@ export default function UnifiedFeed({
           ...x,
           type: "groupAssignment" as const,
         })),
-      quizzes: (g.quizzes || g.quiz || []).map((z: any) => ({
-  ...z,
-  type: "quiz" as const,
-})),
-
-
+        quizzes: (g.quizzes || g.quiz || []).map((z: any) => ({
+          ...z,
+          type: "quiz" as const,
+          // ensure something to render in the bubble:
+          content: z.description ?? z.content ?? "",
+        })),
 
         //   quizzes: (g.quizzes || g.quiz || []).map((z: any) => ({ ...z, type: "quiz" as const })), // <-- new
       }));
