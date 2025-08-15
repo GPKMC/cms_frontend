@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import toast from "react-hot-toast";
-const TiptapEditor = dynamic(() => import("./groupAssignment_rtecomponent"), { ssr: false });
+import TiptapEditor from "./groupAssignment_rtecomponent";
 
 interface User { _id: string; username: string; }
 interface Topic { _id: string; title: string; }
