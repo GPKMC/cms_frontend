@@ -487,7 +487,7 @@ export default function TeacherGradeWorkspace({ assignmentId }: { assignmentId: 
                       </div>
 
                       {selected.submittedAt && (
-                        <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 px-3 py-2 rounded-lg border border-green-200 inline-flex">
+                        <div className="inline-flex items-center gap-2 text-sm text-green-700 bg-green-50 px-3 py-2 rounded-lg border border-green-200">
                           <CheckCircle className="w-4 h-4" />
                           <span>Submitted {new Date(selected.submittedAt).toLocaleString()}</span>
                         </div>
