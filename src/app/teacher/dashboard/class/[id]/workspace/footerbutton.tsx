@@ -127,7 +127,21 @@ export default function FeedItemFooter({ type, id, isExpanded }: Props) {
           </button>
         </div>
       );
-
+ case "material":
+      return (
+        <div className="mt-4 border-t border-gray-200 pt-4 flex justify-end gap-3">
+          <button
+            type="button"
+            className={primary}
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/teacher/dashboard/class/${classid}/Details/materials/${id}`);
+            }}
+          >
+            View  Details
+          </button>
+        </div>
+      );
     default:
       return null;
   }
