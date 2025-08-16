@@ -115,16 +115,7 @@ export default function FeedItemFooter({ type, id, isExpanded }: Props) {
           >
             View Quiz
           </button>
-          <button
-            type="button"
-            className={primary}
-            onClick={(e) => {
-              e.stopPropagation();
-              router.push(`/teacher/dashboard/class/${classid}/Details/quiz/${id}`);
-            }}
-          >
-            View Results
-          </button>
+       
         </div>
       );
  case "material":
