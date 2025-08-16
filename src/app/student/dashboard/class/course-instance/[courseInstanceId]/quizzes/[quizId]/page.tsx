@@ -2,49 +2,25 @@
 
 import React, { useEffect, useState } from 'react';
 import {
-  Loader2,
-  AlertCircle,
-  Clock,
-  Award,
-  CheckCircle,
-  XCircle,
-  BookOpen
+  Loader2, AlertCircle, Clock, Award, CheckCircle, XCircle, BookOpen
 } from 'lucide-react';
 import { useParams } from 'next/navigation';
 
-// --- Date formatting helper ---
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
   return {
-    full: date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    }),
-    short: date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    }),
-    time: date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    })
+    short: date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
+    time: date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
   };
 };
 
-// ---- Types ----
 type Option = { _id: string; text: string };
 type Question = {
   _id: string;
   text: string;
   type: 'mcq';
   points: number;
-  options?: Option[];
+  options: Option[];
   correctOption?: string;
   feedbackCorrect?: string;
   feedbackIncorrect?: string;
@@ -61,21 +37,21 @@ type PopulatedAnswer = {
   question: Question;
   selectedOption: string;
   earnedPoints: number;
-  teacherFeedback: string;
+  teacherFeedback?: string;
 };
 
 type FullSubmission = {
   _id: string;
   quiz: Quiz;
   student: string;
-  status: 'in-progress' | 'submitted';
+  status: 'draft' | 'submitted';
   answers: PopulatedAnswer[];
   totalScore: number;
 };
 
 export default function QuizDetail() {
   const { quizId } = useParams() as { quizId?: string };
-  const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL!;
+  const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
   const SUB_API = `${BACKEND}/quiz-submissions`;
 
   const [fullSub, setFullSub] = useState<FullSubmission | null>(null);
@@ -84,7 +60,6 @@ export default function QuizDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // --- Initialize ---
   useEffect(() => {
     if (!quizId) return;
     const token =
@@ -96,7 +71,6 @@ export default function QuizDetail() {
       setLoading(true);
       setError(null);
       try {
-        // 1) start or fetch
         const startRes = await fetch(SUB_API, {
           method: 'POST',
           headers: {
@@ -109,7 +83,6 @@ export default function QuizDetail() {
         const startBody = await startRes.json();
         const subId: string = (startBody.submission ?? startBody)._id;
 
-        // 2) fetch populated
         const fullRes = await fetch(`${SUB_API}/${subId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -120,11 +93,8 @@ export default function QuizDetail() {
         if (fetched.status === 'submitted') {
           setShowResults(true);
         } else {
-          // prefill in-progress answers
           const map: Record<string, string> = {};
-          fetched.answers.forEach(a => {
-            map[a.question._id] = a.selectedOption;
-          });
+          (fetched.answers || []).forEach(a => { if (a?.question?._id && a.selectedOption) map[a.question._id] = a.selectedOption; });
           setUserAnswers(map);
         }
       } catch (e: any) {
@@ -137,7 +107,6 @@ export default function QuizDetail() {
     init();
   }, [quizId]);
 
-  // --- Handlers ---
   const handleOptionClick = (qId: string, optId: string) => {
     if (showResults) return;
     setUserAnswers(prev => ({ ...prev, [qId]: optId }));
@@ -177,21 +146,14 @@ export default function QuizDetail() {
     }
   };
 
-  // --- Derived State ---
   const quiz = fullSub?.quiz;
   const mcqCount = quiz?.questions.length ?? 0;
   const answeredCount = Object.keys(userAnswers).length;
   const allAnswered = mcqCount > 0 && answeredCount === mcqCount;
   const totalPoints = quiz?.questions.reduce((sum, q) => sum + q.points, 0) ?? 0;
-  const earnedPoints = showResults
-    ? fullSub?.totalScore ?? 0
-    : quiz?.questions.reduce(
-        (sum, q) => sum + (userAnswers[q._id] === q.correctOption ? q.points : 0),
-        0
-      ) ?? 0;
+  const earnedPoints = showResults ? (fullSub?.totalScore ?? 0) : 0;
   const percent = totalPoints ? Math.round((earnedPoints / totalPoints) * 100) : 0;
 
-  // --- Loading / Error / No Quiz ---
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -216,7 +178,6 @@ export default function QuizDetail() {
     );
   }
 
-  // --- Render ---
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       <div className="max-w-4xl mx-auto p-6">
@@ -236,12 +197,8 @@ export default function QuizDetail() {
               <div className="bg-blue-100 rounded-lg p-4">
                 <Clock className="w-6 h-6 text-blue-600 mx-auto mb-2" />
                 <p className="text-sm font-medium text-blue-800">Due Date</p>
-                <p className="text-sm text-blue-600">
-                  {formatDate(quiz.dueDate).short}
-                </p>
-                <p className="text-xs text-blue-500">
-                  {formatDate(quiz.dueDate).time}
-                </p>
+                <p className="text-sm text-blue-600">{formatDate(quiz.dueDate).short}</p>
+                <p className="text-xs text-blue-500">{formatDate(quiz.dueDate).time}</p>
               </div>
             </div>
           </div>
@@ -255,31 +212,21 @@ export default function QuizDetail() {
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div
                 className="bg-gradient-to-r from-blue-500 to-indigo-600 h-2 rounded-full transition-all duration-300"
-                style={{
-                  width: `${mcqCount ? (answeredCount / mcqCount) * 100 : 0}%`
-                }}
+                style={{ width: `${mcqCount ? (answeredCount / mcqCount) * 100 : 0}%` }}
               />
             </div>
           </div>
         </div>
 
-        {/* Questions List */}
+        {/* Questions */}
         <div className="space-y-6">
           {quiz.questions.map((q, idx) => {
-            const answerRecord = fullSub?.answers.find(
-              a => a.question._id === q._id
-            );
-
+            const answerRecord = fullSub?.answers.find(a => a.question._id === q._id);
             return (
-              <div
-                key={q._id}
-                className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden"
-              >
+              <div key={q._id} className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
                 <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-white font-semibold text-lg">
-                      Question {idx + 1}
-                    </h3>
+                    <h3 className="text-white font-semibold text-lg">Question {idx + 1}</h3>
                     <div className="bg-white/20 rounded-full px-3 py-1">
                       <span className="text-white text-sm font-medium">
                         {q.points} point{q.points !== 1 && 's'}
@@ -292,30 +239,19 @@ export default function QuizDetail() {
 
                   {/* Options */}
                   <div className="space-y-3">
-                    {q.options?.map((opt, optIdx) => {
+                    {q.options.map((opt, optIdx) => {
                       const isSelected = userAnswers[q._id] === opt._id;
-                      const isCorrect = opt._id === q.correctOption;
+                      const isCorrect = showResults && q.correctOption && (opt._id === q.correctOption);
 
-                      // base classes
-                      let cls =
-                        'w-full text-left px-6 py-4 border-2 rounded-lg flex items-center space-x-3 ';
-
+                      let cls = 'w-full text-left px-6 py-4 border-2 rounded-lg flex items-center space-x-3 ';
                       if (showResults) {
-                        // post-submit styling
-                        if (isSelected && isCorrect)
-                          cls += 'bg-green-50 border-green-300 text-green-800';
-                        else if (isSelected && !isCorrect)
-                          cls += 'bg-red-50 border-red-300 text-red-800';
-                        else if (isCorrect)
-                          cls += 'bg-green-50 border-green-300 text-green-800';
-                        else
-                          cls += 'bg-gray-50 border-gray-200 text-gray-600';
+                        if (isSelected && isCorrect) cls += 'bg-green-50 border-green-300 text-green-800';
+                        else if (isSelected && !isCorrect) cls += 'bg-red-50 border-red-300 text-red-800';
+                        else if (isCorrect) cls += 'bg-green-50 border-green-300 text-green-800';
+                        else cls += 'bg-gray-50 border-gray-200 text-gray-600';
                       } else {
-                        // before-submit: only the selected one gets a filled look
-                        if (isSelected)
-                          cls += 'bg-blue-200 border-blue-400 text-gray-800';
-                        else
-                          cls += 'border-gray-200 hover:border-blue-300 hover:bg-blue-50 text-gray-700';
+                        if (isSelected) cls += 'bg-blue-200 border-blue-400 text-gray-800';
+                        else cls += 'border-gray-200 hover:border-blue-300 hover:bg-blue-50 text-gray-700';
                       }
 
                       return (
@@ -326,18 +262,14 @@ export default function QuizDetail() {
                           className={cls}
                         >
                           <div className="flex items-center w-full">
-                            {/* A/B/C/D bubble */}
                             <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mr-4">
                               {String.fromCharCode(65 + optIdx)}
                             </div>
                             <span className="flex-1">{opt.text}</span>
 
-                            {/* pre-submit check icon */}
                             {!showResults && isSelected && (
                               <CheckCircle className="w-6 h-6 text-blue-600 ml-auto" />
                             )}
-
-                            {/* post-submit icons */}
                             {showResults && isSelected && (
                               <div className="ml-auto">
                                 {isCorrect ? (
@@ -360,24 +292,16 @@ export default function QuizDetail() {
                         <div className="border-l-green-500 bg-green-50 p-4 flex items-start">
                           <CheckCircle className="w-5 h-5 text-green-600 mr-3" />
                           <div>
-                            <p className="font-medium text-green-800 mb-1">
-                              Correct!
-                            </p>
-                            <p className="text-green-700 text-sm">
-                              {q.feedbackCorrect}
-                            </p>
+                            <p className="font-medium text-green-800 mb-1">Correct!</p>
+                            <p className="text-green-700 text-sm">{q.feedbackCorrect}</p>
                           </div>
                         </div>
                       ) : (
                         <div className="border-l-red-500 bg-red-50 p-4 flex items-start">
                           <XCircle className="w-5 h-5 text-red-600 mr-3" />
                           <div>
-                            <p className="font-medium text-red-800 mb-1">
-                              Incorrect
-                            </p>
-                            <p className="text-red-700 text-sm">
-                              {q.feedbackIncorrect}
-                            </p>
+                            <p className="font-medium text-red-800 mb-1">Incorrect</p>
+                            <p className="text-red-700 text-sm">{q.feedbackIncorrect}</p>
                           </div>
                         </div>
                       )}
@@ -389,7 +313,7 @@ export default function QuizDetail() {
           })}
         </div>
 
-        {/* Submit Button */}
+        {/* Submit */}
         {allAnswered && !showResults && (
           <div className="mt-8 text-center">
             <button
@@ -419,35 +343,25 @@ export default function QuizDetail() {
                   <div className="text-3xl font-bold text-blue-600 mb-2">
                     {earnedPoints}
                   </div>
-                  <div className="text-sm text-blue-600 font-medium">
-                    Points Earned
-                  </div>
+                  <div className="text-sm text-blue-600 font-medium">Points Earned</div>
                 </div>
                 <div className="text-center p-6 bg-indigo-50 rounded-lg">
                   <div className="text-3xl font-bold text-indigo-600 mb-2">
                     {totalPoints}
                   </div>
-                  <div className="text-sm text-indigo-600 font-medium">
-                    Total Points
-                  </div>
+                  <div className="text-sm text-indigo-600 font-medium">Total Points</div>
                 </div>
                 <div className="text-center p-6 bg-green-50 rounded-lg">
                   <div className="text-3xl font-bold text-green-600 mb-2">
                     {percent}%
                   </div>
-                  <div className="text-sm text-green-600 font-medium">
-                    Score
-                  </div>
+                  <div className="text-sm text-green-600 font-medium">Score</div>
                 </div>
               </div>
               <div className="text-center">
                 <div className="inline-flex items-center space-x-2 bg-gray-100 rounded-full px-6 py-2">
                   <span className="text-gray-600">
-                    {percent >= 80
-                      ? '🎉 Excellent!'
-                      : percent >= 60
-                      ? '👍 Good job!'
-                      : '📚 Keep studying!'}
+                    {percent >= 80 ? '🎉 Excellent!' : percent >= 60 ? '👍 Good job!' : '📚 Keep studying!'}
                   </span>
                 </div>
               </div>

@@ -110,7 +110,7 @@ export default function FeedItemFooter({ type, id, isExpanded }: Props) {
             className={ghost}
             onClick={(e) => {
               e.stopPropagation();
-              router.push(`/quizzes/${id}`);
+              router.push(`/teacher/dashboard/class/${classid}/Details/quiz/${id}`);
             }}
           >
             View Quiz
@@ -120,7 +120,7 @@ export default function FeedItemFooter({ type, id, isExpanded }: Props) {
             className={primary}
             onClick={(e) => {
               e.stopPropagation();
-              router.push(`/quizzes/${id}/results`);
+              router.push(`/teacher/dashboard/class/${classid}/Details/quiz/${id}`);
             }}
           >
             View Results
