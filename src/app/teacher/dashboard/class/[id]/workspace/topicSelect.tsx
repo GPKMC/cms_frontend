@@ -5,7 +5,7 @@ import {
   Book,
   FileImage,
   Video,
-  Link,
+  Link as LinkIcon,
   User,
   Clock,
   Eye,
@@ -28,11 +28,11 @@ import {
   Clipboard,
   StarsIcon,
 } from "lucide-react";
+
 import CourseMaterialEditForm from "./editMaterialForm";
 import AssignmentEditForm from "./editAssignmentForm";
 import TopicModal from "./editTopicForm";
 import QuestionEditForm from "./question/editQuestionForm";
-
 import FeedItemFooter from "./footerbutton";
 import EditGroupAssignmentForm from "./groupAssignment/editGroupAssignmentForm";
 import QuizEditForm from "./quiz/editQuiz";
@@ -51,10 +51,14 @@ interface MaterialOrAssignment {
   createdAt: string;
   updatedAt?: string;
   type: "material" | "assignment" | "question" | "groupAssignment" | "quiz";
-  visibleCount?: number; // from backend
+  visibleCount?: number;
   groupCount?: number;
 
-  // for “global” groupAssignment:
+  // quiz status
+  published?: boolean;   // <-- NEW
+  isPublished?: boolean; // (alternate name support)
+
+  // groupAssignment
   groups?: {
     id: string;
     _id?: string;
@@ -68,12 +72,9 @@ interface MaterialOrAssignment {
     links?: string[];
   }[];
 
-  // for “per‑group” groupAssignment:
   parentId?: string;
   groupName?: string;
   members?: string[];
-  // media?: string[];
-  // documents?: string[];
   documents?: { url: string; originalname: string }[];
   media?: { url: string; originalname: string }[];
 
@@ -81,13 +82,12 @@ interface MaterialOrAssignment {
   visibleTo?: UserType[];
   links?: string[];
   mutedStudents?: string[];
-  // topic?: { _id: string, title: string }; // not needed in the card here
 }
 interface TopicGroup {
   topic: { _id: string | null; title: string };
   materials: MaterialOrAssignment[];
   assignments: MaterialOrAssignment[];
-  questions: MaterialOrAssignment[]; // <-- add this
+  questions: MaterialOrAssignment[];
   groupAssignments: MaterialOrAssignment[];
   quizzes: MaterialOrAssignment[];
 }
@@ -167,18 +167,17 @@ function formatTimeAgo(dateString: string) {
   if (diffInSeconds < 60) return "Just now";
   if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
   if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
-  if (diffInSeconds < 604800)
-    return `${Math.floor(diffInSeconds / 86400)}d ago`;
+  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
   return date.toLocaleDateString();
 }
 
-// --- Modal Component ---
+// --- Modal ---
 function Modal({
   children,
   onClose,
   isFull,
   onToggleFull,
-  showHeader = true, // Default to true for document preview
+  showHeader = true,
 }: {
   children: React.ReactNode;
   onClose: () => void;
@@ -221,14 +220,13 @@ function Modal({
             </div>
           </div>
         )}
-        {/* Body */}
         <div className="flex-1 overflow-auto">{children}</div>
       </div>
     </div>
   );
 }
 
-// --- Loading Component ---
+// --- Loading ---
 function LoadingSkeleton() {
   return (
     <div className="space-y-6 animate-pulse">
@@ -245,7 +243,7 @@ function LoadingSkeleton() {
   );
 }
 
-// --- Enhanced Card Component ---
+// --- Card ---
 function ContentCard({
   item,
   isExpanded,
@@ -292,26 +290,31 @@ function ContentCard({
       color: "from-yellow-500 to-yellow-600",
       bg: "bg-yellow-50",
       border: "border-yellow-200",
-      icon: <Users className="w-4 h-4" />, // or another “group” icon
+      icon: <Users className="w-4 h-4" />,
       label: "Group Assignment",
     },
     quiz: {
       color: "from-yellow-500 to-yellow-600",
       bg: "bg-green-50",
       border: "border-yellow-200",
-      icon: <StarsIcon className="w-4 h-4" />, // or another “group” icon
-      label: "quiz",
+      icon: <StarsIcon className="w-4 h-4" />,
+      label: "Quiz",
     },
   };
   const config = typeConfig[item.type || "material"];
+
   useEffect(() => {
     if (!menuOpen) return;
-    function handle(e: MouseEvent) {
+    function handle() {
       setMenuOpen(false);
     }
     document.addEventListener("click", handle);
     return () => document.removeEventListener("click", handle);
   }, [menuOpen]);
+
+  const isQuiz = item.type === "quiz";
+  const isQuizPublished = isQuiz && ((item.published ?? item.isPublished) === true);
+
   return (
     <div
       className={`group transition-all duration-300 hover:shadow-lg ${
@@ -347,20 +350,16 @@ function ContentCard({
               </div>
             </div>
           </div>
+
           <div className="flex items-center gap-3">
-            {/* Student count & tooltip */}
-            {/* VisibleTo Students */}
+            {/* VisibleTo */}
             {Array.isArray(item.visibleTo) && item.visibleTo.length > 0 ? (
               <div className="relative group/visible">
                 <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-full text-xs text-blue-700 font-semibold cursor-pointer">
                   <Users className="w-4 h-4" />
                   <span>{item.visibleTo.length}</span>
                 </div>
-                {/* Tooltip for specific students */}
-                <div
-                  className="absolute left-0 z-20 mt-2 px-4 py-2 bg-white rounded-lg shadow-lg text-sm text-gray-700 whitespace-nowrap 
-        opacity-0 pointer-events-none group-hover/visible:opacity-100 group-hover/visible:pointer-events-auto transition-opacity duration-200 max-h-48 overflow-y-auto"
-                >
+                <div className="absolute left-0 z-20 mt-2 px-4 py-2 bg-white rounded-lg shadow-lg text-sm text-gray-700 whitespace-nowrap opacity-0 pointer-events-none group-hover/visible:opacity-100 group-hover/visible:pointer-events-auto transition-opacity duration-200 max-h-48 overflow-y-auto">
                   {item.visibleTo.map((u: any) => (
                     <div key={u._id || u.email}>{u.username || u.email}</div>
                   ))}
@@ -372,71 +371,48 @@ function ContentCard({
                   <Users className="w-4 h-4" />
                   <span>All</span>
                 </div>
-                {/* Tooltip for all students */}
-                <div
-                  className="absolute left-0 z-20 mt-2 px-4 py-2 bg-white rounded-lg shadow-lg text-sm text-gray-700 whitespace-nowrap 
-        opacity-0 pointer-events-none group-hover/visible:opacity-100 group-hover/visible:pointer-events-auto transition-opacity duration-200 max-h-48 overflow-y-auto"
-                >
-                  {allStudents.map((u: any) => (
-                    <div key={u._id || u.email}>{u.username || u.email}</div>
-                  ))}
-                </div>
               </div>
             )}
 
-            {/* Muted Students */}
+            {/* Muted */}
             <div className="relative group/muted">
               <div
-                className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold cursor-pointer
-      ${
-        (item.mutedStudents ?? []).length > 0
-          ? "bg-yellow-100 text-yellow-800"
-          : "bg-gray-100 text-gray-400"
-      }`}
+                className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold cursor-pointer ${
+                  (item.mutedStudents ?? []).length > 0
+                    ? "bg-yellow-100 text-yellow-800"
+                    : "bg-gray-100 text-gray-400"
+                }`}
               >
                 <MicOff className="w-4 h-4" />
                 <span>{(item.mutedStudents ?? []).length}</span>
               </div>
-              <div
-                className="absolute left-0 z-20 mt-2 px-4 py-2 bg-white rounded-lg shadow-lg text-sm text-gray-700 whitespace-nowrap 
-        opacity-0 pointer-events-none group-hover/muted:opacity-100 group-hover/muted:pointer-events-auto transition-opacity duration-200 max-h-48 overflow-y-auto min-w-[120px]"
-              >
-                {(item.mutedStudents ?? []).length > 0 ? (
-                  allStudents.filter((u) =>
-                    (item.mutedStudents ?? []).includes(u._id!)
-                  ).length > 0 ? (
-                    allStudents
-                      .filter((u) =>
-                        (item.mutedStudents ?? []).includes(u._id!)
-                      )
-                      .map((u) => (
-                        <div key={u._id || u.email}>
-                          {u.username || u.email}
-                        </div>
-                      ))
-                  ) : (
-                    <div className="text-gray-400">Unknown students muted</div>
-                  )
-                ) : (
-                  <div className="text-gray-400">No muted students</div>
-                )}
-              </div>
             </div>
 
             {/* Type badge */}
-            <div
-              className={`px-4 py-2 rounded-full bg-gradient-to-r ${config.color} text-white font-semibold text-sm flex items-center gap-2 shadow-md`}
-            >
+            <div className={`px-4 py-2 rounded-full bg-gradient-to-r ${config.color} text-white font-semibold text-sm flex items-center gap-2 shadow-md`}>
               {config.icon}
               {config.label}
             </div>
-            {/* Expand/collapse chevron */}
-            <div className="flex flex-col items-center  justify-center cursor-pointer ">
+
+            {/* Quiz status badge */}
+            {isQuiz && (
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                  isQuizPublished
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-amber-100 text-amber-800"
+                }`}
+                title={isQuizPublished ? "This quiz is published" : "This quiz is a draft"}
+              >
+                {isQuizPublished ? "Published" : "Draft"}
+              </span>
+            )}
+
+            {/* Menu */}
+            <div className="flex flex-col items-center justify-center cursor-pointer">
               <div
                 className={`p-2 rounded-full transition-all duration-200 ${
-                  isExpanded
-                    ? "bg-gray-200 rotate-180"
-                    : "bg-gray-100 group-hover:bg-gray-200"
+                  isExpanded ? "bg-gray-200 rotate-180" : "bg-gray-100 group-hover:bg-gray-200"
                 }`}
               >
                 <ChevronDown className="w-5 h-5 text-gray-600" />
@@ -481,36 +457,36 @@ function ContentCard({
             </div>
           </div>
         </div>
-        {/* Content Attachments Preview */}
+
+        {/* Attachments summary row */}
         <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
-          {item.documents && item.documents.length > 0 && (
+          {(item as any).documents?.length > 0 && (
             <div className="flex items-center gap-1 px-3 py-1 bg-red-50 rounded-full">
               <FileText className="w-4 h-4 text-red-500" />
-              <span className="font-medium">{item.documents.length} docs</span>
+              <span className="font-medium">{(item as any).documents.length} docs</span>
             </div>
           )}
-          {item.media && item.media.length > 0 && (
+          {(item as any).media?.length > 0 && (
             <div className="flex items-center gap-1 px-3 py-1 bg-purple-50 rounded-full">
               <FileImage className="w-4 h-4 text-purple-500" />
-              <span className="font-medium">{item.media.length} images</span>
+              <span className="font-medium">{(item as any).media.length} images</span>
             </div>
           )}
-          {item.youtubeLinks && item.youtubeLinks.length > 0 && (
+          {(item as any).youtubeLinks?.length > 0 && (
             <div className="flex items-center gap-1 px-3 py-1 bg-red-50 rounded-full">
               <Video className="w-4 h-4 text-red-600" />
-              <span className="font-medium">
-                {item.youtubeLinks.length} videos
-              </span>
+              <span className="font-medium">{(item as any).youtubeLinks.length} videos</span>
             </div>
           )}
-          {item.links && item.links.length > 0 && (
+          {(item as any).links?.length > 0 && (
             <div className="flex items-center gap-1 px-3 py-1 bg-green-50 rounded-full">
-              <Link className="w-4 h-4 text-green-600" />
-              <span className="font-medium">{item.links.length} links</span>
+              <ExternalLink className="w-4 h-4 text-green-600" />
+              <span className="font-medium">{(item as any).links.length} links</span>
             </div>
           )}
         </div>
-        {/* Expanded Content */}
+
+        {/* Expanded */}
         <div
           className={`transition-all duration-500 overflow-hidden ${
             isExpanded ? "max-h-none opacity-100 mt-6" : "max-h-0 opacity-0"
@@ -518,500 +494,437 @@ function ContentCard({
         >
           {isExpanded && (
             <div className="space-y-6">
-              {/* Content (Global/Group) */}
+              {/* Main content */}
               <div
                 className="announcement-content prose max-w-none bg-white p-6 rounded-xl border border-gray-100"
                 dangerouslySetInnerHTML={{ __html: item.content }}
               />
 
-              {/* GROUP ASSIGNMENT: Show groups with their own attachments/fields */}
+              {/* GROUP ASSIGNMENT details */}
               {item.type === "groupAssignment" &&
-              Array.isArray(item.groups) &&
-              item.groups.length > 0 ? (
-                <div className="space-y-6">
-                  {/* Group Assignment Header (global info) */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex items-center justify-between gap-3 mb-4">
-                      <div className="flex gap-3">
-                        {" "}
-                        <div className="p-2 bg-blue-100 rounded-lg">
-                          <Users className="w-6 h-6 text-blue-600" />
+                Array.isArray(item.groups) &&
+                item.groups.length > 0 && (
+                  <div className="space-y-6">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <div className="flex items-center justify-between gap-3 mb-4">
+                        <div className="flex gap-3">
+                          <div className="p-2 bg-blue-100 rounded-lg">
+                            <Users className="w-6 h-6 text-blue-600" />
+                          </div>
+                          <h1 className="text-2xl font-bold text-gray-800">
+                            Group Assignment
+                          </h1>
                         </div>
-                        <h1 className="text-2xl font-bold text-gray-800">
-                          Group Assignment
-                        </h1>
+                        <span>
+                          {(item as any).groupCount ?? item.groups?.length ?? 0} groups
+                        </span>
                       </div>
-                      <span>
-                        {(item as any).groupCount ?? item.groups?.length ?? 0}{" "}
-                        groups
-                      </span>
+                      {item.content && (
+                        <div className="bg-green-50 rounded-lg p-4">
+                          <h3 className="font-semibold text-gray-800 mb-3">
+                            Description
+                          </h3>
+                          <div
+                            className="text-gray-700 leading-relaxed prose prose-sm max-w-none"
+                            dangerouslySetInnerHTML={{
+                              __html:
+                                item.content ||
+                                "<span class='text-gray-400 italic'>No content available</span>",
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
-                    {item.content && (
-                      <div className="bg-green-50 rounded-lg p-4">
-                        <h3 className="font-semibold text-gray-800 mb-3">
-                          Description
-                        </h3>
+
+                    <div className="grid gap-6">
+                      {item.groups.map((group, i) => (
                         <div
-                          className="text-gray-700 leading-relaxed prose prose-sm max-w-none"
-                          dangerouslySetInnerHTML={{
-                            __html:
-                              item.content ||
-                              "<span class='text-gray-400 italic'>No content available</span>",
-                          }}
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* All Groups */}
-                  <div className="grid gap-6">
-                    {item.groups.map((group, i) => (
-                      <div
-                        key={group.id || i}
-                        className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow duration-200"
-                      >
-                        {/* Group Header */}
-                        <div className="bg-gradient-to-r from-amber-500 to-orange-500 p-6 text-white">
-                          <div className="flex items-center justify-between">
-                            <h2 className="text-xl font-bold">{group.name}</h2>
-                            <div className="flex gap-2">
-                              <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1">
-                                <Users className="w-4 h-4" />
-                                <span className="text-sm font-medium">
-                                  {group.members?.length || 0} members
-                                </span>
-                              </div>
-                              <div className="flex justify-end">
-                                <button
-                                  className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const groupId =
-                                      group.id || (group as any)._id;
-                                    if (!groupId) {
-                                      alert("Error: group ID missing!");
-                                      return;
-                                    }
-                                    onDeleteGroup(item._id, groupId);
-                                  }}
-                                >
-                                  Delete Group
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="p-6 space-y-6">
-                          {/* Team Members */}
-                          <div className="bg-gray-50 rounded-lg p-4">
-                            <div className="flex items-center gap-2 mb-3">
-                              <Users className="w-5 h-5 text-gray-600" />
-                              <h3 className="font-semibold text-gray-800">
-                                Team Members
-                              </h3>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              {group.members?.map((memberId, idx) => {
-                                const user = allStudents.find(
-                                  (u) => u._id === memberId
-                                );
-                                return (
-                                  <span
-                                    key={idx}
-                                    className="bg-white border border-gray-200 rounded-full px-3 py-1 text-sm font-medium text-gray-700 shadow-sm"
-                                  >
-                                    {user
-                                      ? user.username || user.email
-                                      : memberId}
+                          key={group.id || i}
+                          className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow duration-200"
+                        >
+                          <div className="bg-gradient-to-r from-amber-500 to-orange-500 p-6 text-white">
+                            <div className="flex items-center justify-between">
+                              <h2 className="text-xl font-bold">{group.name}</h2>
+                              <div className="flex gap-2">
+                                <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1">
+                                  <Users className="w-4 h-4" />
+                                  <span className="text-sm font-medium">
+                                    {group.members?.length || 0} members
                                   </span>
-                                );
-                              }) || (
-                                <span className="text-gray-400 italic">
-                                  No members assigned
-                                </span>
-                              )}
+                                </div>
+                                <div className="flex justify-end">
+                                  <button
+                                    className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const groupId = group.id || (group as any)._id;
+                                      if (!groupId) {
+                                        alert("Error: group ID missing!");
+                                        return;
+                                      }
+                                      onDeleteGroup(item._id, groupId);
+                                    }}
+                                  >
+                                    Delete Group
+                                  </button>
+                                </div>
+                              </div>
                             </div>
                           </div>
 
-                          {/* Task */}
-                          {group.task && (
-                            <div className="bg-blue-50 rounded-lg p-4">
+                          <div className="p-6 space-y-6">
+                            <div className="bg-gray-50 rounded-lg p-4">
                               <div className="flex items-center gap-2 mb-3">
-                                <Clipboard className="w-5 h-5 text-blue-600" />
+                                <Users className="w-5 h-5 text-gray-600" />
                                 <h3 className="font-semibold text-gray-800">
-                                  Task
+                                  Team Members
                                 </h3>
                               </div>
-                              <p className="text-gray-700 leading-relaxed">
-                                {group.task}
-                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {group.members?.map((memberId, idx) => {
+                                  const user = allStudents.find((u) => u._id === memberId);
+                                  return (
+                                    <span
+                                      key={idx}
+                                      className="bg-white border border-gray-200 rounded-full px-3 py-1 text-sm font-medium text-gray-700 shadow-sm"
+                                    >
+                                      {user ? user.username || user.email : memberId}
+                                    </span>
+                                  );
+                                }) || (
+                                  <span className="text-gray-400 italic">
+                                    No members assigned
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          )}
 
-                          {/* Description (per group or fallback to global) */}
-                          {(group.content || item.content) && (
-                            <div className="bg-green-50 rounded-lg p-4">
-                              <h3 className="font-semibold text-gray-800 mb-3">
-                                Description
-                              </h3>
-                              <div
-                                className="text-gray-700 leading-relaxed prose prose-sm max-w-none"
-                                dangerouslySetInnerHTML={{
-                                  __html:
-                                    group.content ||
-                                    item.content ||
-                                    "<span class='text-gray-400 italic'>No content available</span>",
-                                }}
-                              />
-                            </div>
-                          )}
-
-                          {/* Resources Grid */}
-
-                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {/* Documents */}
-                            {((group?.documents?.length ?? 0) ||
-                              (item.documents?.length ?? 0)) > 0 && (
-                              <div className="bg-purple-50 rounded-lg p-4">
-                                <div className="flex items-center gap-2 mb-4">
-                                  <FileText className="w-5 h-5 text-purple-600" />
+                            {group.task && (
+                              <div className="bg-blue-50 rounded-lg p-4">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <Clipboard className="w-5 h-5 text-blue-600" />
                                   <h3 className="font-semibold text-gray-800">
-                                    Documents
+                                    Task
                                   </h3>
                                 </div>
-                                <div className="space-y-2">
-                                  {(group?.documents?.length
-                                    ? group.documents
-                                    : item.documents ?? []
-                                  ).map((doc, idx) => {
-                                    const docUrl = getFileUrl(doc.url);
-                                    const filename = doc.originalname;
-                                    const ext =
-                                      filename
-                                        .split(".")
-                                        .pop()
-                                        ?.toLowerCase() || "";
-                                    const isOffice = [
-                                      "doc",
-                                      "docx",
-                                      "ppt",
-                                      "pptx",
-                                      "xls",
-                                      "xlsx",
-                                    ].includes(ext);
-                                    const isPdf = ext === "pdf";
-                                    return (
-                                      <button
-                                        key={(doc.url || "") + idx}
-                                        type="button"
+                                <p className="text-gray-700 leading-relaxed">
+                                  {group.task}
+                                </p>
+                              </div>
+                            )}
+
+                            {(group.content || item.content) && (
+                              <div className="bg-green-50 rounded-lg p-4">
+                                <h3 className="font-semibold text-gray-800 mb-3">
+                                  Description
+                                </h3>
+                                <div
+                                  className="text-gray-700 leading-relaxed prose prose-sm max-w-none"
+                                  dangerouslySetInnerHTML={{
+                                    __html:
+                                      group.content ||
+                                      item.content ||
+                                      "<span class='text-gray-400 italic'>No content available</span>",
+                                  }}
+                                />
+                              </div>
+                            )}
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                              {/* Documents */}
+                              {((group?.documents?.length ?? 0) ||
+                                ((item as any).documents?.length ?? 0)) > 0 && (
+                                <div className="bg-purple-50 rounded-lg p-4">
+                                  <div className="flex items-center gap-2 mb-4">
+                                    <FileText className="w-5 h-5 text-purple-600" />
+                                    <h3 className="font-semibold text-gray-800">
+                                      Documents
+                                    </h3>
+                                  </div>
+                                  <div className="space-y-2">
+                                    {(group?.documents?.length
+                                      ? group.documents
+                                      : (item as any).documents ?? []
+                                    ).map((doc: { url: string; originalname: string }, idx: number) => {
+                                      const docUrl = getFileUrl(doc.url);
+                                      const filename = doc.originalname;
+                                      const ext =
+                                        filename.split(".").pop()?.toLowerCase() || "";
+                                      const isOffice = ["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext);
+                                      const isPdf = ext === "pdf";
+                                      return (
+                                        <button
+                                          key={(doc.url || "") + idx}
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            onPreview(
+                                              <div className="p-6">
+                                                {isOffice ? (
+                                                  <iframe
+                                                    src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
+                                                      docUrl
+                                                    )}`}
+                                                    className="w-full h-[70vh] border-0 rounded-lg"
+                                                    title={filename}
+                                                  />
+                                                ) : isPdf ? (
+                                                  <iframe
+                                                    src={docUrl}
+                                                    className="w-full h-[70vh] border-0 rounded-lg"
+                                                    title={filename}
+                                                  />
+                                                ) : (
+                                                  <div className="text-center py-12">
+                                                    <File className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                                                    <p className="text-gray-500">
+                                                      Preview not available for this file type
+                                                    </p>
+                                                    <a
+                                                      href={docUrl}
+                                                      target="_blank"
+                                                      rel="noopener noreferrer"
+                                                      className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors whitespace-nowrap"
+                                                      download={filename}
+                                                    >
+                                                      <Download className="w-4 h-4" />
+                                                      Download File
+                                                    </a>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            );
+                                          }}
+                                          className="flex items-center gap-3 p-3 bg-white rounded-lg border border-purple-200 hover:border-purple-300 hover:shadow-sm transition-all duration-200 group w-full text-left"
+                                        >
+                                          <div className="p-2 bg-purple-100 rounded-lg group-hover:bg-purple-200 transition-colors">
+                                            <FileText className="w-4 h-4 text-purple-600" />
+                                          </div>
+                                          <span className="text-gray-700 font-medium flex-1 truncate">
+                                            {filename}
+                                          </span>
+                                          <Eye className="w-4 h-4 text-gray-400 group-hover:text-purple-600 transition-colors" />
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Links */}
+                              {((group?.links?.length ?? 0) ||
+                                ((item as any).links?.length ?? 0)) > 0 && (
+                                <div className="bg-green-50 rounded-lg p-4">
+                                  <div className="flex items-center gap-2 mb-4">
+                                    <ExternalLink className="w-5 h-5 text-green-600" />
+                                    <h3 className="font-semibold text-gray-800">Links</h3>
+                                  </div>
+                                  <div className="space-y-2">
+                                    {(group?.links?.length ? group.links : (item as any).links ?? []).map(
+                                      (url: string, idx: number) => (
+                                        <button
+                                          key={(url || "") + idx}
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            onPreview(
+                                              <div className="p-10 bg-white max-w-xl mx-auto rounded-lg text-center space-y-6">
+                                                <div className="flex justify-center">
+                                                  <ExternalLink className="w-12 h-12 text-green-600" />
+                                                </div>
+                                                <div className="text-xl font-semibold mb-2">
+                                                  {url}
+                                                </div>
+                                                <a
+                                                  href={url}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                                                >
+                                                  <ExternalLink className="w-4 h-4" />
+                                                  Open Link
+                                                </a>
+                                              </div>
+                                            );
+                                          }}
+                                          className="flex items-center gap-3 p-3 bg-white rounded-lg border border-green-200 hover:border-green-300 hover:shadow-sm transition-all duration-200 group w-full text-left"
+                                        >
+                                          <div className="p-2 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors">
+                                            <ExternalLink className="w-4 h-4 text-green-600" />
+                                          </div>
+                                          <span className="text-gray-700 font-medium flex-1 truncate">
+                                            {url}
+                                          </span>
+                                          <Eye className="w-4 h-4 text-gray-400 group-hover:text-green-600 transition-colors" />
+                                        </button>
+                                      )
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Media */}
+                            {((group?.media?.length ?? 0) ||
+                              ((item as any).media?.length ?? 0)) > 0 && (
+                              <div className="bg-rose-50 rounded-lg p-4 mt-6">
+                                <div className="flex items-center gap-2 mb-4">
+                                  <Image className="w-5 h-5 text-rose-600" />
+                                  <h3 className="font-semibold text-gray-800">Images</h3>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                  {(group?.media?.length ? group.media : (item as any).media ?? []).map(
+                                    (img: { url: string; originalname: string }, idx: number) => (
+                                      <div
+                                        key={(img.url || "") + idx}
+                                        className="group relative overflow-hidden rounded-lg border-2 border-rose-200 hover:border-rose-300 transition-all duration-200 cursor-pointer"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           onPreview(
-                                            <div className="p-6">
-                                              {isOffice ? (
-                                                <iframe
-                                                  src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
-                                                    docUrl
-                                                  )}`}
-                                                  className="w-full h-[70vh] border-0 rounded-lg"
-                                                  title={filename}
-                                                />
-                                              ) : isPdf ? (
-                                                <iframe
-                                                  src={docUrl}
-                                                  className="w-full h-[70vh] border-0 rounded-lg"
-                                                  title={filename}
-                                                />
-                                              ) : (
-                                                <div className="text-center py-12">
-                                                  <File className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                                                  <p className="text-gray-500">
-                                                    Preview not available for
-                                                    this file type
-                                                  </p>
-                                                  <a
-                                                    href={docUrl}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors whitespace-nowrap"
-                                                    download={filename}
-                                                  >
-                                                    <Download className="w-4 h-4" />
-                                                    Download File
-                                                  </a>
-                                                </div>
-                                              )}
+                                            <div className="flex flex-col items-center p-6 bg-black/80 min-h-[50vh]">
+                                              <img
+                                                src={getFileUrl(img.url)}
+                                                className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-lg border mb-4"
+                                                alt={img.originalname || `Preview ${idx + 1}`}
+                                                style={{ background: "#fff" }}
+                                              />
+                                              <a
+                                                href={getFileUrl(img.url)}
+                                                download={img.originalname}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                                                style={{ marginTop: "1rem" }}
+                                                onClick={(e) => e.stopPropagation()}
+                                              >
+                                                <Download className="w-4 h-4" />
+                                                Download Image
+                                              </a>
                                             </div>
                                           );
                                         }}
-                                        className="flex items-center gap-3 p-3 bg-white rounded-lg border border-purple-200 hover:border-purple-300 hover:shadow-sm transition-all duration-200 group w-full text-left"
                                       >
-                                        <div className="p-2 bg-purple-100 rounded-lg group-hover:bg-purple-200 transition-colors">
-                                          <FileText className="w-4 h-4 text-purple-600" />
-                                        </div>
-                                        <span className="text-gray-700 font-medium flex-1 truncate">
-                                          {filename}
-                                        </span>
-                                        <Eye className="w-4 h-4 text-gray-400 group-hover:text-purple-600 transition-colors" />
-                                      </button>
-                                    );
-                                  })}
+                                        <img
+                                          src={getFileUrl(img.url)}
+                                          alt={img.originalname || `Material image ${idx + 1}`}
+                                          className="w-full h-24 object-cover rounded-xl border-2 border-gray-100 group-hover:border-rose-200 shadow-sm group-hover:shadow-md transition-all duration-200"
+                                        />
+                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-200" />
+                                      </div>
+                                    )
+                                  )}
                                 </div>
                               </div>
                             )}
 
-                            {/* Links */}
-                            {((group?.links?.length ?? 0) ||
-                              (item.links?.length ?? 0)) > 0 && (
-                              <div className="bg-green-50 rounded-lg p-4">
+                            {/* YouTube */}
+                            {((group?.youtubeLinks?.length ?? 0) ||
+                              ((item as any).youtubeLinks?.length ?? 0)) > 0 && (
+                              <div className="bg-red-50 rounded-lg p-4 mt-6">
                                 <div className="flex items-center gap-2 mb-4">
-                                  <ExternalLink className="w-5 h-5 text-green-600" />
-                                  <h3 className="font-semibold text-gray-800">
-                                    Links
-                                  </h3>
+                                  <Youtube className="w-5 h-5 text-red-600" />
+                                  <h3 className="font-semibold text-gray-800">YouTube Videos</h3>
                                 </div>
-                                <div className="space-y-2">
-                                  {(group?.links?.length
-                                    ? group.links
-                                    : item.links ?? []
-                                  ).map((url, idx) => (
-                                    <button
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                  {(group?.youtubeLinks?.length
+                                    ? group.youtubeLinks
+                                    : (item as any).youtubeLinks ?? []
+                                  ).map((url: string, idx: number) => (
+                                    <div
                                       key={(url || "") + idx}
-                                      type="button"
+                                      className="bg-white rounded-lg overflow-hidden border border-red-200 shadow-sm cursor-pointer"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         onPreview(
-                                          <div className="p-10 bg-white max-w-xl mx-auto rounded-lg text-center space-y-6">
-                                            <div className="flex justify-center">
-                                              <Link className="w-12 h-12 text-green-600" />
-                                            </div>
-                                            <div className="text-xl font-semibold mb-2">
-                                              {url}
-                                            </div>
-                                            <a
-                                              href={url}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                                            >
-                                              <ExternalLink className="w-4 h-4" />
-                                              Open Link
-                                            </a>
+                                          <div className="w-full flex items-center justify-center bg-black">
+                                            <iframe
+                                              src={getYoutubeEmbed(url)}
+                                              title={`YouTube Video ${idx + 1}`}
+                                              className="w-[80vw] max-w-3xl h-[45vw] max-h-[70vh] bg-black rounded-xl border"
+                                              allowFullScreen
+                                            />
                                           </div>
                                         );
                                       }}
-                                      className="flex items-center gap-3 p-3 bg-white rounded-lg border border-green-200 hover:border-green-300 hover:shadow-sm transition-all duration-200 group w-full text-left"
                                     >
-                                      <div className="p-2 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors">
-                                        <ExternalLink className="w-4 h-4 text-green-600" />
-                                      </div>
-                                      <span className="text-gray-700 font-medium flex-1 truncate">
-                                        {url}
-                                      </span>
-                                      <Eye className="w-4 h-4 text-gray-400 group-hover:text-green-600 transition-colors" />
-                                    </button>
+                                      <iframe
+                                        src={getYoutubeEmbed(url)}
+                                        title={`YouTube Video ${idx + 1}`}
+                                        className="w-full h-48"
+                                        allowFullScreen
+                                      />
+                                    </div>
                                   ))}
                                 </div>
                               </div>
                             )}
                           </div>
-
-                          {/* Media Gallery */}
-                          {((group?.media?.length ?? 0) ||
-                            (item.media?.length ?? 0)) > 0 && (
-                            <div className="bg-rose-50 rounded-lg p-4 mt-6">
-                              <div className="flex items-center gap-2 mb-4">
-                                <Image className="w-5 h-5 text-rose-600" />
-                                <h3 className="font-semibold text-gray-800">
-                                  Images
-                                </h3>
-                              </div>
-                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                                {(group?.media?.length
-                                  ? group.media
-                                  : item.media ?? []
-                                ).map((img, idx) => (
-                                  <div
-                                    key={(img.url || "") + idx}
-                                    className="group relative overflow-hidden rounded-lg border-2 border-rose-200 hover:border-rose-300 transition-all duration-200 cursor-pointer"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onPreview(
-                                        <div className="flex flex-col items-center p-6 bg-black/80 min-h-[50vh]">
-                                          <img
-                                            src={getFileUrl(img.url)}
-                                            className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-lg border mb-4"
-                                            alt={
-                                              img.originalname ||
-                                              `Preview ${idx + 1}`
-                                            }
-                                            style={{ background: "#fff" }}
-                                          />
-                                          <a
-                                            href={getFileUrl(img.url)}
-                                            download={img.originalname}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                                            style={{ marginTop: "1rem" }}
-                                            onClick={(e) => e.stopPropagation()}
-                                          >
-                                            <Download className="w-4 h-4" />
-                                            Download Image
-                                          </a>
-                                        </div>
-                                      );
-                                    }}
-                                  >
-                                    <img
-                                      src={getFileUrl(img.url)}
-                                      alt={
-                                        img.originalname ||
-                                        `Material image ${idx + 1}`
-                                      }
-                                      className="w-full h-24 object-cover rounded-xl border-2 border-gray-100 group-hover:border-rose-200 shadow-sm group-hover:shadow-md transition-all duration-300"
-                                    />
-                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-200" />
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* YouTube Videos */}
-                          {((group?.youtubeLinks?.length ?? 0) ||
-                            (item.youtubeLinks?.length ?? 0)) > 0 && (
-                            <div className="bg-red-50 rounded-lg p-4 mt-6">
-                              <div className="flex items-center gap-2 mb-4">
-                                <Youtube className="w-5 h-5 text-red-600" />
-                                <h3 className="font-semibold text-gray-800">
-                                  YouTube Videos
-                                </h3>
-                              </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {(group?.youtubeLinks?.length
-                                  ? group.youtubeLinks
-                                  : item.youtubeLinks ?? []
-                                ).map((url, idx) => (
-                                  <div
-                                    key={(url || "") + idx}
-                                    className="bg-white rounded-lg overflow-hidden border border-red-200 shadow-sm cursor-pointer"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onPreview(
-                                        <div className="w-full flex items-center justify-center bg-black">
-                                          <iframe
-                                            src={getYoutubeEmbed(url)}
-                                            title={`YouTube Video ${idx + 1}`}
-                                            className="w-[80vw] max-w-3xl h-[45vw] max-h-[70vh] bg-black rounded-xl border"
-                                            allowFullScreen
-                                          />
-                                        </div>
-                                      );
-                                    }}
-                                  >
-                                    <iframe
-                                      src={getYoutubeEmbed(url)}
-                                      title={`YouTube Video ${idx + 1}`}
-                                      className="w-full h-48"
-                                      allowFullScreen
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ) : (
-                // NORMAL (non-groupAssignment) content
+                )}
+
+              {/* NON-groupAssignment: documents/media/videos/links */}
+              {item.type !== "groupAssignment" && (
                 <>
                   {/* Documents */}
-                  {item.documents && item.documents.length > 0 && (
+                  {(item as any).documents?.length > 0 && (
                     <div className="mb-8">
                       <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-3 text-lg">
                         <span className="p-2 bg-blue-50 rounded-lg">
                           <FileText className="w-6 h-6 text-blue-500" />
                         </span>
-                        Documents{" "}
-                        <span className="font-medium text-base">
-                          ({item.documents.length})
-                        </span>
+                        Documents <span className="font-medium text-base">({(item as any).documents.length})</span>
                       </h4>
 
                       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                        {item.documents.map((docObj, i) => {
+                        {(item as any).documents.map((docObj: any, i: number) => {
                           const docUrl = getFileUrl(docObj.url);
                           const filename = docObj.originalname;
-                          const ext =
-                            filename.split(".").pop()?.toLowerCase() || "";
-                          const isOffice = [
-                            "doc",
-                            "docx",
-                            "ppt",
-                            "pptx",
-                            "xls",
-                            "xlsx",
-                          ].includes(ext);
+                          const ext = filename.split(".").pop()?.toLowerCase() || "";
+                          const isOffice = ["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext);
                           const isPdf = ext === "pdf";
                           return (
                             <div
                               key={i}
                               className="bg-white rounded-2xl border border-gray-100 shadow-lg flex flex-col p-6 transition hover:border-blue-400 hover:shadow-2xl"
                             >
-                              {/* File Info */}
                               <div className="flex items-center gap-4 mb-4">
                                 <span className="p-3 bg-blue-50 rounded-xl flex items-center justify-center">
                                   {getFileIcon(filename)}
                                 </span>
                                 <div className="flex flex-col min-w-0">
-                                  <span
-                                    className="font-semibold text-gray-900 text-base truncate"
-                                    title={filename}
-                                  >
+                                  <span className="font-semibold text-gray-900 text-base truncate" title={filename}>
                                     {filename}
                                   </span>
                                   <span className="text-xs text-gray-400 mt-1">
-                                    {getFileTypeLabel(filename)} &bull;{" "}
-                                    {getFileSize(filename)}
+                                    {getFileTypeLabel(filename)} &bull; {getFileSize(filename)}
                                   </span>
                                 </div>
                               </div>
-                              {/* Divider */}
+
                               <div className="border-t border-gray-100 my-4" />
-                              {/* Button Row */}
+
                               <div className="flex flex-row gap-3 mt-auto">
                                 <button
-                                  className=" flex items-center justify-center gap-2 py-2 px-2 rounded-md bg-white text-gray-900 border border-gray-300 hover:bg-gray-50 font-semibold transition shadow-sm"
+                                  className="flex items-center justify-center gap-2 py-2 px-2 rounded-md bg-white text-gray-900 border border-gray-300 hover:bg-gray-50 font-semibold transition shadow-sm"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     onPreview(
                                       <div className="p-6">
                                         {isOffice ? (
                                           <iframe
-                                            src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
-                                              docUrl
-                                            )}`}
+                                            src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(docUrl)}`}
                                             className="w-full h-[70vh] border-0 rounded-lg"
                                             title={filename}
                                           />
                                         ) : isPdf ? (
-                                          <iframe
-                                            src={docUrl}
-                                            className="w-full h-[70vh] border-0 rounded-lg"
-                                            title={filename}
-                                          />
+                                          <iframe src={docUrl} className="w-full h-[70vh] border-0 rounded-lg" title={filename} />
                                         ) : (
                                           <div className="text-center py-12">
                                             <File className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                                            <p className="text-gray-500">
-                                              Preview not available for this
-                                              file type
-                                            </p>
+                                            <p className="text-gray-500">Preview not available for this file type</p>
                                             <a
                                               href={docUrl}
                                               target="_blank"
@@ -1050,17 +963,17 @@ function ContentCard({
                     </div>
                   )}
 
-                  {/* Media */}
-                  {item.media && item.media.length > 0 && (
+                  {/* Images */}
+                  {(item as any).media?.length > 0 && (
                     <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-xl border border-purple-100">
                       <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-3 text-lg">
                         <div className="p-2 bg-purple-100 rounded-lg">
                           <FileImage className="w-6 h-6 text-purple-600" />
                         </div>
-                        Images ({item.media.length})
+                        Images ({(item as any).media.length})
                       </h4>
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {item.media.map((imgObj, i) => (
+                        {(item as any).media.map((imgObj: any, i: number) => (
                           <div
                             key={i}
                             className="group relative cursor-pointer transform transition-all duration-300 hover:scale-105"
@@ -1071,9 +984,7 @@ function ContentCard({
                                   <img
                                     src={getFileUrl(imgObj.url)}
                                     className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-lg border mb-4"
-                                    alt={
-                                      imgObj.originalname || `Preview ${i + 1}`
-                                    }
+                                    alt={imgObj.originalname || `Preview ${i + 1}`}
                                     style={{ background: "#fff" }}
                                   />
                                   <a
@@ -1094,9 +1005,7 @@ function ContentCard({
                           >
                             <img
                               src={getFileUrl(imgObj.url)}
-                              alt={
-                                imgObj.originalname || `Material image ${i + 1}`
-                              }
+                              alt={imgObj.originalname || `Material image ${i + 1}`}
                               className="w-full h-32 object-cover rounded-xl border-2 border-gray-100 group-hover:border-purple-200 shadow-sm group-hover:shadow-md transition-all duration-300"
                             />
                             <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-xl backdrop-blur-sm">
@@ -1110,17 +1019,17 @@ function ContentCard({
                     </div>
                   )}
 
-                  {/* YouTube Videos */}
-                  {item.youtubeLinks && item.youtubeLinks.length > 0 && (
+                  {/* Videos */}
+                  {(item as any).youtubeLinks?.length > 0 && (
                     <div className="bg-gradient-to-br from-red-50 to-pink-50 p-6 rounded-xl border border-red-100">
                       <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-3 text-lg">
                         <div className="p-2 bg-red-100 rounded-lg">
                           <Video className="w-6 h-6 text-red-600" />
                         </div>
-                        Videos ({item.youtubeLinks.length})
+                        Videos ({(item as any).youtubeLinks.length})
                       </h4>
                       <div className="grid gap-6 sm:grid-cols-2">
-                        {item.youtubeLinks.map((url, i) => (
+                        {(item as any).youtubeLinks.map((url: string, i: number) => (
                           <div
                             key={i}
                             className="rounded-xl overflow-hidden border-2 border-gray-100 shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105 cursor-pointer"
@@ -1151,16 +1060,16 @@ function ContentCard({
                   )}
 
                   {/* Links */}
-                  {item.links && item.links.length > 0 && (
+                  {(item as any).links?.length > 0 && (
                     <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-xl border border-green-100">
                       <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-3 text-lg">
                         <div className="p-2 bg-green-100 rounded-lg">
-                          <Link className="w-6 h-6 text-green-600" />
+                          <ExternalLink className="w-6 h-6 text-green-600" />
                         </div>
-                        Links ({item.links.length})
+                        Links ({(item as any).links.length})
                       </h4>
                       <div className="space-y-3">
-                        {item.links.map((url, i) => (
+                        {(item as any).links.map((url: string, i: number) => (
                           <a
                             key={i}
                             href={url}
@@ -1172,11 +1081,9 @@ function ContentCard({
                               onPreview(
                                 <div className="p-10 bg-white max-w-xl mx-auto rounded-lg text-center space-y-6">
                                   <div className="flex justify-center">
-                                    <Link className="w-12 h-12 text-green-600" />
+                                    <ExternalLink className="w-12 h-12 text-green-600" />
                                   </div>
-                                  <div className="text-xl font-semibold mb-2">
-                                    {url}
-                                  </div>
+                                  <div className="text-xl font-semibold mb-2">{url}</div>
                                   <a
                                     href={url}
                                     target="_blank"
@@ -1191,7 +1098,7 @@ function ContentCard({
                             }}
                           >
                             <div className="p-2 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors">
-                              <Link className="w-4 h-4" />
+                              <ExternalLink className="w-4 h-4" />
                             </div>
                             <span className="text-sm font-medium truncate flex-1">
                               {url}
@@ -1205,16 +1112,15 @@ function ContentCard({
               )}
             </div>
           )}
-          <FeedItemFooter
-            type={item.type}
-            id={item._id}
-            isExpanded={isExpanded}
-          />
+
+          {/* Footer */}
+          <FeedItemFooter type={item.type} id={item._id} isExpanded={isExpanded} />
         </div>
       </div>
     </div>
   );
 }
+
 function ExternalLinkIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}>
@@ -1228,7 +1134,7 @@ function ExternalLinkIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
-// --- Main Component ---
+// --- Main ---
 export default function UnifiedFeed({
   courseInstanceId,
   token,
@@ -1239,31 +1145,19 @@ export default function UnifiedFeed({
   const [feedData, setFeedData] = useState<TopicGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [modalContent, setModalContent] = useState<React.ReactNode | null>(
-    null
-  );
+  const [modalContent, setModalContent] = useState<React.ReactNode | null>(null);
   const [modalFull, setModalFull] = useState(false);
   const [allStudents, setAllStudents] = useState<UserType[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<string>("all");
-  const [deleteTarget, setDeleteTarget] = useState<MaterialOrAssignment | null>(
-    null
-  );
-  const [editTarget, setEditTarget] = useState<MaterialOrAssignment | null>(
-    null
-  );
+  const [deleteTarget, setDeleteTarget] = useState<MaterialOrAssignment | null>(null);
+  const [editTarget, setEditTarget] = useState<MaterialOrAssignment | null>(null);
 
-  const [deleteTopicTarget, setDeleteTopicTarget] = useState<{
-    _id: string | null;
-    title: string;
-  } | null>(null);
-  const [editTopicTarget, setEditTopicTarget] = useState<{
-    _id: string | null;
-    title: string;
-  } | null>(null);
+  const [deleteTopicTarget, setDeleteTopicTarget] = useState<{ _id: string | null; title: string } | null>(null);
+  const [editTopicTarget, setEditTopicTarget] = useState<{ _id: string | null; title: string } | null>(null);
   const [topicMenuOpen, setTopicMenuOpen] = useState<string | null>(null);
   const [loadingDelete, setLoadingDelete] = useState(false);
 
-  // Fetch students
+  // Students list
   useEffect(() => {
     async function fetchStudents() {
       const res = await fetch(
@@ -1274,48 +1168,31 @@ export default function UnifiedFeed({
     fetchStudents();
   }, [courseInstanceId]);
 
-  // Fetch feed data
+  // Fetch feed
   const fetchFeed = async () => {
     setLoading(true);
     try {
+      // ask for both statuses (server will still restrict for students)
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/Coursefeeds/${courseInstanceId}`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/Coursefeeds/${courseInstanceId}?quizStatus=all`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
-      // 1) pull raw JSON
       const raw = await res.json();
 
-      // 2) normalize every incoming item.type into our literal union
       const normalized: TopicGroup[] = raw.map((g: any) => ({
         topic: g.topic,
-        materials: (g.materials || []).map((m: any) => ({
-          ...m,
-          type: "material" as const,
-        })),
-        assignments: (g.assignments || []).map((a: any) => ({
-          ...a,
-          type: "assignment" as const,
-        })),
-        questions: (g.questions || []).map((q: any) => ({
-          ...q,
-          type: "question" as const,
-        })),
-        groupAssignments: (g.groupAssignments || []).map((x: any) => ({
-          ...x,
-          type: "groupAssignment" as const,
-        })),
+        materials: (g.materials || []).map((m: any) => ({ ...m, type: "material" as const })),
+        assignments: (g.assignments || []).map((a: any) => ({ ...a, type: "assignment" as const })),
+        questions: (g.questions || []).map((q: any) => ({ ...q, type: "question" as const })),
+        groupAssignments: (g.groupAssignments || []).map((x: any) => ({ ...x, type: "groupAssignment" as const })),
         quizzes: (g.quizzes || g.quiz || []).map((z: any) => ({
           ...z,
           type: "quiz" as const,
-          // ensure something to render in the bubble:
           content: z.description ?? z.content ?? "",
+          published: z.published ?? z.isPublished ?? false,
         })),
-
-        //   quizzes: (g.quizzes || g.quiz || []).map((z: any) => ({ ...z, type: "quiz" as const })), // <-- new
       }));
 
-      // 3) now feed your React state with correctly‑typed data
       setFeedData(normalized);
     } catch (err) {
       setFeedData([]);
@@ -1327,17 +1204,14 @@ export default function UnifiedFeed({
   useEffect(() => {
     fetchFeed();
   }, [courseInstanceId, token]);
-  //delete group
+
+  // Delete a group inside a group assignment
   async function handleDeleteGroup(groupAssignmentId: string, groupId: string) {
     if (!window.confirm("Are you sure you want to remove this group?")) return;
-
     try {
       await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/group-assignment/${groupAssignmentId}/group/${groupId}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }
       );
       fetchFeed();
     } catch (err) {
@@ -1345,7 +1219,7 @@ export default function UnifiedFeed({
     }
   }
 
-  // Topic dropdown options
+  // Topics list
   const topicOptions = [
     { _id: "all", title: "All Topics" },
     ...feedData
@@ -1361,27 +1235,24 @@ export default function UnifiedFeed({
       })
       .filter((t, i, arr) => arr.findIndex((x) => x._id === t._id) === i),
   ];
-  const [courseName, setCourseName] = useState<string>("");
 
+  const [courseName, setCourseName] = useState<string>("");
   useEffect(() => {
     async function fetchCourseName() {
-      const token =
+      const token2 =
         localStorage.getItem("token_teacher") ||
         sessionStorage.getItem("token_teacher");
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/course-api/courseInstance/${courseInstanceId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token2}` } }
       );
       const data = await res.json();
-      // You may need to adjust this based on your API's response structure:
-      setCourseName(data.instance?.course?.name || ""); // or data.courseInstance.course.name
+      setCourseName(data.instance?.course?.name || "");
     }
     fetchCourseName();
   }, [courseInstanceId]);
 
-  // Topic filtering
+  // Filter by topic
   let groupsToShow = feedData;
   if (selectedTopic === "no-topic") {
     groupsToShow = feedData.filter(
@@ -1391,9 +1262,7 @@ export default function UnifiedFeed({
         g.topic.title.toLowerCase().includes("uncategorized")
     );
   } else if (selectedTopic !== "all") {
-    groupsToShow = feedData.filter(
-      (g) => String(g.topic._id) === selectedTopic
-    );
+    groupsToShow = feedData.filter((g) => String(g.topic._id) === selectedTopic);
   }
   if (selectedTopic === "all") {
     groupsToShow = [
@@ -1417,22 +1286,19 @@ export default function UnifiedFeed({
     assignments: MaterialOrAssignment[],
     questions: MaterialOrAssignment[],
     groupAssignments: MaterialOrAssignment[],
-    quizzes: MaterialOrAssignment[] // <-- add param
+    quizzes: MaterialOrAssignment[]
   ) {
     const all = [
       ...materials.map((m) => ({ ...m, type: "material" as const })),
       ...assignments.map((a) => ({ ...a, type: "assignment" as const })),
       ...questions.map((q) => ({ ...q, type: "question" as const })),
-      ...groupAssignments.map((g) => ({ ...g, type: "groupAssignment" })),
-      ...quizzes.map((qz) => ({ ...qz, type: "quiz" as const })), // <-- add
+      ...groupAssignments.map((g) => ({ ...g, type: "groupAssignment" as const })),
+      ...quizzes.map((qz) => ({ ...qz, type: "quiz" as const })),
     ];
-    return all.sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+    return all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
-  // --- Delete Handlers ---
+  // Delete handlers
   async function handleDeleteItem() {
     if (!deleteTarget) return;
     setLoadingDelete(true);
@@ -1448,12 +1314,8 @@ export default function UnifiedFeed({
     } else if (deleteTarget.type === "quiz") {
       url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/quizrouter/${deleteTarget._id}`;
     }
-
     if (url) {
-      await fetch(url, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await fetch(url, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
     }
     setDeleteTarget(null);
     setLoadingDelete(false);
@@ -1465,10 +1327,7 @@ export default function UnifiedFeed({
     setLoadingDelete(true);
     await fetch(
       `${process.env.NEXT_PUBLIC_BACKEND_URL}/topic-api/topic/${deleteTopicTarget._id}`,
-      {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      }
+      { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }
     );
     setDeleteTopicTarget(null);
     setLoadingDelete(false);
@@ -1484,19 +1343,15 @@ export default function UnifiedFeed({
           <Book className="w-12 h-12 text-gray-400" />
         </div>
         <h3 className="text-xl font-bold text-gray-600 mb-2">No Content Yet</h3>
-        <p className="text-gray-500">
-          No assignments or materials have been posted yet.
-        </p>
+        <p className="text-gray-500">No assignments or materials have been posted yet.</p>
       </div>
     );
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
-      {/* Topic Filter Dropdown */}
+      {/* Topic filter */}
       <div className="mb-8">
-        <label className="block mb-1 font-semibold text-gray-700">
-          Filter by Topic:
-        </label>
+        <label className="block mb-1 font-semibold text-gray-700">Filter by Topic:</label>
         <select
           className="border rounded px-3 py-2 w-full max-w-xs"
           value={selectedTopic || ""}
@@ -1510,16 +1365,15 @@ export default function UnifiedFeed({
         </select>
       </div>
 
-      {/* Feed Groups */}
+      {/* Topic groups */}
       {groupsToShow.map((group) => {
         const items = getSortedItems(
           group.materials || [],
           group.assignments || [],
           group.questions || [],
           group.groupAssignments || [],
-          group.quizzes || [] // <-- pass quizzes
+          group.quizzes || []
         );
-
         if (items.length === 0) return null;
 
         const isNoTopic =
@@ -1532,7 +1386,6 @@ export default function UnifiedFeed({
 
         return (
           <div key={topicKey} className="space-y-6">
-            {/* Only show header if NOT "No Topic" */}
             {!isNoTopic && (
               <div className="relative bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 rounded-2xl p-6 text-white shadow-lg flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -1547,14 +1400,12 @@ export default function UnifiedFeed({
                     </p>
                   </div>
                 </div>
-                {/* Topic Three-dots Menu */}
+
                 <div className="relative">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setTopicMenuOpen(
-                        topicKey === topicMenuOpen ? null : topicKey
-                      );
+                      setTopicMenuOpen(topicKey === topicMenuOpen ? null : topicKey);
                     }}
                     className="p-2 rounded-full hover:bg-white/20"
                     title="Topic Actions"
@@ -1581,7 +1432,7 @@ export default function UnifiedFeed({
                           setDeleteTopicTarget(group.topic);
                           setTopicMenuOpen(null);
                         }}
-                        disabled={isNoTopic} // Disable for 'No Topic'
+                        disabled={isNoTopic}
                       >
                         Delete Topic
                       </button>
@@ -1590,23 +1441,20 @@ export default function UnifiedFeed({
                 </div>
               </div>
             )}
+
             {/* Items */}
             <div className="space-y-4">
               {items.map((item) => (
                 <ContentCard
                   key={item._id}
-                  // assert that `item` really is a MaterialOrAssignment
                   item={item as MaterialOrAssignment}
                   isExpanded={expanded === item._id}
-                  onToggle={() =>
-                    setExpanded(expanded === item._id ? null : item._id)
-                  }
+                  onToggle={() => setExpanded(expanded === item._id ? null : item._id)}
                   onPreview={(node) => {
                     setModalFull(false);
                     setModalContent(node);
                   }}
                   allStudents={allStudents}
-                  // same assertion when you hand it to setEditTarget and setDeleteTarget:
                   onEdit={() => setEditTarget(item as MaterialOrAssignment)}
                   onDelete={() => setDeleteTarget(item as MaterialOrAssignment)}
                   onDeleteGroup={handleDeleteGroup}
@@ -1617,45 +1465,25 @@ export default function UnifiedFeed({
         );
       })}
 
+      {/* Preview modal */}
       {modalContent && (
-        <Modal
-          onClose={() => setModalContent(null)}
-          isFull={modalFull}
-          onToggleFull={() => setModalFull((f) => !f)}
-        >
+        <Modal onClose={() => setModalContent(null)} isFull={modalFull} onToggleFull={() => setModalFull((f) => !f)}>
           {modalContent}
         </Modal>
       )}
 
-      {/* Delete confirmation modal for items */}
+      {/* Delete item modal */}
       {deleteTarget && (
-        <Modal
-          onClose={() => setDeleteTarget(null)}
-          isFull={false}
-          onToggleFull={() => {}}
-          showHeader={false}
-        >
+        <Modal onClose={() => setDeleteTarget(null)} isFull={false} onToggleFull={() => {}} showHeader={false}>
           <div className="p-8 text-center space-y-6">
             <X className="w-10 h-10 mx-auto text-red-500" />
-            <div className="text-xl font-bold">
-              Are you sure you want to delete?
-            </div>
-            <div className="text-gray-500">
-              "{deleteTarget.title}" will be permanently deleted.
-            </div>
+            <div className="text-xl font-bold">Are you sure you want to delete?</div>
+            <div className="text-gray-500">"{deleteTarget.title}" will be permanently deleted.</div>
             <div className="flex justify-center gap-4 mt-6">
-              <button
-                className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300"
-                onClick={() => setDeleteTarget(null)}
-                disabled={loadingDelete}
-              >
+              <button className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300" onClick={() => setDeleteTarget(null)} disabled={loadingDelete}>
                 Cancel
               </button>
-              <button
-                className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700"
-                onClick={handleDeleteItem}
-                disabled={loadingDelete}
-              >
+              <button className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700" onClick={handleDeleteItem} disabled={loadingDelete}>
                 {loadingDelete ? "Deleting..." : "Delete"}
               </button>
             </div>
@@ -1663,29 +1491,17 @@ export default function UnifiedFeed({
         </Modal>
       )}
 
-      {/* Delete confirmation modal for topics */}
+      {/* Delete topic modal */}
       {deleteTopicTarget && (
-        <Modal
-          onClose={() => setDeleteTopicTarget(null)}
-          isFull={false}
-          onToggleFull={() => {}}
-          showHeader={false}
-        >
+        <Modal onClose={() => setDeleteTopicTarget(null)} isFull={false} onToggleFull={() => {}} showHeader={false}>
           <div className="p-8 text-center space-y-6">
             <X className="w-10 h-10 mx-auto text-red-500" />
-            <div className="text-xl font-bold">
-              Are you sure you want to delete this topic?
-            </div>
+            <div className="text-xl font-bold">Are you sure you want to delete this topic?</div>
             <div className="text-gray-500">
-              This topic will be deleted. All related materials and assignments
-              will move to <b>No Topic</b>.
+              This topic will be deleted. All related materials and assignments will move to <b>No Topic</b>.
             </div>
             <div className="flex justify-center gap-4 mt-6">
-              <button
-                className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300"
-                onClick={() => setDeleteTopicTarget(null)}
-                disabled={loadingDelete}
-              >
+              <button className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300" onClick={() => setDeleteTopicTarget(null)} disabled={loadingDelete}>
                 Cancel
               </button>
               <button
@@ -1700,6 +1516,7 @@ export default function UnifiedFeed({
         </Modal>
       )}
 
+      {/* Edit modals */}
       {editTarget && editTarget.type === "material" && (
         <CourseMaterialEditForm
           materialId={editTarget._id}
@@ -1710,17 +1527,13 @@ export default function UnifiedFeed({
           }}
         />
       )}
+
       {editTarget && editTarget.type === "assignment" && (
-        <Modal
-          onClose={() => setEditTarget(null)}
-          isFull={false}
-          onToggleFull={() => {}} // No fullscreen needed for now
-          showHeader={false}
-        >
+        <Modal onClose={() => setEditTarget(null)} isFull={false} onToggleFull={() => {}} showHeader={false}>
           <AssignmentEditForm
             assignmentId={editTarget._id}
             courseInstanceId={courseInstanceId}
-            courseName={courseName} // <-- the subject name
+            courseName={courseName}
             onSuccess={() => {
               setEditTarget(null);
               fetchFeed();
@@ -1729,13 +1542,9 @@ export default function UnifiedFeed({
           />
         </Modal>
       )}
+
       {editTarget && editTarget.type === "groupAssignment" && (
-        <Modal
-          onClose={() => setEditTarget(null)}
-          isFull={false}
-          onToggleFull={() => {}}
-          showHeader={false}
-        >
+        <Modal onClose={() => setEditTarget(null)} isFull={false} onToggleFull={() => {}} showHeader={false}>
           <EditGroupAssignmentForm
             groupAssignmentId={editTarget._id}
             courseInstanceId={courseInstanceId}
@@ -1749,13 +1558,9 @@ export default function UnifiedFeed({
           />
         </Modal>
       )}
+
       {editTarget && editTarget.type === "quiz" && (
-        <Modal
-          onClose={() => setEditTarget(null)}
-          isFull={false}
-          onToggleFull={() => {}}
-          showHeader={false}
-        >
+        <Modal onClose={() => setEditTarget(null)} isFull={false} onToggleFull={() => {}} showHeader={false}>
           <QuizEditForm
             quizId={editTarget._id}
             courseInstanceId={courseInstanceId}
@@ -1763,7 +1568,7 @@ export default function UnifiedFeed({
             onCancel={() => setEditTarget(null)}
             onSuccess={() => {
               setEditTarget(null);
-              fetchFeed(); // refresh quizzes list or feed
+              fetchFeed();
             }}
           />
         </Modal>
@@ -1781,46 +1586,15 @@ export default function UnifiedFeed({
           topic={{
             _id: editTopicTarget._id!,
             title: editTopicTarget.title,
-            // if you also have description, add here
-            // description: editTopicTarget.description
           }}
         />
       )}
 
-      {editTarget && editTarget.type === "question" && (
-        <>
-          {console.log("Editing question:", editTarget._id)}
-          <QuestionEditForm
-            QuestionId={editTarget._id}
-            courseInstanceId={courseInstanceId}
-            courseName={courseName}
-            onSuccess={() => {
-              setEditTarget(null);
-              fetchFeed();
-            }}
-            onCancel={() => setEditTarget(null)}
-          />
-        </>
+      {modalContent && (
+        <Modal onClose={() => setModalContent(null)} isFull={modalFull} onToggleFull={() => setModalFull((f) => !f)}>
+          {modalContent}
+        </Modal>
       )}
-      {/* {editTarget && editTarget.type === "quiz" && (
-  <Modal
-    onClose={() => setEditTarget(null)}
-    isFull={false}
-    onToggleFull={() => {}}
-    showHeader={false}
-  >
-    <QuizEditForm
-      quizId={editTarget._id}
-      courseInstanceId={courseInstanceId}
-      courseName={courseName}
-      onSuccess={() => {
-        setEditTarget(null);
-        fetchFeed();
-      }}
-      onCancel={() => setEditTarget(null)}
-    />
-  </Modal>
-)} */}
     </div>
   );
 }
