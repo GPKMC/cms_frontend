@@ -3,33 +3,31 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Inbox, CalendarClock, Archive, FileX2, Clock8, Send,
-  Search, Plus, RefreshCw, Eye, Trash2, Edit3, CheckCircle2,
+  Search, RefreshCw, Eye, CheckCircle2,
   MoreVertical, Download, ExternalLink, FileText, File, FileSpreadsheet, FileBarChart2,
   Image as ImageIcon, Star, Calendar, Users, BookOpen,
-  Activity, Globe, MessageSquare, Layout, Share2, Copy
+  Activity, Globe, MessageSquare, Layout, Share2, Copy,
+  Edit3Icon
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import AnnouncementReplies from "./new/reply";
+import AnnouncementReplies from "./reply";
 
-/* ========= API CONFIG ========= */
-const BACKEND = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+/* ========= API CONFIG (teacher) ========= */
+const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000").replace(/\/$/, "");
 const EP = {
   list: `${BACKEND}/announcement`,
-  read: (id: string) => `${BACKEND}/announcement/${id}/notification-details?adminView=true`,
-  readFallback: (id: string) => `${BACKEND}/announcement/${id}?adminView=true`,
+  read: (id: string) => `${BACKEND}/announcement/${id}/notification-details`,
+  readFallback: (id: string) => `${BACKEND}/announcement/${id}`,
   markRead: (id: string) => `${BACKEND}/announcement/${id}/read`,
   archive: (id: string) => `${BACKEND}/announcement/${id}/archive`,
   unarchive: (id: string) => `${BACKEND}/announcement/${id}/unarchive`,
-  patch: (id: string) => `${BACKEND}/announcement/${id}`,
-  del: (id: string) => `${BACKEND}/announcement/${id}`,
   folderCounts: `${BACKEND}/announcement/folder-counts`,
 };
 
 const getToken = (): string =>
   (typeof window !== "undefined" &&
-    (localStorage.getItem("token_admin") ||
-      localStorage.getItem("token") ||
-      localStorage.getItem("authToken"))) || "";
+    (localStorage.getItem("token_teacher") ||
+      sessionStorage.getItem("token_teacher"))) || "";
 
 const authHeaders = (json = true): Record<string, string> => {
   const t = getToken();
@@ -146,8 +144,6 @@ const stripHtml = (html?: string) =>
   (html || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 
 const getShareUrl = (id: string) => {
-  // If you have a public detail page, adjust the path below.
-  // Example: /announcement/[id]
   const base =
     (typeof window !== "undefined" ? window.location.origin : "") ||
     process.env.NEXT_PUBLIC_SHARE_BASE ||
@@ -165,16 +161,13 @@ async function shareAnnouncement(a: Pick<AnnFull, "_id" | "title" | "summary" | 
       await (navigator as any).share({ title: a.title, text, url });
       return;
     } catch {
-      // fallthrough to copy
+      // fallthrough
     }
   }
-
-  // Fallbacks
   try {
     await navigator.clipboard?.writeText(url);
     alert("Share link copied to clipboard!");
   } catch {
-    // open a simple chooser via prompt
     window.prompt("Copy this link:", url);
   }
 }
@@ -186,7 +179,6 @@ function matchesFolder(a: AnnLite, f: FolderKey) {
 
   switch (f) {
     case "inbox":
-      // Only LIVE (not archived)
       return !archived && st === "live";
     case "drafts":
       return st === "draft";
@@ -202,14 +194,13 @@ function matchesFolder(a: AnnLite, f: FolderKey) {
   }
 }
 
-
 function paginate<T>(arr: T[], page: number, limit: number) {
   const start = (page - 1) * limit;
   return arr.slice(start, start + limit);
 }
 
 /* ========= Main ========= */
-export default function AnnouncementAdminMailbox() {
+export default function NotificationTeacher() {
   const [folder, setFolder] = useState<FolderKey>("inbox");
   const [q, setQ] = useState("");
   const [type, setType] = useState("");
@@ -217,8 +208,8 @@ export default function AnnouncementAdminMailbox() {
   const [limit, setLimit] = useState(20);
   const [loading, setLoading] = useState(false);
 
-  const [allRows, setAllRows] = useState<AnnLite[]>([]); // raw from API for admin view
-  const [rows, setRows] = useState<AnnLite[]>([]);        // filtered + paginated for the list
+  const [allRows, setAllRows] = useState<AnnLite[]>([]);
+  const [rows, setRows] = useState<AnnLite[]>([]);
   const [total, setTotal] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -229,9 +220,7 @@ export default function AnnouncementAdminMailbox() {
   const pages = useMemo(() => Math.max(1, Math.ceil((total || 0) / limit)), [total, limit]);
   const startIndex = (page - 1) * limit;
 
-  // const menuRef = useRef<HTMLDivElement | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
-
   const router = useRouter();
 
   useEffect(() => {
@@ -251,14 +240,12 @@ export default function AnnouncementAdminMailbox() {
     };
   }, [menuFor]);
 
-
-  // refilter + repaginate any time folder/page/limit/search/type/allRows change
+  // refilter + repaginate when deps change
   useEffect(() => {
     const typed = type.trim().toLowerCase();
     const term = q.trim().toLowerCase();
 
     let base = allRows;
-
     if (typed) base = base.filter(r => (r.type || "").toLowerCase() === typed);
     if (term) {
       base = base.filter(r =>
@@ -272,7 +259,6 @@ export default function AnnouncementAdminMailbox() {
     setRows(paged);
     setTotal(filtered.length);
 
-    // keep selected item visible; if not present, select first
     if (selectedId && !filtered.some(r => r._id === selectedId)) {
       setSelectedId(filtered[0]?._id || null);
     } else if (!selectedId && filtered[0]?._id) {
@@ -288,214 +274,160 @@ export default function AnnouncementAdminMailbox() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ======= API Calls ======= */
-async function fetchList() {
-  try {
-    setLoading(true);
-
-    // Pull a generous page (backend caps at ~100). We do client filtering/pagination.
-    const qs = buildQS({
-      page: 1,
-      limit: 100,
-      adminView: true, // crucial for admin (drafts/scheduled/expired)
-    });
-
-    const res = await fetch(`${EP.list}?${qs}`, {
-      headers: { ...authHeaders(false) },
-      cache: "no-store",
-    });
-
-    const json = await res.json().catch(() => ({}));
-    const items: any[] =
-      Array.isArray(json?.data) ? json.data :
-      Array.isArray(json?.items) ? json.items :
-      Array.isArray(json) ? json : [];
-
-    const normalized = items.map(normalizeAnn);
-    setAllRows(normalized);
-
-    // Immediate local counts so chips are correct even if counts API lags
-    setFolderCounts(computeCounts(normalized));
-  } catch (e) {
-    console.error("fetchList error", e);
-    setAllRows([]);
-  } finally {
-    setLoading(false);
-  }
-}
-// ⬇️ Add this helper in your utils section (anywhere above the component)
-function computeCounts(list: AnnLite[]): FolderCounts {
-  return list.reduce<FolderCounts>(
-    (acc, a) => {
-      const st = status(a);
-      acc.all++;
-      if (st === "draft") acc.drafts++;
-      if (st === "scheduled") acc.scheduled++;
-      if (st === "expired") acc.expired++;
-      if (st === "live") acc.live++;
-      if (a?.myState?.archived) acc.archived++;
-      if (!a?.myState?.archived && st === "live") acc.inbox++;
-      return acc;
-    },
-    { all: 0, drafts: 0, scheduled: 0, expired: 0, live: 0, archived: 0, inbox: 0 }
-  );
-}
-useEffect(() => {
-  setFolderCounts(computeCounts(allRows));
-}, [allRows]);
-
-
-// ⬇️ Replace your existing fetchFolderCounts with this
-async function fetchFolderCounts() {
-  try {
-    const res = await fetch(`${EP.folderCounts}?adminView=true`, {
-      headers: { ...authHeaders(false) },
-      cache: "no-store",
-    });
-    if (!res.ok) throw new Error("counts not ok");
-
-    const data = await res.json();
-    const d = data?.data || data;
-
-    // Map possible backend key variants for "archived"
-    const serverCounts: FolderCounts = {
-      all: Number(d?.all ?? 0),
-      drafts: Number(d?.drafts ?? 0),
-      scheduled: Number(d?.scheduled ?? 0),
-      expired: Number(d?.expired ?? 0),
-      live: Number(d?.live ?? 0),
-      archived: Number(d?.archived ?? d?.archive ?? d?.archieve ?? 0),
-      inbox: Number(d?.inbox ?? 0),
-    };
-
-    // Merge with local calculation as a safety net
-    const localCounts = computeCounts(allRows);
-    setFolderCounts({
-      ...serverCounts,
-      archived: serverCounts.archived || localCounts.archived,
-    });
-  } catch (e) {
-    // Fallback entirely to local calculation
-    setFolderCounts(computeCounts(allRows));
-  }
-}
-
- async function archive(id: string) {
-  // close any open menu quickly for better UX
-  setMenuFor(null);
-
-  // 1) optimistic UI update
-  const prev = allRows;
-  const next = allRows.map(a =>
-    a._id === id
-      ? {
-          ...a,
-          myState: {
-            ...(a.myState || { readAt: null, archived: false, archivedAt: null }),
-            archived: true,
-            archivedAt: new Date().toISOString(),
-          },
-        }
-      : a
-  );
-  setAllRows(next);
-  setFolderCounts(computeCounts(next)); // instant chip refresh
-
-  // (optional) jump to the Archived folder right away
-  // setFolder("archived");
-
-  try {
-    const res = await fetch(EP.archive(id), {
-      method: "POST",
-      headers: authHeaders(true),
-      body: JSON.stringify({}),
-    });
-    if (!res.ok) throw new Error("Archive failed");
-
-    // 2) light re-sync (don’t block UI)
-    fetchFolderCounts();
-    fetchList();
-  } catch (e) {
-    console.error("archive error", e);
-    // 3) revert optimistic change if the server call failed
-    setAllRows(prev);
-    setFolderCounts(computeCounts(prev));
-    alert("Could not archive. Please try again.");
-  }
-}
-
-async function unarchive(id: string) {
-  setMenuFor(null);
-
-  const prev = allRows;
-  const next = allRows.map(a =>
-    a._id === id
-      ? {
-          ...a,
-          myState: {
-            ...(a.myState || { readAt: null, archived: false, archivedAt: null }),
-            archived: false,
-            archivedAt: null,
-          },
-        }
-      : a
-  );
-  setAllRows(next);
-  setFolderCounts(computeCounts(next)); // instant chip refresh
-
-  try {
-    const res = await fetch(EP.unarchive(id), {
-      method: "POST",
-      headers: authHeaders(true),
-      body: JSON.stringify({}),
-    });
-    if (!res.ok) throw new Error("Unarchive failed");
-
-    fetchFolderCounts();
-    fetchList();
-  } catch (e) {
-    console.error("unarchive error", e);
-    setAllRows(prev);
-    setFolderCounts(computeCounts(prev));
-    alert("Could not unarchive. Please try again.");
-  }
-}
-
-
-  async function remove(id: string) {
-    if (!confirm("Delete this announcement permanently?")) return;
+  /* ======= API Calls (teacher) ======= */
+  async function fetchList() {
     try {
-      await fetch(EP.del(id), { method: "DELETE", headers: authHeaders(false) });
-      await fetchList(); await fetchFolderCounts();
-    } catch (e) { console.error("delete error", e); }
-  }
-
-  // NEW: publish a draft immediately
-  async function publishNow(id: string) {
-    try {
-      const res = await fetch(EP.patch(id), {
-        method: "PATCH",
-        headers: authHeaders(true),
-        body: JSON.stringify({
-          published: true,
-          publishAt: new Date().toISOString(),
-        }),
+      setLoading(true);
+      const qs = buildQS({ page: 1, limit: 100 }); // no adminView for teacher
+      const res = await fetch(`${EP.list}?${qs}`, {
+        headers: { ...authHeaders(false) },
+        cache: "no-store",
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error || "Failed to publish");
-      }
-      await fetchList();
-      await fetchFolderCounts();
-      alert("Published 🎉");
-    } catch (e: any) {
-      alert(e?.message || "Could not publish. Check publish/expiry dates.");
-      console.error("publishNow error", e);
+
+      const json = await res.json().catch(() => ({}));
+      const items: any[] =
+        Array.isArray(json?.data) ? json.data :
+        Array.isArray(json?.items) ? json.items :
+        Array.isArray(json) ? json : [];
+
+      const normalized = items.map(normalizeAnn);
+      setAllRows(normalized);
+      setFolderCounts(computeCounts(normalized)); // local quick counts
+    } catch (e) {
+      console.error("fetchList error", e);
+      setAllRows([]);
+    } finally {
+      setLoading(false);
     }
   }
 
-  const selectedOne = rows.find((r) => r._id === selectedId) || allRows.find(r => r._id === selectedId) || null;
+  function computeCounts(list: AnnLite[]): FolderCounts {
+    return list.reduce<FolderCounts>(
+      (acc, a) => {
+        const st = status(a);
+        acc.all++;
+        if (st === "draft") acc.drafts++;
+        if (st === "scheduled") acc.scheduled++;
+        if (st === "expired") acc.expired++;
+        if (st === "live") acc.live++;
+        if (a?.myState?.archived) acc.archived++;
+        if (!a?.myState?.archived && st === "live") acc.inbox++;
+        return acc;
+      },
+      { all: 0, drafts: 0, scheduled: 0, expired: 0, live: 0, archived: 0, inbox: 0 }
+    );
+  }
 
+  useEffect(() => {
+    setFolderCounts(computeCounts(allRows));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allRows]);
+
+  async function fetchFolderCounts() {
+    try {
+      const res = await fetch(`${EP.folderCounts}`, {
+        headers: { ...authHeaders(false) },
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error("counts not ok");
+
+      const data = await res.json();
+      const d = data?.data || data;
+
+      const serverCounts: FolderCounts = {
+        all: Number(d?.all ?? 0),
+        drafts: Number(d?.drafts ?? 0),
+        scheduled: Number(d?.scheduled ?? 0),
+        expired: Number(d?.expired ?? 0),
+        live: Number(d?.live ?? 0),
+        archived: Number(d?.archived ?? d?.archive ?? d?.archieve ?? 0),
+        inbox: Number(d?.inbox ?? 0),
+      };
+
+      const localCounts = computeCounts(allRows);
+      setFolderCounts({
+        ...serverCounts,
+        archived: serverCounts.archived || localCounts.archived,
+      });
+    } catch {
+      setFolderCounts(computeCounts(allRows));
+    }
+  }
+
+  async function archive(id: string) {
+    setMenuFor(null);
+    const prev = allRows;
+    const next = allRows.map(a =>
+      a._id === id
+        ? {
+            ...a,
+            myState: {
+              ...(a.myState || { readAt: null, archived: false, archivedAt: null }),
+              archived: true,
+              archivedAt: new Date().toISOString(),
+            },
+          }
+        : a
+    );
+    setAllRows(next);
+    setFolderCounts(computeCounts(next));
+
+    try {
+      const res = await fetch(EP.archive(id), {
+        method: "POST",
+        headers: authHeaders(true),
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error("Archive failed");
+      fetchFolderCounts();
+      fetchList();
+    } catch (e) {
+      console.error("archive error", e);
+      setAllRows(prev);
+      setFolderCounts(computeCounts(prev));
+      alert("Could not archive. Please try again.");
+    }
+  }
+
+  async function unarchive(id: string) {
+    setMenuFor(null);
+    const prev = allRows;
+    const next = allRows.map(a =>
+      a._id === id
+        ? {
+            ...a,
+            myState: {
+              ...(a.myState || { readAt: null, archived: false, archivedAt: null }),
+              archived: false,
+              archivedAt: null,
+            },
+          }
+        : a
+    );
+    setAllRows(next);
+    setFolderCounts(computeCounts(next));
+
+    try {
+      const res = await fetch(EP.unarchive(id), {
+        method: "POST",
+        headers: authHeaders(true),
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error("Unarchive failed");
+      fetchFolderCounts();
+      fetchList();
+    } catch (e) {
+      console.error("unarchive error", e);
+      setAllRows(prev);
+      setFolderCounts(computeCounts(prev));
+      alert("Could not unarchive. Please try again.");
+    }
+  }
+
+  const selectedOne =
+    rows.find((r) => r._id === selectedId) ||
+    allRows.find((r) => r._id === selectedId) ||
+    null;
 
   /* ========= UI ========= */
   return (
@@ -513,7 +445,7 @@ async function unarchive(id: string) {
                   <h1 className="text-2xl font-black bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent">
                     Announcement Hub
                   </h1>
-                  <p className="text-sm text-gray-600">Manage communications efficiently</p>
+                  <p className="text-sm text-gray-600">Stay on top of updates</p>
                 </div>
               </div>
 
@@ -525,13 +457,7 @@ async function unarchive(id: string) {
                   <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                   Refresh
                 </button>
-                <button
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-sm font-medium"
-                  onClick={() => { router.push("/admin/announcement/new"); }}
-                >
-                  <Plus className="h-4 w-4" />
-                  Create
-                </button>
+                {/* (Teacher) — no Create button */}
               </div>
             </div>
 
@@ -560,7 +486,7 @@ async function unarchive(id: string) {
                 </div>
                 <nav className="p-3 space-y-1">
                   <FolderBtn icon={<Inbox className="h-4 w-4" />} label="Inbox" count={folderCounts.inbox} active={folder === "inbox"} onClick={() => setFolder("inbox")} />
-                  <FolderBtn icon={<Edit3 className="h-4 w-4" />} label="Drafts" count={folderCounts.drafts} active={folder === "drafts"} onClick={() => setFolder("drafts")} />
+                  <FolderBtn icon={<Edit3Icon className="h-4 w-4" />} label="Drafts" count={folderCounts.drafts} active={folder === "drafts"} onClick={() => setFolder("drafts")} />
                   <FolderBtn icon={<CalendarClock className="h-4 w-4" />} label="Scheduled" count={folderCounts.scheduled} active={folder === "scheduled"} onClick={() => setFolder("scheduled")} />
                   <FolderBtn icon={<Clock8 className="h-4 w-4" />} label="Expired" count={folderCounts.expired} active={folder === "expired"} onClick={() => setFolder("expired")} />
                   <FolderBtn icon={<Archive className="h-4 w-4" />} label="Archived" count={folderCounts.archived} active={folder === "archived"} onClick={() => setFolder("archived")} />
@@ -658,15 +584,8 @@ async function unarchive(id: string) {
                                     >
                                       <Share2 className="h-3 w-3" /> Share
                                     </button>
-                                    {st === "draft" && (
-                                      <button
-                                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs"
-                                        onClick={(e) => { e.stopPropagation(); setMenuFor(null); publishNow(r._id); }}
-                                      >
-                                        <Send className="h-3 w-3" /> Publish now
-                                      </button>
-                                    )}
 
+                                    {/* Teacher: Archive/Unarchive only (no edit, publish, delete) */}
                                     {!r?.myState?.archived ? (
                                       <button className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs" onClick={() => archive(r._id)}>
                                         <Archive className="h-3 w-3" /> Archive
@@ -676,9 +595,6 @@ async function unarchive(id: string) {
                                         <Archive className="h-3 w-3" /> Unarchive
                                       </button>
                                     )}
-                                    <button className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs text-red-600" onClick={() => remove(r._id)}>
-                                      <Trash2 className="h-3 w-3" /> Delete
-                                    </button>
                                   </div>
                                 )}
                               </div>
@@ -733,28 +649,14 @@ async function unarchive(id: string) {
                         >
                           <Share2 className="h-4 w-4" />
                         </button>
-                        <button
-                          className="p-2 rounded-lg bg-white/20 text-white hover:bg-white/30"
-                          title="Edit"
-                          onClick={() => router.push(`/admin/announcement/${selectedOne._id}/edit`)}
-                        >
-                          <Edit3 className="h-4 w-4" />
-                        </button>
-                        {status(selectedOne) === "draft" && (
-                          <button
-                            className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
-                            onClick={() => publishNow(selectedOne._id)}
-                          >
-                            Publish now
-                          </button>
-                        )}
+                        {/* Teacher: no edit/publish buttons here */}
                       </div>
                     )}
                   </div>
                 </div>
 
                 <div className="flex-1 overflow-auto p-6">
-                  {selectedId ? <BeautifulPreview id={selectedId} onShare={shareAnnouncement} onEdit={(id) => router.push(`/admin/announcement/${id}/edit`)} /> : <EmptyPreview />}
+                  {selectedId ? <BeautifulPreview id={selectedId} onShare={shareAnnouncement} /> : <EmptyPreview />}
                 </div>
 
                 {selectedOne && (
@@ -772,11 +674,7 @@ async function unarchive(id: string) {
                           Unarchive
                         </button>
                       )}
-                      <button className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700" onClick={() => router.push(`/admin/announcement/${selectedOne._id}/edit`)}>
-                        Edit
-                      </button>
-
-
+                      {/* Teacher: no Edit here */}
                     </div>
                   </div>
                 )}
@@ -854,7 +752,7 @@ function StatusBadge({ status }: { status: string }) {
     live: <Activity className="h-2 w-2" />,
     scheduled: <Calendar className="h-2 w-2" />,
     expired: <Clock8 className="h-2 w-2" />,
-    draft: <Edit3 className="h-2 w-2" />,
+    draft: <Edit3Icon className="h-2 w-2" />,
   };
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${colors[status] || colors.draft}`}>
@@ -926,10 +824,9 @@ function EmptyPreview() {
 }
 
 /* ========= Preview (fetches full details) ========= */
-function BeautifulPreview({ id, onShare, onEdit }: {
+function BeautifulPreview({ id, onShare }: {
   id: string;
   onShare: (a: Pick<AnnFull, "_id" | "title" | "summary" | "contentHtml">) => void;
-  onEdit: (id: string) => void;
 }) {
   const [item, setItem] = useState<AnnFull | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1080,14 +977,8 @@ function BeautifulPreview({ id, onShare, onEdit }: {
         </div>
       ) : null}
 
+      {/* Share row (Teacher: no Edit button) */}
       <div className="flex items-center gap-4 pt-2">
-        <button
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl"
-          onClick={() => onEdit(item._id)}
-        >
-          <Edit3 className="h-5 w-5" />
-          Edit
-        </button>
         <button
           className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl"
           onClick={() => onShare(item)}
@@ -1119,6 +1010,8 @@ function BeautifulPreview({ id, onShare, onEdit }: {
           Telegram
         </a>
       </div>
+
+      {/* Discussion */}
       <div className="bg-white rounded-xl border-2 border-gray-200 shadow-lg overflow-hidden">
         <div className="bg-gradient-to-r from-fuchsia-50 to-violet-50 px-6 py-4 border-b border-gray-200">
           <h3 className="font-bold text-xl text-gray-800 flex items-center gap-3">
@@ -1127,12 +1020,9 @@ function BeautifulPreview({ id, onShare, onEdit }: {
           </h3>
         </div>
         <div className="p-6">
-          {/* You can also pass currentUserId and isAdmin if you have them */}
           <AnnouncementReplies
             announcementId={id}
-            isAdmin={true}              // or compute from your auth context
-            // currentUserId={me?._id}  // optional if you have it
-            adminView={true}            // lets admin reply on drafts/scheduled
+            // (teacher version of replies uses token_teacher internally)
           />
         </div>
       </div>
