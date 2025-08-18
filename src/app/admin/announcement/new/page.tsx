@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import toast from 'react-hot-toast';
+import toast, { Toaster } from 'react-hot-toast';
+
 import {
   Save,
   Upload,
@@ -20,6 +21,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import TiptapEditor from '../notification_rte_comenent';
+import { useRouter } from 'next/navigation';
 
 /** ======= CONFIG ======= */
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000').replace(/\/$/, '');
@@ -197,7 +199,7 @@ export default function AnnouncementCreatePage() {
 
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [docFiles, setDocFiles] = useState<File[]>([]);
-
+  const router = useRouter(); 
   const imagePreviews = useMemo(() => imageFiles.map((f) => URL.createObjectURL(f)), [imageFiles]);
   useEffect(
     () => () => {
@@ -440,80 +442,82 @@ export default function AnnouncementCreatePage() {
     setSelectedBatchIds([]);
   }
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>, forcePublished?: boolean) {
-    e.preventDefault();
-    if (!title.trim()) {
-      notifyError('Title is required');
-      return;
-    }
+async function handleSubmit(e: React.FormEvent<HTMLFormElement>, forcePublished?: boolean) {
+  e.preventDefault();
+  if (!title.trim()) return notifyError('Title is required');
 
-    if (audienceMode === 'faculty') {
-      if (selectedFacultyIds.length === 0) {
-        notifyError('Select at least one faculty (or switch to All).');
-        return;
-      }
-    }
-
-    if (audienceMode === 'batches') {
-      if (!batchFacultyId) {
-        notifyError('Choose a faculty to load its batches.');
-        return;
-      }
-      if (selectedBatchIds.length === 0) {
-        notifyError('Select at least one batch (or use Faculty mode for all batches under that faculty).');
-        return;
-      }
-    }
-
-    setSubmitting(true);
-    try {
-      const [uploadedImages, uploadedDocs] = await Promise.all([uploadFiles(imageFiles), uploadFiles(docFiles)]);
-
-      const payload: AnnouncementPayload = {
-        type,
-        title: title.trim(),
-        summary: summary.trim() || undefined,
-        contentHtml: contentHtml || undefined,
-        images: uploadedImages,
-        files: uploadedDocs,
-        links: links.filter((l) => l.url && /^https?:\/\//i.test(l.url)),
-        published: forcePublished ?? published,
-        publishAt: toISO(publishAt),
-        expiresAt: toISO(expiresAt),
-        pinned,
-        priority,
-        audience: {
-          mode: audienceMode,
-          facultyIds:
-            audienceMode === 'faculty'
-              ? selectedFacultyIds
-              : audienceMode === 'batches' && batchFacultyId
-              ? [batchFacultyId] // for context
-              : [],
-          batchIds: audienceMode === 'batches' ? selectedBatchIds : [],
-        },
-      };
-
-      const res = await fetch(EP.create, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error || 'Failed to create announcement');
-      }
-      notifySuccess(forcePublished ?? published ? 'Announcement published' : 'Draft saved');
-      resetForm();
-    } catch (err: any) {
-      notifyError(err.message || 'Something went wrong');
-    } finally {
-      setSubmitting(false);
+  if (audienceMode === 'faculty' && selectedFacultyIds.length === 0) {
+    return notifyError('Select at least one faculty (or switch to All).');
+  }
+  if (audienceMode === 'batches') {
+    if (!batchFacultyId) return notifyError('Choose a faculty to load its batches.');
+    if (selectedBatchIds.length === 0) {
+      return notifyError('Select at least one batch (or use Faculty mode for all batches under that faculty).');
     }
   }
 
+  setSubmitting(true);
+  try {
+    const [uploadedImages, uploadedDocs] = await Promise.all([
+      uploadFiles(imageFiles),
+      uploadFiles(docFiles),
+    ]);
+
+    const payload: AnnouncementPayload = {
+      type,
+      title: title.trim(),
+      summary: summary.trim() || undefined,
+      contentHtml: contentHtml || undefined,
+      images: uploadedImages,
+      files: uploadedDocs,
+      links: links.filter((l) => l.url && /^https?:\/\//i.test(l.url)),
+      published: forcePublished ?? published,
+      publishAt: toISO(publishAt),
+      expiresAt: toISO(expiresAt),
+      pinned,
+      priority,
+      audience: {
+        mode: audienceMode,
+        facultyIds:
+          audienceMode === 'faculty'
+            ? selectedFacultyIds
+            : audienceMode === 'batches' && batchFacultyId
+            ? [batchFacultyId]
+            : [],
+        batchIds: audienceMode === 'batches' ? selectedBatchIds : [],
+      },
+    };
+
+    const res = await fetch(EP.create, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error || 'Failed to create announcement');
+    }
+
+    const isPublished = forcePublished ?? published;
+    notifySuccess(isPublished ? 'Announcement published' : 'Draft saved');
+
+    // Navigate to the list (route path, not /page.tsx). Small delay lets the toast be seen.
+    setTimeout(() => {
+      router.replace('/admin/announcement');
+    }, 600);
+
+    return; // Don't reset the form; we're leaving this page.
+  } catch (err: any) {
+    notifyError(err?.message || 'Something went wrong');
+  } finally {
+    setSubmitting(false);
+  }
+}
+
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+      <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
       <div className="mx-auto max-w-5xl p-6">
         {/* Header */}
         <div className="mb-8">
