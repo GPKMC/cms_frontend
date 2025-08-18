@@ -9,6 +9,7 @@ import {
   Activity, Globe, MessageSquare, Layout, Share2, Copy
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import AnnouncementReplies from "./new/reply";
 
 /* ========= API CONFIG ========= */
 const BACKEND = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
@@ -27,8 +28,8 @@ const EP = {
 const getToken = (): string =>
   (typeof window !== "undefined" &&
     (localStorage.getItem("token_admin") ||
-     localStorage.getItem("token") ||
-     localStorage.getItem("authToken"))) || "";
+      localStorage.getItem("token") ||
+      localStorage.getItem("authToken"))) || "";
 
 const authHeaders = (json = true): Record<string, string> => {
   const t = getToken();
@@ -185,7 +186,8 @@ function matchesFolder(a: AnnLite, f: FolderKey) {
 
   switch (f) {
     case "inbox":
-      return !archived && (st === "live" || st === "scheduled");
+      // Only LIVE (not archived)
+      return !archived && st === "live";
     case "drafts":
       return st === "draft";
     case "scheduled":
@@ -199,6 +201,7 @@ function matchesFolder(a: AnnLite, f: FolderKey) {
       return true;
   }
 }
+
 
 function paginate<T>(arr: T[], page: number, limit: number) {
   const start = (page - 1) * limit;
@@ -301,8 +304,8 @@ export default function AnnouncementAdminMailbox() {
       const json = await res.json().catch(() => ({}));
       const items: any[] =
         Array.isArray(json?.data) ? json.data :
-        Array.isArray(json?.items) ? json.items :
-        Array.isArray(json) ? json : [];
+          Array.isArray(json?.items) ? json.items :
+            Array.isArray(json) ? json : [];
 
       const normalized = items.map(normalizeAnn);
       setAllRows(normalized);
@@ -340,7 +343,7 @@ export default function AnnouncementAdminMailbox() {
           if (st === "expired") acc.expired++;
           if (st === "live") acc.live++;
           if (a?.myState?.archived) acc.archived++;
-          if (!a?.myState?.archived && (st === "live" || st === "scheduled")) acc.inbox++;
+          if (!a?.myState?.archived && st === "live") acc.inbox++;
           return acc;
         },
         { all: 0, drafts: 0, scheduled: 0, expired: 0, live: 0, archived: 0, inbox: 0 }
@@ -652,9 +655,8 @@ function StatChip({ label, value, active, onClick }: { label: string; value: num
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-        active ? "bg-blue-100 border-blue-300 text-blue-700" : "bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200"
-      }`}
+      className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${active ? "bg-blue-100 border-blue-300 text-blue-700" : "bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200"
+        }`}
     >
       {label} <span className="bg-white/50 px-2 py-1 rounded-full text-xs">{value}</span>
     </button>
@@ -667,9 +669,8 @@ function FolderBtn({
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left text-sm transition-colors ${
-        active ? "bg-blue-100 text-blue-700 border border-blue-200" : "hover:bg-gray-100 text-gray-700"
-      }`}
+      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left text-sm transition-colors ${active ? "bg-blue-100 text-blue-700 border border-blue-200" : "hover:bg-gray-100 text-gray-700"
+        }`}
     >
       <div className="flex items-center gap-2">
         {icon}
@@ -977,6 +978,23 @@ function BeautifulPreview({ id, onShare, onEdit }: {
           <Share2 className="h-5 w-5" />
           Telegram
         </a>
+      </div>
+      <div className="bg-white rounded-xl border-2 border-gray-200 shadow-lg overflow-hidden">
+        <div className="bg-gradient-to-r from-fuchsia-50 to-violet-50 px-6 py-4 border-b border-gray-200">
+          <h3 className="font-bold text-xl text-gray-800 flex items-center gap-3">
+            <MessageSquare className="h-6 w-6" />
+            Discussion
+          </h3>
+        </div>
+        <div className="p-6">
+          {/* You can also pass currentUserId and isAdmin if you have them */}
+          <AnnouncementReplies
+            announcementId={id}
+            isAdmin={true}              // or compute from your auth context
+            // currentUserId={me?._id}  // optional if you have it
+            adminView={true}            // lets admin reply on drafts/scheduled
+          />
+        </div>
       </div>
     </div>
   );
