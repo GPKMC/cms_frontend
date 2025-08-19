@@ -47,11 +47,12 @@ function authHeaders(json = true): Record<string, string> {
 
 /* ========= Types ========= */
 type ReplyFile = { url: string; originalname?: string; filetype?: string; size?: number; caption?: string };
+type ReplyAuthor = { _id: string; username?: string; name?: string };
 type Reply = {
   _id: string;
   announcement: string;
   parent: string | null;
-  author: string; // user id
+  author: string | ReplyAuthor; // id or populated author
   contentHtml: string;
   files?: ReplyFile[];
   isDeleted?: boolean;
@@ -67,6 +68,27 @@ const fmt = (s?: string) => (s ? new Date(s).toLocaleString() : '—');
 const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
 const BYTES = (n?: number) =>
   n == null ? '' : n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 ** 2).toFixed(1)} MB`;
+
+// Get a stable author id
+const authorId = (a: string | ReplyAuthor) => (typeof a === 'string' ? a : a?._id || '');
+// Human name for author (respects "You")
+function authorLabel(a: string | ReplyAuthor, currentUserId?: string) {
+  const id = authorId(a);
+  if (currentUserId && id && id === currentUserId) return 'You';
+  if (typeof a === 'object' && a) return a.username || a.name || 'User';
+  return 'User';
+}
+// Initials/badge text
+function authorBadgeText(a: string | ReplyAuthor) {
+  if (typeof a === 'object' && a) {
+    const base = a.username || a.name || a._id || '';
+    const parts = String(base).trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return (base.slice(0, 2) || 'US').toUpperCase();
+  }
+  // fallback: last 2 chars of id
+  return String(a || 'US').slice(-2).toUpperCase();
+}
 
 async function uploadFiles(files: File[]): Promise<ReplyFile[]> {
   if (!files.length) return [];
@@ -112,7 +134,7 @@ export default function TeacherAnnouncementReplies({
   sort?: 'asc' | 'desc';
 }) {
   const { user } = useUser();
-  const currentUserId = user?._id || user?.id || '';
+  const currentUserId = (user?._id || user?.id || '') as string;
 
   const [loading, setLoading] = useState(false);
   const [root, setRoot] = useState<Reply[]>([]);
@@ -316,7 +338,7 @@ function ReplyItem({
   currentUserId?: string;
   onChanged: () => void;
 }) {
-  const canEdit = !!currentUserId && currentUserId === reply.author;
+  const canEdit = !!currentUserId && authorId(reply.author) === currentUserId;
 
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<Reply[]>([]);
@@ -436,12 +458,12 @@ function ReplyItem({
       <div className={`rounded-lg border ${reply.isDeleted ? 'bg-red-50/40 border-red-200' : 'bg-white'}`}>
         <div className="p-3 flex items-start gap-3">
           <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 grid place-items-center text-xs shrink-0">
-            {String(reply.author || '').slice(-2).toUpperCase()}
+            {authorBadgeText(reply.author)}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 text-xs text-gray-500">
               <span className="font-medium text-gray-700">
-                {currentUserId === reply.author ? 'You' : 'User'}
+                {authorLabel(reply.author, currentUserId)}
               </span>
               <span>·</span>
               <span>{fmt(reply.createdAt)}</span>
@@ -579,7 +601,7 @@ function ReplyItem({
                   <div key={ch._id} className={`pl-4 border-l ${ch.isDeleted ? 'border-red-200' : 'border-gray-200'}`}>
                     <div className="text-[11px] text-gray-500 mb-1">
                       <span className="font-medium text-gray-700">
-                        {currentUserId === ch.author ? 'You' : 'User'}
+                        {authorLabel(ch.author, currentUserId)}
                       </span>{' '}
                       · {fmt(ch.createdAt)}
                       {ch.editedAt ? ` · edited ${fmt(ch.editedAt)}` : ''}
