@@ -18,7 +18,7 @@ const sidebarTeacherItems = [
   { id: 2, label: "My Classes", icon: <FaBookOpen />, page: "/teacher/dashboard/class" },
   { id: 3, label: "Assignments", icon: <FaClipboardList />, page: "/teacher/dashboard/assignments" },
   { id: 4, label: "Attendance", icon: <FaCalendarCheck />, page: "/teacher/dashboard/attendance" },
-  { id: 5, label: "Grades", icon: <FaStar />, page: "/teacher/dashboard/grades" },
+  { id: 5, label: "Exam/practical", icon: <FaStar />, page: "/teacher/dashboard/exam" },
   { id: 6, label: "Announcements", icon: <FaBullhorn />, page: "/teacher/dashboard/announcements" },
   { id: 7, label: "Profile", icon: <FaUser />, page: "/teacher/dashboard/myProfile" },
 ];
