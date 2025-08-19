@@ -2,14 +2,13 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Inbox, CalendarClock, Archive, FileX2, Clock8, Send,
+  Inbox, Archive, FileX2,
   Search, RefreshCw, Eye, CheckCircle2,
   MoreVertical, Download, ExternalLink, FileText, File, FileSpreadsheet, FileBarChart2,
   Image as ImageIcon, Star, Calendar, Users, BookOpen,
   Activity, Globe, MessageSquare, Layout, Share2, Copy,
-  Edit3Icon
+  Edit3 as Edit3Icon
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import AnnouncementReplies from "./reply";
 
 /* ========= API CONFIG (teacher) ========= */
@@ -22,6 +21,7 @@ const EP = {
   archive: (id: string) => `${BACKEND}/announcement/${id}/archive`,
   unarchive: (id: string) => `${BACKEND}/announcement/${id}/unarchive`,
   folderCounts: `${BACKEND}/announcement/folder-counts`,
+  replyCounts: (id: string) => `${BACKEND}/announcement/${id}/reply-counts`, // NEW
 };
 
 const getToken = (): string =>
@@ -59,8 +59,6 @@ type AnnLite = {
   summary?: string;
   audience?: Audience;
   published?: boolean;
-  publishAt?: string | null;
-  expiresAt?: string | null;
   pinned?: boolean;
   priority?: "normal" | "high" | "urgent";
   createdAt?: string;
@@ -68,17 +66,17 @@ type AnnLite = {
   images?: FileObj[];
   files?: FileObj[];
   myState?: MyState;
+  replyCount?: number;      // NEW
+  newReplyCount?: number;   // NEW
 };
 
 type AnnFull = AnnLite & { contentHtml?: string };
 
-type FolderKey = "inbox" | "drafts" | "scheduled" | "expired" | "archived" | "all";
+type FolderKey = "inbox" | "drafts" | "archived" | "all";
 
 type FolderCounts = {
   all: number;
   drafts: number;
-  scheduled: number;
-  expired: number;
   live: number;
   archived: number;
   inbox: number;
@@ -96,15 +94,9 @@ const formatBytes = (n?: number) => {
   return `${size.toFixed(size < 10 ? 1 : 0)} ${u[i]}`;
 };
 
+// SIMPLIFIED: only draft vs live (no scheduled/expired)
 function status(a: AnnLite) {
-  const now = Date.now();
-  const pub = !!a?.published;
-  const starts = !a?.publishAt || new Date(a.publishAt).getTime() <= now;
-  const notExpired = !a?.expiresAt || new Date(a.expiresAt).getTime() > now;
-  if (!pub) return "draft";
-  if (!starts) return "scheduled";
-  if (!notExpired) return "expired";
-  return "live";
+  return a?.published ? "live" : "draft";
 }
 
 const ensureArr = <T,>(v: T | T[] | null | undefined): T[] => (Array.isArray(v) ? v : v ? [v] : []);
@@ -115,8 +107,6 @@ const normalizeAnn = (x: any): AnnFull => ({
   summary: x?.summary || x?.shortDescription || "",
   audience: x?.audience || { mode: "all" },
   published: !!x?.published,
-  publishAt: x?.publishAt || x?.publishedAt || null,
-  expiresAt: x?.expiresAt || null,
   pinned: !!x?.pinned,
   priority: x?.priority || "normal",
   createdAt: x?.createdAt || x?.created_at || null,
@@ -137,6 +127,8 @@ const normalizeAnn = (x: any): AnnFull => ({
   })),
   myState: x?.myState || { readAt: null, archived: !!x?.archived, archivedAt: x?.archivedAt || null },
   contentHtml: x?.contentHtml || x?.content || "",
+  replyCount: Number(x?.replyCount ?? 0),        // NEW
+  newReplyCount: Number(x?.newReplyCount ?? 0),  // NEW
 });
 
 /* ===== Share helpers ===== */
@@ -182,10 +174,6 @@ function matchesFolder(a: AnnLite, f: FolderKey) {
       return !archived && st === "live";
     case "drafts":
       return st === "draft";
-    case "scheduled":
-      return st === "scheduled";
-    case "expired":
-      return st === "expired";
     case "archived":
       return archived;
     case "all":
@@ -214,14 +202,13 @@ export default function NotificationTeacher() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [folderCounts, setFolderCounts] = useState<FolderCounts>({
-    all: 0, drafts: 0, scheduled: 0, expired: 0, live: 0, archived: 0, inbox: 0,
+    all: 0, drafts: 0, live: 0, archived: 0, inbox: 0,
   });
 
   const pages = useMemo(() => Math.max(1, Math.ceil((total || 0) / limit)), [total, limit]);
   const startIndex = (page - 1) * limit;
 
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const router = useRouter();
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -278,7 +265,7 @@ export default function NotificationTeacher() {
   async function fetchList() {
     try {
       setLoading(true);
-      const qs = buildQS({ page: 1, limit: 100 }); // no adminView for teacher
+      const qs = buildQS({ page: 1, limit: 100 }); // teacher view
       const res = await fetch(`${EP.list}?${qs}`, {
         headers: { ...authHeaders(false) },
         cache: "no-store",
@@ -307,14 +294,12 @@ export default function NotificationTeacher() {
         const st = status(a);
         acc.all++;
         if (st === "draft") acc.drafts++;
-        if (st === "scheduled") acc.scheduled++;
-        if (st === "expired") acc.expired++;
         if (st === "live") acc.live++;
         if (a?.myState?.archived) acc.archived++;
         if (!a?.myState?.archived && st === "live") acc.inbox++;
         return acc;
       },
-      { all: 0, drafts: 0, scheduled: 0, expired: 0, live: 0, archived: 0, inbox: 0 }
+      { all: 0, drafts: 0, live: 0, archived: 0, inbox: 0 }
     );
   }
 
@@ -334,11 +319,10 @@ export default function NotificationTeacher() {
       const data = await res.json();
       const d = data?.data || data;
 
-      const serverCounts: FolderCounts = {
+      // Map server counts to simplified model (ignore scheduled/expired)
+      const serverCounts: Partial<FolderCounts> = {
         all: Number(d?.all ?? 0),
         drafts: Number(d?.drafts ?? 0),
-        scheduled: Number(d?.scheduled ?? 0),
-        expired: Number(d?.expired ?? 0),
         live: Number(d?.live ?? 0),
         archived: Number(d?.archived ?? d?.archive ?? d?.archieve ?? 0),
         inbox: Number(d?.inbox ?? 0),
@@ -346,8 +330,11 @@ export default function NotificationTeacher() {
 
       const localCounts = computeCounts(allRows);
       setFolderCounts({
-        ...serverCounts,
-        archived: serverCounts.archived || localCounts.archived,
+        all: serverCounts.all ?? localCounts.all,
+        drafts: serverCounts.drafts ?? localCounts.drafts,
+        live: serverCounts.live ?? localCounts.live,
+        archived: serverCounts.archived ?? localCounts.archived,
+        inbox: serverCounts.inbox ?? localCounts.inbox,
       });
     } catch {
       setFolderCounts(computeCounts(allRows));
@@ -464,9 +451,7 @@ export default function NotificationTeacher() {
             <div className="px-6 pb-4">
               <div className="flex gap-2 flex-wrap">
                 <StatChip label="Inbox" value={folderCounts.inbox} active={folder === "inbox"} onClick={() => setFolder("inbox")} />
-                <StatChip label="Drafts" value={folderCounts.drafts} active={folder === "drafts"} onClick={() => setFolder("drafts")} />
-                <StatChip label="Scheduled" value={folderCounts.scheduled} active={folder === "scheduled"} onClick={() => setFolder("scheduled")} />
-                <StatChip label="Expired" value={folderCounts.expired} active={folder === "expired"} onClick={() => setFolder("expired")} />
+                {/* <StatChip label="Drafts" value={folderCounts.drafts} active={folder === "drafts"} onClick={() => setFolder("drafts")} /> */}
                 <StatChip label="Archived" value={folderCounts.archived} active={folder === "archived"} onClick={() => setFolder("archived")} />
                 <StatChip label="All" value={folderCounts.all} active={folder === "all"} onClick={() => setFolder("all")} />
               </div>
@@ -486,9 +471,7 @@ export default function NotificationTeacher() {
                 </div>
                 <nav className="p-3 space-y-1">
                   <FolderBtn icon={<Inbox className="h-4 w-4" />} label="Inbox" count={folderCounts.inbox} active={folder === "inbox"} onClick={() => setFolder("inbox")} />
-                  <FolderBtn icon={<Edit3Icon className="h-4 w-4" />} label="Drafts" count={folderCounts.drafts} active={folder === "drafts"} onClick={() => setFolder("drafts")} />
-                  <FolderBtn icon={<CalendarClock className="h-4 w-4" />} label="Scheduled" count={folderCounts.scheduled} active={folder === "scheduled"} onClick={() => setFolder("scheduled")} />
-                  <FolderBtn icon={<Clock8 className="h-4 w-4" />} label="Expired" count={folderCounts.expired} active={folder === "expired"} onClick={() => setFolder("expired")} />
+                  {/* <FolderBtn icon={<Edit3Icon className="h-4 w-4" />} label="Drafts" count={folderCounts.drafts} active={folder === "drafts"} onClick={() => setFolder("drafts")} /> */}
                   <FolderBtn icon={<Archive className="h-4 w-4" />} label="Archived" count={folderCounts.archived} active={folder === "archived"} onClick={() => setFolder("archived")} />
                   <FolderBtn icon={<FileX2 className="h-4 w-4" />} label="All" count={folderCounts.all} active={folder === "all"} onClick={() => setFolder("all")} />
                 </nav>
@@ -564,40 +547,33 @@ export default function NotificationTeacher() {
                                   <AudiencePill audience={r.audience} />
                                   <StatusBadge status={st} />
                                   <TypeBadge type={r.type} />
+
+                                  {/* NEW: replies pill */}
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border
+                                      ${r.newReplyCount ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-gray-50 border-gray-200 text-gray-600"}`}
+                                    title="Replies • New since you last read"
+                                  >
+                                    <MessageSquare className="h-3 w-3" />
+                                    {r.replyCount ?? 0}
+                                    {(r.newReplyCount ?? 0) > 0 && (
+                                      <span className="ml-1 font-semibold">• {r.newReplyCount} new</span>
+                                    )}
+                                  </span>
                                 </div>
 
                                 <div className="text-xs text-gray-500">{fmt(r.createdAt)}</div>
                               </div>
 
-                              <div className="relative" ref={(el) => { rowRefs.current[r._id] = el; }}>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === r._id ? null : r._id); }}
-                                  className="p-1 rounded hover:bg-gray-200"
-                                >
-                                  <MoreVertical className="h-3 w-3" />
-                                </button>
-                                {menuFor === r._id && (
-                                  <div className="absolute right-0 mt-1 w-44 bg-white border rounded-lg shadow-lg z-20">
-                                    <button
-                                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs"
-                                      onClick={(e) => { e.stopPropagation(); shareAnnouncement(r); setMenuFor(null); }}
-                                    >
-                                      <Share2 className="h-3 w-3" /> Share
-                                    </button>
-
-                                    {/* Teacher: Archive/Unarchive only (no edit, publish, delete) */}
-                                    {!r?.myState?.archived ? (
-                                      <button className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs" onClick={() => archive(r._id)}>
-                                        <Archive className="h-3 w-3" /> Archive
-                                      </button>
-                                    ) : (
-                                      <button className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs" onClick={() => unarchive(r._id)}>
-                                        <Archive className="h-3 w-3" /> Unarchive
-                                      </button>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
+                              <RowMenu
+                                refCb={(el) => { rowRefs.current[r._id] = el; }}
+                                open={menuFor === r._id}
+                                onToggle={() => setMenuFor(menuFor === r._id ? null : r._id)}
+                                onShare={() => shareAnnouncement(r)}
+                                archived={!!r?.myState?.archived}
+                                onArchive={() => archive(r._id)}
+                                onUnarchive={() => unarchive(r._id)}
+                              />
                             </div>
                           </div>
                         );
@@ -649,7 +625,6 @@ export default function NotificationTeacher() {
                         >
                           <Share2 className="h-4 w-4" />
                         </button>
-                        {/* Teacher: no edit/publish buttons here */}
                       </div>
                     )}
                   </div>
@@ -674,7 +649,6 @@ export default function NotificationTeacher() {
                           Unarchive
                         </button>
                       )}
-                      {/* Teacher: no Edit here */}
                     </div>
                   </div>
                 )}
@@ -689,6 +663,45 @@ export default function NotificationTeacher() {
 }
 
 /* ========= Helper Components ========= */
+function RowMenu({
+  refCb, open, onToggle, onShare, archived, onArchive, onUnarchive,
+}: {
+  refCb: (el: HTMLDivElement | null) => void;
+  open: boolean;
+  onToggle: () => void;
+  onShare: () => void;
+  archived: boolean;
+  onArchive: () => void;
+  onUnarchive: () => void;
+}) {
+  return (
+    <div className="relative" ref={refCb}>
+      <button onClick={(e) => { e.stopPropagation(); onToggle(); }} className="p-1 rounded hover:bg-gray-200">
+        <MoreVertical className="h-3 w-3" />
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-1 w-44 bg-white border rounded-lg shadow-lg z-20">
+          <button
+            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs"
+            onClick={(e) => { e.stopPropagation(); onShare(); onToggle(); }}
+          >
+            <Share2 className="h-3 w-3" /> Share
+          </button>
+          {!archived ? (
+            <button className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs" onClick={(e) => { e.stopPropagation(); onArchive(); onToggle(); }}>
+              <Archive className="h-3 w-3" /> Archive
+            </button>
+          ) : (
+            <button className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs" onClick={(e) => { e.stopPropagation(); onUnarchive(); onToggle(); }}>
+              <Archive className="h-3 w-3" /> Unarchive
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StatChip({ label, value, active, onClick }: { label: string; value: number; active?: boolean; onClick: () => void }) {
   return (
     <button
@@ -744,14 +757,10 @@ function AudiencePill({ audience }: { audience?: Audience }) {
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
     live: "bg-green-100 text-green-700",
-    scheduled: "bg-blue-100 text-blue-700",
-    expired: "bg-red-100 text-red-700",
     draft: "bg-gray-100 text-gray-700",
   };
   const icons: Record<string, React.ReactNode> = {
     live: <Activity className="h-2 w-2" />,
-    scheduled: <Calendar className="h-2 w-2" />,
-    expired: <Clock8 className="h-2 w-2" />,
     draft: <Edit3Icon className="h-2 w-2" />,
   };
   return (
@@ -831,6 +840,7 @@ function BeautifulPreview({ id, onShare }: {
   const [item, setItem] = useState<AnnFull | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const [rc, setRc] = useState<{ replyCount: number; newReplyCount: number }>({ replyCount: 0, newReplyCount: 0 }); // NEW
 
   useEffect(() => {
     let alive = true;
@@ -844,7 +854,20 @@ function BeautifulPreview({ id, onShare }: {
         const j = await res.json();
         const data = j?.data || j?.announcement || j;
         const norm = normalizeAnn(data);
-        if (alive) setItem(norm);
+        if (alive) {
+          setItem(norm);
+          setRc({ replyCount: Number(norm.replyCount ?? 0), newReplyCount: Number(norm.newReplyCount ?? 0) });
+        }
+
+        // mark as read (so subsequent "new" counts reflect after this open)
+        fetch(EP.markRead(id), { method: "POST", headers: authHeaders(true), body: JSON.stringify({}) }).catch(() => {});
+
+        // fetch fresh reply counts
+        const cRes = await fetch(EP.replyCounts(id), { headers: { ...authHeaders(false) }, cache: "no-store" });
+        if (alive && cRes.ok) {
+          const cj = await cRes.json().catch(() => ({}));
+          setRc({ replyCount: Number(cj?.replyCount ?? 0), newReplyCount: Number(cj?.newReplyCount ?? 0) });
+        }
       } catch (e) {
         console.error("preview load error", e);
         if (alive) setErr("Could not load details for this announcement.");
@@ -877,6 +900,17 @@ function BeautifulPreview({ id, onShare }: {
           <StatusBadge status={st} />
           <TypeBadge type={item.type} />
           <AudiencePill audience={item.audience} />
+
+          {/* NEW: replies pill */}
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border
+              ${rc.newReplyCount ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-gray-50 border-gray-200 text-gray-600"}`}
+            title="Replies • New since you last read"
+          >
+            <MessageSquare className="h-4 w-4" />
+            {rc.replyCount}
+            {rc.newReplyCount > 0 && <span className="ml-1 font-semibold">• {rc.newReplyCount} new</span>}
+          </span>
         </div>
 
         <h1 className="text-3xl font-bold leading-tight text-gray-900">{item.title}</h1>
@@ -891,15 +925,9 @@ function BeautifulPreview({ id, onShare }: {
           </div>
         ) : null}
 
-        {/* Metadata */}
+        {/* Metadata (created only) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <MetaCard icon={<Calendar className="h-5 w-5 text-green-600" />} title="Created" value={fmt(item.createdAt)} tone="green" />
-          {item.publishAt && (
-            <MetaCard icon={<Send className="h-5 w-5 text-blue-600" />} title="Publish Date" value={fmt(item.publishAt)} tone="blue" />
-          )}
-          {item.expiresAt && (
-            <MetaCard icon={<Clock8 className="h-5 w-5 text-amber-600" />} title="Expires" value={fmt(item.expiresAt)} tone="amber" />
-          )}
         </div>
       </div>
 
@@ -977,7 +1005,7 @@ function BeautifulPreview({ id, onShare }: {
         </div>
       ) : null}
 
-      {/* Share row (Teacher: no Edit button) */}
+      {/* Share row */}
       <div className="flex items-center gap-4 pt-2">
         <button
           className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl"
@@ -1017,13 +1045,13 @@ function BeautifulPreview({ id, onShare }: {
           <h3 className="font-bold text-xl text-gray-800 flex items-center gap-3">
             <MessageSquare className="h-6 w-6" />
             Discussion
+            <span className="ml-2 text-sm text-gray-600">
+              ({rc.replyCount} total{rc.newReplyCount > 0 ? ` • ${rc.newReplyCount} new` : ""})
+            </span>
           </h3>
         </div>
         <div className="p-6">
-          <AnnouncementReplies
-            announcementId={id}
-            // (teacher version of replies uses token_teacher internally)
-          />
+          <AnnouncementReplies announcementId={id} />
         </div>
       </div>
     </div>
