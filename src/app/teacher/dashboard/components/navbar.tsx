@@ -1,14 +1,17 @@
 "use client";
 
 import Image from "next/image";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, Loader2, Mail, Shield, User2 } from "lucide-react";
 import { useUser } from "../teacherContext";
 
-/** ======== Config & helpers (same as profile page should use) ======== */
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+/** ======== Config & helpers ======== */
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+const EP = {
+  announcementList: `${API_BASE}/announcement`,
+};
+const LAST_SEEN_KEY = "teacher_notif_last_seen"; // teacher-specific
 
 const getToken = (): string =>
   (typeof window !== "undefined" &&
@@ -16,7 +19,7 @@ const getToken = (): string =>
       sessionStorage.getItem("token_teacher"))) ||
   "";
 
-/** ======== Types (optional but nice) ======== */
+/** ======== Types ======== */
 type Role = "student" | "teacher" | "admin" | "superadmin";
 type UserDoc = {
   _id?: string;
@@ -31,6 +34,14 @@ type UserDoc = {
   updatedAt?: string;
 };
 
+type AnnLite = {
+  _id: string;
+  createdAt?: string | null;
+  publishAt?: string | null;
+  published?: boolean;
+  myState?: { archived?: boolean; readAt?: string | null };
+};
+
 export default function Navbarteacher() {
   const { user } = useUser();
   const router = useRouter();
@@ -40,7 +51,13 @@ export default function Navbarteacher() {
   const [details, setDetails] = useState<UserDoc | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // initials for avatar
+  // hover-intent timer so the popover doesn't close when traversing the gap
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // --- NEW: announcement badge state ---
+  const [newCount, setNewCount] = useState(0);
+  const [lastSeen, setLastSeen] = useState<string>("");
+
   const initials = useMemo(() => {
     const n = user?.username || "";
     return n
@@ -52,16 +69,23 @@ export default function Navbarteacher() {
   }, [user]);
 
   async function ensureDetailsLoaded() {
-    if (!user?._id || details || loadingProfile) return;
+    if (!user?._id && !user?.id) return;
+    if (details || loadingProfile) return;
     try {
       setError(null);
       setLoadingProfile(true);
-      const res = await fetch(`${API_BASE}/user-api/teacher/${user._id || user?.id}`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `${API_BASE}/user-api/teacher/${user?._id || user?.id}`,
+        {
+          headers: { Authorization: `Bearer ${getToken()}` },
+          cache: "no-store",
+        }
+      );
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || json?.message || "Failed to fetch profile");
+      if (!res.ok)
+        throw new Error(
+          json?.error || json?.message || "Failed to fetch profile"
+        );
       setDetails((json?.user as UserDoc) || (json as UserDoc));
     } catch (e: any) {
       setError(e?.message || "Failed to load profile");
@@ -70,51 +94,178 @@ export default function Navbarteacher() {
     }
   }
 
+  const openWithData = () => {
+    if (!openProfile) setOpenProfile(true);
+    void ensureDetailsLoaded();
+  };
+
+  const handleEnter = () => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    openWithData();
+  };
+
+  const handleLeave = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setOpenProfile(false), 120);
+  };
+
+  // ======== NEW: Fetch & compute new announcements count ========
+  const refreshNewCount = async (seenIso: string) => {
+    try {
+      const token = getToken();
+      if (!token) {
+        setNewCount(0);
+        return;
+      }
+      const qs = new URLSearchParams({
+        page: "1",
+        limit: "200",
+      }).toString();
+
+      const res = await fetch(`${EP.announcementList}?${qs}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+
+      const json = await res.json().catch(() => ({}));
+      const items: AnnLite[] = Array.isArray(json?.data)
+        ? json.data
+        : Array.isArray(json?.items)
+        ? json.items
+        : Array.isArray(json)
+        ? json
+        : [];
+
+      const seenTs = seenIso ? Date.parse(seenIso) : 0;
+
+      // Count "new since last seen": published, not archived, created/published after seen time.
+      const count = items.reduce((acc, a) => {
+        if (a?.myState?.archived) return acc;
+        if (!a?.published) return acc; // ignore drafts
+        const t = Date.parse(a.publishAt || a.createdAt || "");
+        if (!Number.isFinite(t)) return acc;
+        return t > seenTs ? acc + 1 : acc;
+      }, 0);
+
+      setNewCount(count > 999 ? 999 : count);
+    } catch {
+      setNewCount(0);
+    }
+  };
+
+  // Load last seen & compute on mount
+  useEffect(() => {
+    const seen =
+      (typeof window !== "undefined" && localStorage.getItem(LAST_SEEN_KEY)) ||
+      "";
+    setLastSeen(seen || "");
+    void refreshNewCount(seen || "");
+  }, []);
+
+  // Recompute when window regains focus (helpful if new items appear)
+  useEffect(() => {
+    const onFocus = () => void refreshNewCount(lastSeen);
+    if (typeof window !== "undefined") {
+      window.addEventListener("focus", onFocus);
+      return () => window.removeEventListener("focus", onFocus);
+    }
+  }, [lastSeen]);
+
+  // Keep in sync across tabs
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === LAST_SEEN_KEY) {
+        const seen = e.newValue || "";
+        setLastSeen(seen);
+        void refreshNewCount(seen);
+      }
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("storage", onStorage);
+      return () => window.removeEventListener("storage", onStorage);
+    }
+  }, []);
+
+  // React instantly if the notifications page dispatches "notif:lastseen"
+  useEffect(() => {
+    const onSeen = (e: any) => {
+      const seen = e?.detail || "";
+      setLastSeen(seen);
+      void refreshNewCount(seen);
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("notif:lastseen", onSeen as EventListener);
+      return () =>
+        window.removeEventListener("notif:lastseen", onSeen as EventListener);
+    }
+  }, []);
+
+  const goToNotifications = () => {
+    const nowIso = new Date().toISOString();
+    if (typeof window !== "undefined") {
+      localStorage.setItem(LAST_SEEN_KEY, nowIso);
+      // Let other components/tabs know immediately
+      window.dispatchEvent(new CustomEvent("notif:lastseen", { detail: nowIso }));
+    }
+    setLastSeen(nowIso);
+    setNewCount(0); // zero the badge now
+    router.push("/teacher/dashboard/notification");
+  };
+
   return (
     <div className="fixed top-0 left-0 w-full z-50 flex items-center py-4 px-4 bg-[#2E3094] gap-4">
       <Image src="/images/gpkoiralalogo.svg" width={60} height={60} alt="logo" />
 
-      {/* welcome (optional) */}
       {user && (
         <span className="text-white/90 font-medium whitespace-nowrap">
           Welcome, {user.username}!
         </span>
       )}
 
-      {/* spacer */}
       <div className="flex-1" />
 
       {/* Right actions */}
       <div className="flex items-center gap-1 sm:gap-2">
-        {/* Notifications (stub – you’ll wire this later) */}
-        <button
-          type="button"
-          className="relative p-2 rounded-full hover:bg-white/10 text-white transition"
-          aria-label="Notifications"
-          title="Notifications"
-          onClick={()=>router.push("/teacher/dashboard/notification")}
-        >
-          <Bell className="h-5 w-5" />
-          {/* Example unread dot:
-          <span className="absolute -top-0.5 -right-0.5 h-2 w-2 bg-red-500 rounded-full" />
-          */}
-        </button>
+        {/* Notifications with badge */}
+        <div className="relative">
+          <button
+            type="button"
+            className="p-2 rounded-full hover:bg-white/10 text-white transition"
+            aria-label="Notifications"
+            title="Notifications"
+            onClick={goToNotifications}
+          >
+            <Bell className="h-5 w-5" />
+          </button>
+          {newCount > 0 && (
+            <span
+              className="absolute -top-1 -right-1 min-w-[18px] h-[18px] text-[10px] leading-none px-1 py-0.5 rounded-full bg-red-500 text-white font-semibold select-none flex items-center justify-center"
+              aria-label={`${newCount} new announcements`}
+              title={`${newCount} new announcements`}
+            >
+              {newCount > 99 ? "99+" : newCount}
+            </span>
+          )}
+        </div>
 
         {/* Profile popover */}
-        <div
-          className="relative"
-          onMouseEnter={() => {
-            setOpenProfile(true);
-            void ensureDetailsLoaded();
-          }}
-          onMouseLeave={() => setOpenProfile(false)}
-        >
+        <div className="relative">
           <button
             type="button"
             className="flex items-center gap-2 pl-2 pr-3 py-1 rounded-full hover:bg-white/10 text-white transition"
             aria-haspopup="dialog"
             aria-expanded={openProfile}
             title="Profile"
+            onMouseEnter={handleEnter}
+            onMouseLeave={handleLeave}
+            onFocus={handleEnter}
+            onBlur={handleLeave}
+            onClick={() =>
+              openProfile ? setOpenProfile(false) : openWithData()
+            }
           >
             <div className="h-8 w-8 rounded-full bg-white/20 grid place-items-center overflow-hidden">
               {initials ? (
@@ -129,8 +280,16 @@ export default function Navbarteacher() {
           </button>
 
           {openProfile && (
-            <div className="absolute right-0 mt-2 w-80 rounded-xl bg-white shadow-xl border border-gray-200 overflow-hidden">
-              {/* Header row */}
+            <div
+              className="absolute right-0 top-full translate-y-2 w-80 rounded-xl bg-white shadow-xl border border-gray-200 overflow-hidden"
+              role="dialog"
+              tabIndex={-1}
+              onMouseEnter={handleEnter}
+              onMouseLeave={handleLeave}
+              onFocus={handleEnter}
+              onBlur={handleLeave}
+            >
+              {/* Header */}
               <div className="px-4 py-3 bg-gray-50 border-b">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-full bg-indigo-600 text-white grid place-items-center">
@@ -164,7 +323,6 @@ export default function Navbarteacher() {
                 ) : (
                   <>
                     <Row label="Role" value={details?.role || user?.role || "teacher"} />
-                    {/* <Row label="User ID" value={details?._id || user?._id || "—"} mono /> */}
                     {details?.department && (
                       <Row label="Department" value={details.department} />
                     )}
@@ -190,10 +348,10 @@ export default function Navbarteacher() {
                 )}
               </div>
 
-              {/* Footer actions */}
+              {/* Footer */}
               <div className="px-4 py-3 bg-gray-50 border-t flex items-center justify-end gap-2">
                 <button
-                  onClick={() => router.push(`/teacher/dashboard/myProfile`)} // adjust route if different
+                  onClick={() => router.push(`/teacher/dashboard/myProfile`)}
                   className="px-3 py-1.5 rounded-lg bg-[#2E3094] text-white text-sm hover:opacity-90"
                 >
                   View Profile
@@ -221,9 +379,7 @@ function Row({
     <div className="flex items-start gap-2">
       <span className="w-24 text-gray-500">{label}</span>
       <span
-        className={`flex-1 ${
-          mono ? "font-mono text-[12px]" : ""
-        } text-gray-800 truncate`}
+        className={`flex-1 ${mono ? "font-mono text-[12px]" : ""} text-gray-800 truncate`}
       >
         {value}
       </span>

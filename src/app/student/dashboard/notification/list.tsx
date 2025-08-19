@@ -1,40 +1,55 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useContext } from "react";
 import {
-  Inbox, CalendarClock, Archive, FileX2, Clock8, Send,
-  Search, Plus, RefreshCw, Eye, Trash2, Edit3, CheckCircle2,
+  Inbox, Archive, FileX2,
+  Search, RefreshCw, Eye, CheckCircle2,
   MoreVertical, Download, ExternalLink, FileText, File, FileSpreadsheet, FileBarChart2,
   Image as ImageIcon, Star, Calendar, Users, BookOpen,
-  Activity, Globe, MessageSquare, Layout, Share2, Copy
+  Activity, Globe, MessageSquare, Layout, Share2, Copy,
+  Edit3 as Edit3Icon
 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import AnnouncementReplies from "./new/reply";
+import AnnouncementReplies from "./reply";
 
-/* ========= API CONFIG ========= */
-const BACKEND = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+/* ========= Optional UserContext =========
+   If your app already has a UserContext, simply:
+   - remove the shim below
+   - import { useUserContext } from "<your-path>"
+*/
+type UserContextType = { token?: string; role?: "student" | "teacher" | "admin"; id?: string };
+const UserContext = React.createContext<UserContextType | null>(null);
+const useUserContext = () => useContext(UserContext);
+/* ========= end context shim ========= */
+
+/* ========= API CONFIG (student) ========= */
+const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000").replace(/\/$/, "");
 const EP = {
   list: `${BACKEND}/announcement`,
-  read: (id: string) => `${BACKEND}/announcement/${id}/notification-details?adminView=true`,
-  readFallback: (id: string) => `${BACKEND}/announcement/${id}?adminView=true`,
+  read: (id: string) => `${BACKEND}/announcement/${id}/notification-details`,
+  readFallback: (id: string) => `${BACKEND}/announcement/${id}`,
   markRead: (id: string) => `${BACKEND}/announcement/${id}/read`,
   archive: (id: string) => `${BACKEND}/announcement/${id}/archive`,
   unarchive: (id: string) => `${BACKEND}/announcement/${id}/unarchive`,
-  patch: (id: string) => `${BACKEND}/announcement/${id}`,
-  del: (id: string) => `${BACKEND}/announcement/${id}`,
   folderCounts: `${BACKEND}/announcement/folder-counts`,
-  replyCounts: (id: string) => `${BACKEND}/announcement/${id}/reply-counts`, // <- NEW
+  replyCounts: (id: string) => `${BACKEND}/announcement/${id}/reply-counts`,
 };
 
-const getToken = (): string =>
-  (typeof window !== "undefined" &&
-    (localStorage.getItem("token_admin") ||
-      localStorage.getItem("token") ||
-      localStorage.getItem("authToken"))) || "";
+const getStudentToken = (ctx?: UserContextType | null): string => {
+  // 1) Prefer context if present
+  if (ctx?.token) return ctx.token;
+  // 2) Fallback to storage
+  if (typeof window !== "undefined") {
+    return (
+      localStorage.getItem("token_student") ||
+      sessionStorage.getItem("token_student") ||
+      ""
+    );
+  }
+  return "";
+};
 
-const authHeaders = (json = true): Record<string, string> => {
-  const t = getToken();
-  const h: Record<string, string> = t ? { Authorization: `Bearer ${t}` } : {};
+const makeAuthHeaders = (token: string, json = true): Record<string, string> => {
+  const h: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
   if (json) h["Content-Type"] = "application/json";
   return h;
 };
@@ -62,8 +77,6 @@ type AnnLite = {
   summary?: string;
   audience?: Audience;
   published?: boolean;
-  publishAt?: string | null;
-  expiresAt?: string | null;
   pinned?: boolean;
   priority?: "normal" | "high" | "urgent";
   createdAt?: string;
@@ -71,19 +84,17 @@ type AnnLite = {
   images?: FileObj[];
   files?: FileObj[];
   myState?: MyState;
-  replyCount?: number;     // <- NEW
-  newReplyCount?: number;  // <- NEW
+  replyCount?: number;
+  newReplyCount?: number;
 };
 
 type AnnFull = AnnLite & { contentHtml?: string };
 
-type FolderKey = "inbox" | "drafts" | "scheduled" | "expired" | "archived" | "all";
+type FolderKey = "inbox" | "drafts" | "archived" | "all";
 
 type FolderCounts = {
   all: number;
   drafts: number;
-  scheduled: number;
-  expired: number;
   live: number;
   archived: number;
   inbox: number;
@@ -101,15 +112,9 @@ const formatBytes = (n?: number) => {
   return `${size.toFixed(size < 10 ? 1 : 0)} ${u[i]}`;
 };
 
+// SIMPLIFIED: only draft vs live (no scheduled/expired)
 function status(a: AnnLite) {
-  const now = Date.now();
-  const pub = !!a?.published;
-  const starts = !a?.publishAt || new Date(a.publishAt).getTime() <= now;
-  const notExpired = !a?.expiresAt || new Date(a.expiresAt).getTime() > now;
-  if (!pub) return "draft";
-  if (!starts) return "scheduled";
-  if (!notExpired) return "expired";
-  return "live";
+  return a?.published ? "live" : "draft";
 }
 
 const ensureArr = <T,>(v: T | T[] | null | undefined): T[] => (Array.isArray(v) ? v : v ? [v] : []);
@@ -120,8 +125,6 @@ const normalizeAnn = (x: any): AnnFull => ({
   summary: x?.summary || x?.shortDescription || "",
   audience: x?.audience || { mode: "all" },
   published: !!x?.published,
-  publishAt: x?.publishAt || x?.publishedAt || null,
-  expiresAt: x?.expiresAt || null,
   pinned: !!x?.pinned,
   priority: x?.priority || "normal",
   createdAt: x?.createdAt || x?.created_at || null,
@@ -142,8 +145,8 @@ const normalizeAnn = (x: any): AnnFull => ({
   })),
   myState: x?.myState || { readAt: null, archived: !!x?.archived, archivedAt: x?.archivedAt || null },
   contentHtml: x?.contentHtml || x?.content || "",
-  replyCount: Number(x?.replyCount ?? 0),         // <- NEW
-  newReplyCount: Number(x?.newReplyCount ?? 0),   // <- NEW
+  replyCount: Number(x?.replyCount ?? 0),
+  newReplyCount: Number(x?.newReplyCount ?? 0),
 });
 
 /* ===== Share helpers ===== */
@@ -167,9 +170,10 @@ async function shareAnnouncement(a: Pick<AnnFull, "_id" | "title" | "summary" | 
     try {
       await (navigator as any).share({ title: a.title, text, url });
       return;
-    } catch { /* fallthrough */ }
+    } catch {
+      // fallthrough
+    }
   }
-
   try {
     await navigator.clipboard?.writeText(url);
     alert("Share link copied to clipboard!");
@@ -188,10 +192,6 @@ function matchesFolder(a: AnnLite, f: FolderKey) {
       return !archived && st === "live";
     case "drafts":
       return st === "draft";
-    case "scheduled":
-      return st === "scheduled";
-    case "expired":
-      return st === "expired";
     case "archived":
       return archived;
     case "all":
@@ -205,8 +205,11 @@ function paginate<T>(arr: T[], page: number, limit: number) {
   return arr.slice(start, start + limit);
 }
 
-/* ========= Main ========= */
-export default function AnnouncementAdminMailbox() {
+/* ========= Main (Student) ========= */
+export default function NotificationStudent() {
+  const userCtx = useUserContext();
+  const token = getStudentToken(userCtx);
+
   const [folder, setFolder] = useState<FolderKey>("inbox");
   const [q, setQ] = useState("");
   const [type, setType] = useState("");
@@ -220,15 +223,13 @@ export default function AnnouncementAdminMailbox() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [folderCounts, setFolderCounts] = useState<FolderCounts>({
-    all: 0, drafts: 0, scheduled: 0, expired: 0, live: 0, archived: 0, inbox: 0,
+    all: 0, drafts: 0, live: 0, archived: 0, inbox: 0,
   });
 
   const pages = useMemo(() => Math.max(1, Math.ceil((total || 0) / limit)), [total, limit]);
   const startIndex = (page - 1) * limit;
 
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
-
-  const router = useRouter();
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -247,13 +248,12 @@ export default function AnnouncementAdminMailbox() {
     };
   }, [menuFor]);
 
-  // refilter + repaginate any time folder/page/limit/search/type/allRows change
+  // refilter + repaginate when deps change
   useEffect(() => {
     const typed = type.trim().toLowerCase();
     const term = q.trim().toLowerCase();
 
     let base = allRows;
-
     if (typed) base = base.filter(r => (r.type || "").toLowerCase() === typed);
     if (term) {
       base = base.filter(r =>
@@ -280,16 +280,15 @@ export default function AnnouncementAdminMailbox() {
     fetchList();
     fetchFolderCounts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [token]);
 
-  /* ======= API Calls ======= */
+  /* ======= API Calls (student) ======= */
   async function fetchList() {
     try {
       setLoading(true);
-      const qs = buildQS({ page: 1, limit: 100, adminView: true });
-
+      const qs = buildQS({ page: 1, limit: 100 }); // student view
       const res = await fetch(`${EP.list}?${qs}`, {
-        headers: { ...authHeaders(false) },
+        headers: { ...makeAuthHeaders(token, false) },
         cache: "no-store",
       });
 
@@ -301,8 +300,7 @@ export default function AnnouncementAdminMailbox() {
 
       const normalized = items.map(normalizeAnn);
       setAllRows(normalized);
-
-      setFolderCounts(computeCounts(normalized));
+      setFolderCounts(computeCounts(normalized)); // local quick counts
     } catch (e) {
       console.error("fetchList error", e);
       setAllRows([]);
@@ -317,24 +315,24 @@ export default function AnnouncementAdminMailbox() {
         const st = status(a);
         acc.all++;
         if (st === "draft") acc.drafts++;
-        if (st === "scheduled") acc.scheduled++;
-        if (st === "expired") acc.expired++;
         if (st === "live") acc.live++;
         if (a?.myState?.archived) acc.archived++;
         if (!a?.myState?.archived && st === "live") acc.inbox++;
         return acc;
       },
-      { all: 0, drafts: 0, scheduled: 0, expired: 0, live: 0, archived: 0, inbox: 0 }
+      { all: 0, drafts: 0, live: 0, archived: 0, inbox: 0 }
     );
   }
+
   useEffect(() => {
     setFolderCounts(computeCounts(allRows));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allRows]);
 
   async function fetchFolderCounts() {
     try {
-      const res = await fetch(`${EP.folderCounts}?adminView=true`, {
-        headers: { ...authHeaders(false) },
+      const res = await fetch(`${EP.folderCounts}`, {
+        headers: { ...makeAuthHeaders(token, false) },
         cache: "no-store",
       });
       if (!res.ok) throw new Error("counts not ok");
@@ -342,11 +340,10 @@ export default function AnnouncementAdminMailbox() {
       const data = await res.json();
       const d = data?.data || data;
 
-      const serverCounts: FolderCounts = {
+      // Map server counts to simplified model (ignore scheduled/expired)
+      const serverCounts: Partial<FolderCounts> = {
         all: Number(d?.all ?? 0),
         drafts: Number(d?.drafts ?? 0),
-        scheduled: Number(d?.scheduled ?? 0),
-        expired: Number(d?.expired ?? 0),
         live: Number(d?.live ?? 0),
         archived: Number(d?.archived ?? d?.archive ?? d?.archieve ?? 0),
         inbox: Number(d?.inbox ?? 0),
@@ -354,10 +351,13 @@ export default function AnnouncementAdminMailbox() {
 
       const localCounts = computeCounts(allRows);
       setFolderCounts({
-        ...serverCounts,
-        archived: serverCounts.archived || localCounts.archived,
+        all: serverCounts.all ?? localCounts.all,
+        drafts: serverCounts.drafts ?? localCounts.drafts,
+        live: serverCounts.live ?? localCounts.live,
+        archived: serverCounts.archived ?? localCounts.archived,
+        inbox: serverCounts.inbox ?? localCounts.inbox,
       });
-    } catch (e) {
+    } catch {
       setFolderCounts(computeCounts(allRows));
     }
   }
@@ -383,7 +383,7 @@ export default function AnnouncementAdminMailbox() {
     try {
       const res = await fetch(EP.archive(id), {
         method: "POST",
-        headers: authHeaders(true),
+        headers: makeAuthHeaders(token, true),
         body: JSON.stringify({}),
       });
       if (!res.ok) throw new Error("Archive failed");
@@ -418,7 +418,7 @@ export default function AnnouncementAdminMailbox() {
     try {
       const res = await fetch(EP.unarchive(id), {
         method: "POST",
-        headers: authHeaders(true),
+        headers: makeAuthHeaders(token, true),
         body: JSON.stringify({}),
       });
       if (!res.ok) throw new Error("Unarchive failed");
@@ -432,38 +432,10 @@ export default function AnnouncementAdminMailbox() {
     }
   }
 
-  async function remove(id: string) {
-    if (!confirm("Delete this announcement permanently?")) return;
-    try {
-      await fetch(EP.del(id), { method: "DELETE", headers: authHeaders(false) });
-      await fetchList(); await fetchFolderCounts();
-    } catch (e) { console.error("delete error", e); }
-  }
-
-  async function publishNow(id: string) {
-    try {
-      const res = await fetch(EP.patch(id), {
-        method: "PATCH",
-        headers: authHeaders(true),
-        body: JSON.stringify({
-          published: true,
-          publishAt: new Date().toISOString(),
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error || "Failed to publish");
-      }
-      await fetchList();
-      await fetchFolderCounts();
-      alert("Published 🎉");
-    } catch (e: any) {
-      alert(e?.message || "Could not publish. Check publish/expiry dates.");
-      console.error("publishNow error", e);
-    }
-  }
-
-  const selectedOne = rows.find((r) => r._id === selectedId) || allRows.find(r => r._id === selectedId) || null;
+  const selectedOne =
+    rows.find((r) => r._id === selectedId) ||
+    allRows.find((r) => r._id === selectedId) ||
+    null;
 
   /* ========= UI ========= */
   return (
@@ -479,9 +451,9 @@ export default function AnnouncementAdminMailbox() {
                 </div>
                 <div>
                   <h1 className="text-2xl font-black bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent">
-                    Announcement Hub
+                    Student Announcement Hub
                   </h1>
-                  <p className="text-sm text-gray-600">Manage communications efficiently</p>
+                  <p className="text-sm text-gray-600">See what’s new for you</p>
                 </div>
               </div>
 
@@ -493,22 +465,12 @@ export default function AnnouncementAdminMailbox() {
                   <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                   Refresh
                 </button>
-                <button
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-sm font-medium"
-                  onClick={() => { router.push("/admin/announcement/new"); }}
-                >
-                  <Plus className="h-4 w-4" />
-                  Create
-                </button>
               </div>
             </div>
 
             <div className="px-6 pb-4">
               <div className="flex gap-2 flex-wrap">
                 <StatChip label="Inbox" value={folderCounts.inbox} active={folder === "inbox"} onClick={() => setFolder("inbox")} />
-                <StatChip label="Drafts" value={folderCounts.drafts} active={folder === "drafts"} onClick={() => setFolder("drafts")} />
-                <StatChip label="Scheduled" value={folderCounts.scheduled} active={folder === "scheduled"} onClick={() => setFolder("scheduled")} />
-                <StatChip label="Expired" value={folderCounts.expired} active={folder === "expired"} onClick={() => setFolder("expired")} />
                 <StatChip label="Archived" value={folderCounts.archived} active={folder === "archived"} onClick={() => setFolder("archived")} />
                 <StatChip label="All" value={folderCounts.all} active={folder === "all"} onClick={() => setFolder("all")} />
               </div>
@@ -528,9 +490,6 @@ export default function AnnouncementAdminMailbox() {
                 </div>
                 <nav className="p-3 space-y-1">
                   <FolderBtn icon={<Inbox className="h-4 w-4" />} label="Inbox" count={folderCounts.inbox} active={folder === "inbox"} onClick={() => setFolder("inbox")} />
-                  <FolderBtn icon={<Edit3 className="h-4 w-4" />} label="Drafts" count={folderCounts.drafts} active={folder === "drafts"} onClick={() => setFolder("drafts")} />
-                  <FolderBtn icon={<CalendarClock className="h-4 w-4" />} label="Scheduled" count={folderCounts.scheduled} active={folder === "scheduled"} onClick={() => setFolder("scheduled")} />
-                  <FolderBtn icon={<Clock8 className="h-4 w-4" />} label="Expired" count={folderCounts.expired} active={folder === "expired"} onClick={() => setFolder("expired")} />
                   <FolderBtn icon={<Archive className="h-4 w-4" />} label="Archived" count={folderCounts.archived} active={folder === "archived"} onClick={() => setFolder("archived")} />
                   <FolderBtn icon={<FileX2 className="h-4 w-4" />} label="All" count={folderCounts.all} active={folder === "all"} onClick={() => setFolder("all")} />
                 </nav>
@@ -607,7 +566,7 @@ export default function AnnouncementAdminMailbox() {
                                   <StatusBadge status={st} />
                                   <TypeBadge type={r.type} />
 
-                                  {/* Reply counts pill */}
+                                  {/* replies pill */}
                                   <span
                                     className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border
                                       ${r.newReplyCount ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-gray-50 border-gray-200 text-gray-600"}`}
@@ -615,7 +574,7 @@ export default function AnnouncementAdminMailbox() {
                                   >
                                     <MessageSquare className="h-3 w-3" />
                                     {r.replyCount ?? 0}
-                                    {typeof r.newReplyCount === "number" && r.newReplyCount > 0 && (
+                                    {(r.newReplyCount ?? 0) > 0 && (
                                       <span className="ml-1 font-semibold">• {r.newReplyCount} new</span>
                                     )}
                                   </span>
@@ -624,45 +583,15 @@ export default function AnnouncementAdminMailbox() {
                                 <div className="text-xs text-gray-500">{fmt(r.createdAt)}</div>
                               </div>
 
-                              <div className="relative" ref={(el) => { rowRefs.current[r._id] = el; }}>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === r._id ? null : r._id); }}
-                                  className="p-1 rounded hover:bg-gray-200"
-                                >
-                                  <MoreVertical className="h-3 w-3" />
-                                </button>
-                                {menuFor === r._id && (
-                                  <div className="absolute right-0 mt-1 w-44 bg-white border rounded-lg shadow-lg z-20">
-                                    <button
-                                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs"
-                                      onClick={(e) => { e.stopPropagation(); shareAnnouncement(r); setMenuFor(null); }}
-                                    >
-                                      <Share2 className="h-3 w-3" /> Share
-                                    </button>
-                                    {st === "draft" && (
-                                      <button
-                                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs"
-                                        onClick={(e) => { e.stopPropagation(); setMenuFor(null); publishNow(r._id); }}
-                                      >
-                                        <Send className="h-3 w-3" /> Publish now
-                                      </button>
-                                    )}
-
-                                    {!r?.myState?.archived ? (
-                                      <button className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs" onClick={() => archive(r._id)}>
-                                        <Archive className="h-3 w-3" /> Archive
-                                      </button>
-                                    ) : (
-                                      <button className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs" onClick={() => unarchive(r._id)}>
-                                        <Archive className="h-3 w-3" /> Unarchive
-                                      </button>
-                                    )}
-                                    <button className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs text-red-600" onClick={() => remove(r._id)}>
-                                      <Trash2 className="h-3 w-3" /> Delete
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
+                              <RowMenu
+                                refCb={(el) => { rowRefs.current[r._id] = el; }}
+                                open={menuFor === r._id}
+                                onToggle={() => setMenuFor(menuFor === r._id ? null : r._id)}
+                                onShare={() => shareAnnouncement(r)}
+                                archived={!!r?.myState?.archived}
+                                onArchive={() => archive(r._id)}
+                                onUnarchive={() => unarchive(r._id)}
+                              />
                             </div>
                           </div>
                         );
@@ -714,28 +643,13 @@ export default function AnnouncementAdminMailbox() {
                         >
                           <Share2 className="h-4 w-4" />
                         </button>
-                        <button
-                          className="p-2 rounded-lg bg-white/20 text-white hover:bg-white/30"
-                          title="Edit"
-                          onClick={() => router.push(`/admin/announcement/${selectedOne._id}/edit`)}
-                        >
-                          <Edit3 className="h-4 w-4" />
-                        </button>
-                        {status(selectedOne) === "draft" && (
-                          <button
-                            className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
-                            onClick={() => publishNow(selectedOne._id)}
-                          >
-                            Publish now
-                          </button>
-                        )}
                       </div>
                     )}
                   </div>
                 </div>
 
                 <div className="flex-1 overflow-auto p-6">
-                  {selectedId ? <BeautifulPreview id={selectedId} onShare={shareAnnouncement} onEdit={(id) => router.push(`/admin/announcement/${id}/edit`)} /> : <EmptyPreview />}
+                  {selectedId ? <BeautifulPreview id={selectedId} token={token} onShare={shareAnnouncement} /> : <EmptyPreview />}
                 </div>
 
                 {selectedOne && (
@@ -753,9 +667,6 @@ export default function AnnouncementAdminMailbox() {
                           Unarchive
                         </button>
                       )}
-                      <button className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700" onClick={() => router.push(`/admin/announcement/${selectedOne._id}/edit`)}>
-                        Edit
-                      </button>
                     </div>
                   </div>
                 )}
@@ -770,6 +681,45 @@ export default function AnnouncementAdminMailbox() {
 }
 
 /* ========= Helper Components ========= */
+function RowMenu({
+  refCb, open, onToggle, onShare, archived, onArchive, onUnarchive,
+}: {
+  refCb: (el: HTMLDivElement | null) => void;
+  open: boolean;
+  onToggle: () => void;
+  onShare: () => void;
+  archived: boolean;
+  onArchive: () => void;
+  onUnarchive: () => void;
+}) {
+  return (
+    <div className="relative" ref={refCb}>
+      <button onClick={(e) => { e.stopPropagation(); onToggle(); }} className="p-1 rounded hover:bg-gray-200">
+        <MoreVertical className="h-3 w-3" />
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-1 w-44 bg-white border rounded-lg shadow-lg z-20">
+          <button
+            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs"
+            onClick={(e) => { e.stopPropagation(); onShare(); onToggle(); }}
+          >
+            <Share2 className="h-3 w-3" /> Share
+          </button>
+          {!archived ? (
+            <button className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs" onClick={(e) => { e.stopPropagation(); onArchive(); onToggle(); }}>
+              <Archive className="h-3 w-3" /> Archive
+            </button>
+          ) : (
+            <button className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs" onClick={(e) => { e.stopPropagation(); onUnarchive(); onToggle(); }}>
+              <Archive className="h-3 w-3" /> Unarchive
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StatChip({ label, value, active, onClick }: { label: string; value: number; active?: boolean; onClick: () => void }) {
   return (
     <button
@@ -825,15 +775,11 @@ function AudiencePill({ audience }: { audience?: Audience }) {
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
     live: "bg-green-100 text-green-700",
-    scheduled: "bg-blue-100 text-blue-700",
-    expired: "bg-red-100 text-red-700",
     draft: "bg-gray-100 text-gray-700",
   };
   const icons: Record<string, React.ReactNode> = {
     live: <Activity className="h-2 w-2" />,
-    scheduled: <Calendar className="h-2 w-2" />,
-    expired: <Clock8 className="h-2 w-2" />,
-    draft: <Edit3 className="h-2 w-2" />,
+    draft: <Edit3Icon className="h-2 w-2" />,
   };
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${colors[status] || colors.draft}`}>
@@ -905,15 +851,19 @@ function EmptyPreview() {
 }
 
 /* ========= Preview (fetches full details) ========= */
-function BeautifulPreview({ id, onShare, onEdit }: {
+function BeautifulPreview({
+  id,
+  onShare,
+  token,
+}: {
   id: string;
   onShare: (a: Pick<AnnFull, "_id" | "title" | "summary" | "contentHtml">) => void;
-  onEdit: (id: string) => void;
+  token: string;
 }) {
   const [item, setItem] = useState<AnnFull | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [rc, setRc] = useState<{replyCount: number; newReplyCount: number}>({ replyCount: 0, newReplyCount: 0 });
+  const [rc, setRc] = useState<{ replyCount: number; newReplyCount: number }>({ replyCount: 0, newReplyCount: 0 });
 
   useEffect(() => {
     let alive = true;
@@ -921,24 +871,25 @@ function BeautifulPreview({ id, onShare, onEdit }: {
       setLoading(true);
       setErr("");
       try {
-        let res = await fetch(EP.read(id), { headers: { ...authHeaders(false) }, cache: "no-store" });
-        if (res.status === 404) res = await fetch(EP.readFallback(id), { headers: { ...authHeaders(false) }, cache: "no-store" });
+        let res = await fetch(EP.read(id), { headers: { ...makeAuthHeaders(token, false) }, cache: "no-store" });
+        if (res.status === 404) res = await fetch(EP.readFallback(id), { headers: { ...makeAuthHeaders(token, false) }, cache: "no-store" });
         if (!res.ok) throw new Error(`Failed to load (${res.status})`);
         const j = await res.json();
         const data = j?.data || j?.announcement || j;
         const norm = normalizeAnn(data);
-        if (alive) setItem(norm);
+        if (alive) {
+          setItem(norm);
+          setRc({ replyCount: Number(norm.replyCount ?? 0), newReplyCount: Number(norm.newReplyCount ?? 0) });
+        }
 
-        // mark as read when opening preview
-        fetch(EP.markRead(id), { method: "POST", headers: authHeaders(true), body: JSON.stringify({}) }).catch(()=>{});
+        // mark as read (so subsequent "new" counts reflect after this open)
+        fetch(EP.markRead(id), { method: "POST", headers: makeAuthHeaders(token, true), body: JSON.stringify({}) }).catch(() => {});
 
-        // fetch reply counts (fresh)
-        const cRes = await fetch(EP.replyCounts(id), { headers: { ...authHeaders(false) }, cache: "no-store" });
-        if (cRes.ok) {
-          const cj = await cRes.json().catch(()=>({}));
-          if (alive) setRc({ replyCount: Number(cj?.replyCount ?? 0), newReplyCount: Number(cj?.newReplyCount ?? 0) });
-        } else {
-          if (alive) setRc({ replyCount: Number(norm.replyCount ?? 0), newReplyCount: Number(norm.newReplyCount ?? 0) });
+        // fetch fresh reply counts
+        const cRes = await fetch(EP.replyCounts(id), { headers: { ...makeAuthHeaders(token, false) }, cache: "no-store" });
+        if (alive && cRes.ok) {
+          const cj = await cRes.json().catch(() => ({}));
+          setRc({ replyCount: Number(cj?.replyCount ?? 0), newReplyCount: Number(cj?.newReplyCount ?? 0) });
         }
       } catch (e) {
         console.error("preview load error", e);
@@ -948,7 +899,7 @@ function BeautifulPreview({ id, onShare, onEdit }: {
       }
     })();
     return () => { alive = false; };
-  }, [id]);
+  }, [id, token]);
 
   if (loading) {
     return (
@@ -972,13 +923,14 @@ function BeautifulPreview({ id, onShare, onEdit }: {
           <StatusBadge status={st} />
           <TypeBadge type={item.type} />
           <AudiencePill audience={item.audience} />
-          {/* counts inline */}
+
+          {/* replies pill */}
           <span
             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border
               ${rc.newReplyCount ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-gray-50 border-gray-200 text-gray-600"}`}
             title="Replies • New since you last read"
           >
-            <MessageSquare className="h-3 w-3" />
+            <MessageSquare className="h-4 w-4" />
             {rc.replyCount}
             {rc.newReplyCount > 0 && <span className="ml-1 font-semibold">• {rc.newReplyCount} new</span>}
           </span>
@@ -996,15 +948,9 @@ function BeautifulPreview({ id, onShare, onEdit }: {
           </div>
         ) : null}
 
-        {/* Metadata */}
+        {/* Metadata (created only) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <MetaCard icon={<Calendar className="h-5 w-5 text-green-600" />} title="Created" value={fmt(item.createdAt)} tone="green" />
-          {item.publishAt && (
-            <MetaCard icon={<Send className="h-5 w-5 text-blue-600" />} title="Publish Date" value={fmt(item.publishAt)} tone="blue" />
-          )}
-          {item.expiresAt && (
-            <MetaCard icon={<Clock8 className="h-5 w-5 text-amber-600" />} title="Expires" value={fmt(item.expiresAt)} tone="amber" />
-          )}
         </div>
       </div>
 
@@ -1018,7 +964,7 @@ function BeautifulPreview({ id, onShare, onEdit }: {
         </div>
         <div className="p-6">
           {item.contentHtml ? (
-            <div className="prose max-w-none announcement-content" dangerouslySetInnerHTML={{ __html: item.contentHtml }} />
+            <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: item.contentHtml }} />
           ) : (
             <p className="text-gray-600">No content provided.</p>
           )}
@@ -1082,14 +1028,8 @@ function BeautifulPreview({ id, onShare, onEdit }: {
         </div>
       ) : null}
 
+      {/* Share row */}
       <div className="flex items-center gap-4 pt-2">
-        <button
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl"
-          onClick={() => onEdit(item._id)}
-        >
-          <Edit3 className="h-5 w-5" />
-          Edit
-        </button>
         <button
           className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl"
           onClick={() => onShare(item)}
@@ -1122,6 +1062,7 @@ function BeautifulPreview({ id, onShare, onEdit }: {
         </a>
       </div>
 
+      {/* Discussion */}
       <div className="bg-white rounded-xl border-2 border-gray-200 shadow-lg overflow-hidden">
         <div className="bg-gradient-to-r from-fuchsia-50 to-violet-50 px-6 py-4 border-b border-gray-200">
           <h3 className="font-bold text-xl text-gray-800 flex items-center gap-3">
@@ -1133,11 +1074,7 @@ function BeautifulPreview({ id, onShare, onEdit }: {
           </h3>
         </div>
         <div className="p-6">
-          <AnnouncementReplies
-            announcementId={id}
-            isAdmin={true}
-            adminView={true}
-          />
+          <AnnouncementReplies announcementId={id} />
         </div>
       </div>
     </div>
