@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
   BookOpen, Download, Save, Users, Award, ClipboardList, Calculator,
-  ChevronDown, AlertCircle, CheckCircle2, Loader2
+  ChevronDown, AlertCircle, CheckCircle2, Loader2, Printer, PlusCircle, FolderOpen
 } from "lucide-react";
+import toast, { Toaster } from "react-hot-toast";
 
 /* ========= TYPES ========= */
 type CourseInstanceLite = {
@@ -15,6 +16,9 @@ type CourseInstanceLite = {
 };
 type StudentLite = { _id: string; username?: string; name?: string; email?: string };
 type Mode = "exam" | "practical";
+
+type AttemptInfo = { attemptNo: number; count: number; maxMarks?: number; title?: string };
+type ExamSlotInfo = { examSlot: number; title?: string; maxMarks?: number; totalCount: number; attempts: AttemptInfo[] };
 
 /* ========= CONFIG ========= */
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000").replace(/\/$/, "");
@@ -29,7 +33,11 @@ function ciLabel(ci: CourseInstanceLite) {
   return `${ci.course?.name || "Course"} ${sy ? `• ${sy}` : ""} • ${ci.batch?.batchname || ""}`;
 }
 
-type ExamRow = { marks?: number; remarks?: string };
+type ExamRow = {
+  marks?: number;
+  remarks?: string;
+  examOutcome?: "scored" | "ab" | "not_assigned";
+};
 type PracticalRow = {
   pFirst?: number;
   pFinal?: number;
@@ -49,7 +57,8 @@ export default function MarksEntry() {
 
   const [mode, setMode] = useState<Mode>("exam");
 
-  // exam config
+  // exam config (two-level: examSlot and attemptNo; both >= 1)
+  const [examSlot, setExamSlot] = useState<number>(1);
   const [attemptNo, setAttemptNo] = useState<number>(1);
   const [maxMarks, setMaxMarks] = useState<number>(30);
   const [examTitle, setExamTitle] = useState<string>("");
@@ -65,7 +74,11 @@ export default function MarksEntry() {
 
   const [rows, setRows] = useState<Record<string, ExamRow & PracticalRow>>({});
 
-  // auth token (same pattern you used before)
+  // exam slots list (each slot has attempts)
+  const [examSlots, setExamSlots] = useState<ExamSlotInfo[]>([]);
+  const [loadingExams, setLoadingExams] = useState(false);
+
+  // auth token
   const token =
     typeof window !== "undefined"
       ? localStorage.getItem("token_teacher") || sessionStorage.getItem("token_teacher")
@@ -73,11 +86,9 @@ export default function MarksEntry() {
 
   const authHeader = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-  /* ========= FOCUS GRID (for keyboard navigation) ========= */
-  // cellRefs[studentId][field] -> input element
+  /* ========= FOCUS GRID ========= */
   const cellRefs = useRef<Record<string, Record<string, HTMLInputElement | null>>>({});
 
-  // ordered fields per mode (exclude disabled "Total")
   const fieldOrder = useMemo<string[]>(
     () => (mode === "exam" ? ["marks", "remarks"] : ["pFirst", "pFinal", "pAssign", "pAttend", "remarks"]),
     [mode]
@@ -91,7 +102,6 @@ export default function MarksEntry() {
     const el = cellRefs.current[studentId]?.[field];
     if (el) {
       el.focus();
-      // select text for quick overwrite
       el.select?.();
     }
   };
@@ -102,12 +112,8 @@ export default function MarksEntry() {
       if (key === "Enter") {
         e.preventDefault();
         const nextCol = colIdx + 1;
-        if (nextCol < fieldOrder.length) {
-          focusCell(rowIdx, nextCol);
-        } else {
-          // wrap to first col of next row
-          focusCell(rowIdx + 1, 0);
-        }
+        if (nextCol < fieldOrder.length) focusCell(rowIdx, nextCol);
+        else focusCell(rowIdx + 1, 0);
       } else if (key === "Home") {
         e.preventDefault();
         focusCell(rowIdx, 0);
@@ -123,28 +129,27 @@ export default function MarksEntry() {
       }
     };
 
-  /* ========= 1) Load my course instances (real API) ========= */
+  /* ========= Load my course instances ========= */
   useEffect(() => {
     async function fetchCIs() {
       try {
-        const res = await axios.get(`${BACKEND}/teacher-routes/my-course-instances`, {
-          headers: authHeader,
-        });
+        const res = await axios.get(`${BACKEND}/teacher-routes/my-course-instances`, { headers: authHeader });
         const arr: CourseInstanceLite[] = res?.data?.courseInstances || [];
         setCourseInstances(arr);
         if (arr.length > 0) setSelectedCI(arr[0]._id);
       } catch (err: any) {
         console.error("Failed to load courseInstances:", err?.response?.data || err.message);
-        alert(err?.response?.data?.message || "Failed to load course instances");
+        toast.error(err?.response?.data?.message || "Failed to load course instances");
       } finally {
         setLoadingCI(false);
       }
     }
     if (authHeader) fetchCIs();
     else setLoadingCI(false);
-  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
-  /* ========= 2) Load students for selected CI (real API) ========= */
+  /* ========= Load students for selected CI ========= */
   useEffect(() => {
     async function fetchStudents() {
       if (!selectedCI) {
@@ -154,35 +159,173 @@ export default function MarksEntry() {
       }
       setLoadingStudents(true);
       try {
-        const res = await axios.get(
-          `${BACKEND}/teacher-routes/course-instance/${selectedCI}/students`,
-          { headers: authHeader }
-        );
+        const res = await axios.get(`${BACKEND}/teacher-routes/course-instance/${selectedCI}/students`, { headers: authHeader });
         const list: StudentLite[] = res?.data || [];
         setStudents(list);
-        // initialize row objects + reset refs container
         setRows((old) => {
           const next = { ...old };
           for (const s of list) if (!next[s._id]) next[s._id] = {};
           return next;
         });
-        cellRefs.current = {}; // clear old refs so they don't point to stale nodes
+        cellRefs.current = {};
       } catch (err: any) {
         console.error("Failed to load students:", err?.response?.data || err.message);
-        alert(err?.response?.data?.message || "Failed to load students");
+        toast.error(err?.response?.data?.message || "Failed to load students");
       } finally {
         setLoadingStudents(false);
       }
     }
     if (authHeader) fetchStudents();
-  }, [selectedCI, token]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCI, token]);
 
-  /* ========= 3) Default exam title ========= */
+  /* ========= Load ALL exam slots+attempts for this CI ========= */
+  async function loadExamSlots() {
+    if (!selectedCI || !authHeader) return;
+    setLoadingExams(true);
+    try {
+      const res = await axios.get(`${BACKEND}/result/list/${selectedCI}?kind=exam`, { headers: authHeader });
+      const records: any[] = Array.isArray(res.data) ? res.data : [];
+
+      // group by examSlot, then attemptNo
+      const group = new Map<number, { title?: string; maxMarks?: number; attempts: Map<number, AttemptInfo>; total: number }>();
+      for (const rec of records) {
+        const slot = Number(rec?.examSlot);
+        const att  = Number(rec?.attemptNo);
+        if (!Number.isFinite(slot) || slot < 1 || !Number.isFinite(att) || att < 1) continue;
+
+        const g = group.get(slot) || { title: undefined, maxMarks: undefined, attempts: new Map(), total: 0 };
+        if (!g.title && rec?.examTitle != null) g.title = String(rec.examTitle ?? "");
+        if (!Number.isFinite(g.maxMarks) && Number.isFinite(Number(rec?.maxMarks))) g.maxMarks = Number(rec.maxMarks);
+
+        const a = g.attempts.get(att) || { attemptNo: att, count: 0, maxMarks: g.maxMarks, title: g.title };
+        a.count += 1;
+        if (!Number.isFinite(a.maxMarks) && Number.isFinite(Number(rec?.maxMarks))) a.maxMarks = Number(rec.maxMarks);
+        if (a.title == null && rec?.examTitle != null) a.title = String(rec.examTitle ?? "");
+        g.attempts.set(att, a);
+
+        g.total += 1;
+        group.set(slot, g);
+      }
+
+      const arr: ExamSlotInfo[] = Array.from(group.entries())
+        .map(([slot, g]) => ({
+          examSlot: slot,
+          title: g.title,
+          maxMarks: g.maxMarks,
+          totalCount: g.total,
+          attempts: Array.from(g.attempts.values()).sort((x, y) => x.attemptNo - y.attemptNo),
+        }))
+        .sort((x, y) => x.examSlot - y.examSlot);
+
+      setExamSlots(arr);
+
+      // choose first existing slot/attempt if current selection doesn't exist
+      const slotExists = arr.some(s => s.examSlot === examSlot);
+      if (!slotExists && arr.length) {
+        setExamSlot(arr[0].examSlot);
+        const firstAttempt = arr[0].attempts[0]?.attemptNo ?? 1;
+        setAttemptNo(firstAttempt);
+      } else if (slotExists) {
+        const selected = arr.find(s => s.examSlot === examSlot)!;
+        const attemptExists = selected.attempts.some(a => a.attemptNo === attemptNo);
+        if (!attemptExists && selected.attempts.length) {
+          setAttemptNo(selected.attempts[0].attemptNo);
+        }
+      }
+    } catch (err: any) {
+      console.error("Failed to load exam slots:", err?.response?.data || err.message);
+      toast.error(err?.response?.data?.error || "Failed to load exam sessions");
+    } finally {
+      setLoadingExams(false);
+    }
+  }
+
   useEffect(() => {
-    if (mode === "exam" && !examTitle) setExamTitle(`Exam-${attemptNo}`);
-  }, [mode, attemptNo, examTitle]);
+    if (!authHeader || !selectedCI) return;
+    loadExamSlots();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCI, token]);
 
-  /* ========= 4) Change handlers ========= */
+  /* ========= Load existing saved rows for selected (slot, attempt) ========= */
+  async function loadExistingRows() {
+    if (!selectedCI || !authHeader) return;
+
+    const params =
+      mode === "exam"
+        ? `?kind=exam&examSlot=${examSlot}&attemptNo=${attemptNo}`
+        : `?kind=practical`;
+
+    try {
+      const res = await axios.get(
+        `${BACKEND}/result/list/${selectedCI}${params}`,
+        { headers: authHeader }
+      );
+      const records = Array.isArray(res.data) ? res.data : [];
+
+      // For exam: pick maxMarks + title from existing rows of this (slot, attempt)
+      if (mode === "exam") {
+        if (records.length) {
+          const withMax = records.find((r: any) => Number.isFinite(Number(r?.maxMarks)));
+          if (withMax) setMaxMarks(Number(withMax.maxMarks));
+          const withTitle = records.find((r: any) => r?.examTitle != null);
+          if (withTitle) setExamTitle(String(withTitle.examTitle ?? ""));
+        }
+      }
+
+      const byStudent: Record<string, any> = {};
+      for (const rec of records) {
+        const sid = rec?.student?._id || rec?.student;
+        if (!sid) continue;
+        if (rec.kind === "exam") {
+          const outcome: ExamRow["examOutcome"] = rec?.examOutcome || (Number.isFinite(Number(rec?.marks)) ? "scored" : undefined);
+          byStudent[sid] = {
+            examOutcome: outcome,
+            marks: outcome === "scored" ? (Number.isFinite(Number(rec?.marks)) ? Number(rec.marks) : undefined) : undefined,
+            remarks: rec.remarks ?? "",
+          };
+        } else {
+          byStudent[sid] = {
+            pFirst: rec.pFirst ?? undefined,
+            pFinal: rec.pFinal ?? undefined,
+            pAssign: rec.pAssign ?? undefined,
+            pAttend: rec.pAttend ?? undefined,
+            practicalTotal: rec.practicalTotal ?? undefined,
+            remarks: rec.remarks ?? "",
+          };
+        }
+      }
+
+      setRows((prev) => {
+        const next = { ...prev };
+        for (const s of students) {
+          if (byStudent[s._id]) {
+            next[s._id] = { ...(next[s._id] || {}), ...byStudent[s._id] };
+          } else {
+            if (mode === "exam") {
+              next[s._id] = { ...(next[s._id] || {}), marks: undefined, remarks: "", examOutcome: undefined };
+            } else {
+              next[s._id] = { ...(next[s._id] || {}), pFirst: undefined, pFinal: undefined, pAssign: undefined, pAttend: undefined, practicalTotal: undefined, remarks: "" };
+            }
+          }
+        }
+        return next;
+      });
+    } catch (err: any) {
+      console.error("Failed to load existing results:", err?.response?.data || err.message);
+      toast.error(err?.response?.data?.error || "Failed to load existing results");
+    }
+  }
+
+  useEffect(() => {
+    if (!authHeader) return;
+    if (!selectedCI) return;
+    if (students.length === 0) return;
+    loadExistingRows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCI, mode, examSlot, attemptNo, students.length, token]);
+
+  /* ========= Change handlers ========= */
   function clamp(num: number | undefined, max: number) {
     if (num === undefined || Number.isNaN(num)) return undefined;
     return Math.min(Math.max(num, 0), max);
@@ -195,13 +338,29 @@ export default function MarksEntry() {
   ) => {
     setRows((prev) => {
       const next = { ...prev };
-      const r = { ...(next[studentId] || {}) };
+      const r: any = { ...(next[studentId] || {}) };
 
       if (field === "remarks") {
-        (r as any).remarks = value;
+        r.remarks = value;
       } else if (mode === "exam" && field === "marks") {
-        const n = value === "" ? undefined : Number(value);
-        (r as any).marks = Number.isFinite(n as number) ? (n as number) : undefined;
+        const raw = (value ?? "").trim();
+
+        if (raw === "") {
+          r.marks = undefined;
+          r.examOutcome = undefined;
+        } else if (/^a$/i.test(raw)) {
+          r.examOutcome = "ab";
+          r.marks = 0;
+        } else if (/^n$/i.test(raw)) {
+          r.examOutcome = "not_assigned";
+          r.marks = undefined;
+        } else {
+          const n = Number(raw);
+          if (Number.isFinite(n)) {
+            r.examOutcome = "scored";
+            r.marks = clamp(n, maxMarks);
+          }
+        }
       } else {
         const raw = value === "" ? undefined : Number(value);
         let n: number | undefined = Number.isFinite(raw as number) ? (raw as number) : undefined;
@@ -209,13 +368,13 @@ export default function MarksEntry() {
         if (field === "pFinal") n = clamp(n, pMaxFinal);
         if (field === "pAssign") n = clamp(n, pMaxAssign);
         if (field === "pAttend") n = clamp(n, pMaxAttend);
-        (r as any)[field] = n;
+        r[field] = n;
 
         const t = (r.pFirst || 0) + (r.pFinal || 0) + (r.pAssign || 0) + (r.pAttend || 0);
-        (r as any).practicalTotal = Number.isFinite(t) ? t : undefined;
+        r.practicalTotal = Number.isFinite(t) ? t : undefined;
       }
 
-      next[studentId] = r as any;
+      next[studentId] = r;
       return next;
     });
   };
@@ -223,18 +382,22 @@ export default function MarksEntry() {
   const canSubmit = useMemo(() => {
     if (!selectedCI || students.length === 0) return false;
     if (mode === "exam") {
-      if (![1, 2, 3].includes(attemptNo)) return false;
+      if (!Number.isInteger(examSlot) || examSlot < 1) return false;
+      if (!Number.isInteger(attemptNo) || attemptNo < 1) return false;
       if (!Number.isFinite(maxMarks) || maxMarks < 0) return false;
-      return students.some((s) => Number.isFinite(rows[s._id]?.marks as number));
+      return students.some((s) => {
+        const r = rows[s._id] as ExamRow | undefined;
+        return r?.examOutcome != null || Number.isFinite(r?.marks as number);
+      });
     }
     return students.some((s) => Number.isFinite(rows[s._id]?.practicalTotal as number));
-  }, [selectedCI, students, rows, mode, attemptNo, maxMarks]);
+  }, [selectedCI, students, rows, mode, examSlot, attemptNo, maxMarks]);
 
-  /* ========= 5) Submit to real endpoints ========= */
+  /* ========= Submit ========= */
   const handleSubmit = async () => {
     if (!canSubmit || saving) return;
     if (!authHeader) {
-      alert("Not authenticated. Please login again.");
+      toast.error("Not authenticated. Please login again.");
       return;
     }
     try {
@@ -243,20 +406,28 @@ export default function MarksEntry() {
 
       if (mode === "exam") {
         const payload = {
+          examSlot,
           attemptNo,
           maxMarks,
-          examTitle: examTitle || `Exam-${attemptNo}`,
+          examTitle,
           rows: students
-            .filter((s) => Number.isFinite(rows[s._id]?.marks as number))
-            .map((s) => ({
-              student: s._id,
-              marks: rows[s._id]!.marks!,
-              remarks: rows[s._id]?.remarks || undefined,
-            })),
+            .filter((s) => {
+              const r = rows[s._id] as ExamRow | undefined;
+              return r && (r.examOutcome != null || Number.isFinite(r.marks as number));
+            })
+            .map((s) => {
+              const r = rows[s._id] as ExamRow;
+              const outcome = r.examOutcome ?? (Number.isFinite(r.marks as number) ? "scored" : undefined);
+              return {
+                student: s._id,
+                examOutcome: outcome,
+                ...(outcome === "ab" ? { marks: 0 } :
+                   outcome === "scored" ? { marks: r.marks } : {}),
+                remarks: r.remarks || undefined,
+              };
+            }),
         };
-        await axios.post(`${BACKEND}/results/bulk/exam/${selectedCI}`, payload, {
-          headers: authHeader,
-        });
+        await axios.post(`${BACKEND}/result/bulk/exam/${selectedCI}`, payload, { headers: authHeader });
       } else {
         const payload = {
           pMaxFirst,
@@ -287,34 +458,39 @@ export default function MarksEntry() {
               };
             }),
         };
-        await axios.post(`${BACKEND}/results/bulk/practical/${selectedCI}`, payload, {
-          headers: authHeader,
-        });
+        await axios.post(`${BACKEND}/result/bulk/practical/${selectedCI}`, payload, { headers: authHeader });
       }
 
       setSaveSuccess(true);
+      toast.success("Marks saved successfully!");
+
+      await loadExamSlots();
+      await loadExistingRows();
+
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err: any) {
-      console.error("Save failed:", err?.response?.data || err.message);
-      alert(err?.response?.data?.error || err?.response?.data?.message || "Failed to save");
+      toast.error(err?.response?.data?.error || err?.response?.data?.message || "Failed to save");
     } finally {
       setSaving(false);
     }
   };
 
-  /* ========= 6) CSV Download ========= */
+  /* ========= CSV Download ========= */
   const handleDownloadCSV = () => {
-    const headerExam = ["SN","Student Name/Email","Marks","Remarks"];
-    const headerPrac = ["SN","Student Name/Email","First(5)","Final(5)","Assignment(5)","Attendance(5)","Total(40)","Remarks"];
+    const headerExam = ["SN", "Student Name/Email", "Marks (or A/N)", "Remarks"];
+    const headerPrac = ["SN", "Student Name/Email", "First(5)", "Final(5)", "Assignment(5)", "Attendance(5)", "Total(40)", "Remarks"];
 
     const lines: string[] = [];
     if (mode === "exam") {
       lines.push(headerExam.join(","));
       students.forEach((s, i) => {
-        const r = rows[s._id] || {};
+        const r = (rows[s._id] || {}) as ExamRow;
         const name = (s.name || s.username || s.email || s._id).replace(/,/g, " ");
-        const marks = (r as any).marks ?? "";
-        const remarks = ((r as any).remarks || "").replace(/,/g, " ");
+        const marks =
+          r.examOutcome === "ab" ? "A" :
+          r.examOutcome === "not_assigned" ? "N" :
+          (Number.isFinite(r.marks as number) ? String(r.marks) : "");
+        const remarks = (r.remarks || "").replace(/,/g, " ");
         lines.push([i + 1, name, marks, remarks].join(","));
       });
     } else {
@@ -335,16 +511,50 @@ export default function MarksEntry() {
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    const title = mode === "exam" ? `exam_attempt${attemptNo}_CI_${selectedCI}.csv` : `practical_CI_${selectedCI}.csv`;
+    const title =
+      mode === "exam"
+        ? `exam_slot${examSlot}_attempt${attemptNo}_CI_${selectedCI}.csv`
+        : `practical_CI_${selectedCI}.csv`;
     a.href = url;
     a.download = title;
     a.click();
     URL.revokeObjectURL(url);
+    toast.success("CSV exported");
+  };
+
+  /* ========= Print ========= */
+  const handlePrint = () => {
+    toast("Preparing print…", { icon: "🖨️" });
+    window.print();
+  };
+
+  /* ========= Exam Session actions ========= */
+  const handleOpenAttempt = (slot: number, attempt: number) => {
+    setExamSlot(slot);
+    setAttemptNo(attempt);
+  };
+
+  const handleCreateNewExam = () => {
+    const nextSlot = examSlots.length ? Math.max(...examSlots.map(s => s.examSlot)) + 1 : 1;
+    setExamSlot(nextSlot);
+    setAttemptNo(1);
+    setExamTitle("");
+    if (!Number.isFinite(maxMarks)) setMaxMarks(30);
+    toast.success(`New exam created locally (Slot ${nextSlot}, Attempt 1). Enter marks & save to persist.`);
+  };
+
+  const handleCreateNewAttempt = () => {
+    const slot = examSlots.find(s => s.examSlot === examSlot);
+    const nextAttempt = slot && slot.attempts.length
+      ? Math.max(...slot.attempts.map(a => a.attemptNo)) + 1
+      : 1;
+    setAttemptNo(nextAttempt);
+    toast.success(`New attempt created locally (Slot ${examSlot}, Attempt ${nextAttempt}). Save to persist.`);
   };
 
   const filledRows = students.filter(s => {
-    const r = rows[s._id] || {};
-    if (mode === "exam") return Number.isFinite((r as any).marks as number);
+    const r = rows[s._id] as ExamRow & PracticalRow;
+    if (mode === "exam") return (r as ExamRow)?.examOutcome != null || Number.isFinite((r as ExamRow)?.marks as number);
     return Number.isFinite((r as any).practicalTotal as number);
   }).length;
 
@@ -359,12 +569,48 @@ export default function MarksEntry() {
     );
   }
 
+  const selectedCILabel =
+    selectedCI ? ciLabel(courseInstances.find(ci => ci._id === selectedCI) || ({} as CourseInstanceLite)) : "None";
+
+  function examOutcomeClasses(
+    outcome?: "scored" | "ab" | "not_assigned"
+  ) {
+    if (outcome === "ab") {
+      return "bg-red-50 border-red-300 text-red-700 placeholder-red-400 focus:ring-red-500 focus:border-red-500";
+    }
+    if (outcome === "scored") {
+      return "bg-green-50 border-green-300 text-green-700 focus:ring-green-500 focus:border-green-500";
+    }
+    // not_assigned or empty → normal look
+    return "";
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      {/* Toaster */}
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 5000,
+          style: { fontSize: "14px" },
+          success: { style: { background: "#16a34a", color: "white" } },
+          error: { style: { background: "#dc2626", color: "white" } },
+        }}
+      />
+
+      {/* Print styles */}
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          .print-block { display: block !important; }
+          .print-break-inside-avoid { break-inside: avoid; }
+        }
+      `}</style>
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-8 no-print">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-blue-100 rounded-lg">
               <ClipboardList className="h-6 w-6 text-blue-600" />
@@ -375,7 +621,7 @@ export default function MarksEntry() {
         </div>
 
         {/* Configuration Panel */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 mb-8">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 mb-8 no-print">
           <div className="px-6 py-4 border-b border-slate-200">
             <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
               <BookOpen className="h-5 w-5 text-slate-600" />
@@ -430,20 +676,120 @@ export default function MarksEntry() {
                 </div>
               </div>
 
+              {/* Exam Slots + Attempts (list) */}
+              {mode === "exam" && (
+                <div className="lg:col-span-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Exam Slots & Attempts</label>
+                  <div className="flex flex-col gap-2">
+                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                      <div className="max-h-64 overflow-auto divide-y divide-slate-100">
+                        {loadingExams && (
+                          <div className="flex items-center gap-2 px-3 py-2 text-slate-600">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Loading exams…
+                          </div>
+                        )}
+                        {!loadingExams && examSlots.length === 0 && (
+                          <div className="px-3 py-3 text-slate-500">No exam slots yet. Create one below.</div>
+                        )}
+                        {!loadingExams && examSlots.map((slot) => (
+                          <div key={slot.examSlot} className="px-3 py-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${
+                                  examSlot === slot.examSlot ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"
+                                }`}>
+                                  {slot.examSlot}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="text-sm font-medium text-slate-900 truncate">
+                                    {slot.title || `Exam-${slot.examSlot}`}
+                                  </div>
+                                  <div className="text-xs text-slate-500">
+                                    Max {slot.maxMarks ?? "—"} • {slot.totalCount} record{slot.totalCount === 1 ? "" : "s"}
+                                  </div>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => { setExamSlot(slot.examSlot); if (slot.attempts[0]) setAttemptNo(slot.attempts[0].attemptNo); }}
+                                className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
+                                title="Select this exam slot"
+                              >
+                                <FolderOpen className="h-4 w-4" />
+                                Open
+                              </button>
+                            </div>
+
+                            {/* attempts pills */}
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {slot.attempts.map((a) => (
+                                <button
+                                  key={a.attemptNo}
+                                  onClick={() => handleOpenAttempt(slot.examSlot, a.attemptNo)}
+                                  className={`px-2 py-1 rounded text-xs border ${
+                                    examSlot === slot.examSlot && attemptNo === a.attemptNo
+                                      ? "bg-blue-600 text-white border-blue-600"
+                                      : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                                  }`}
+                                  title={`Open Attempt ${a.attemptNo}`}
+                                >
+                                  Attempt {a.attemptNo} <span className="opacity-70">({a.count})</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs text-slate-500">
+                        Current: Slot <span className="font-semibold text-slate-700">{examSlot}</span> • Attempt <span className="font-semibold text-slate-700">{attemptNo}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleCreateNewAttempt}
+                          className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200"
+                          title="Create a new attempt for current slot"
+                        >
+                          <PlusCircle className="h-4 w-4" />
+                          New Attempt
+                        </button>
+                        <button
+                          onClick={handleCreateNewExam}
+                          className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700"
+                          title="Create a new exam slot"
+                        >
+                          <PlusCircle className="h-4 w-4" />
+                          New Exam
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Dynamic Config */}
               {mode === "exam" ? (
-                <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Exam Slot</label>
+                    <input
+                      type="number"
+                      min={1}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-4 py-3 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      value={examSlot}
+                      onChange={(e) => setExamSlot(Math.max(1, Number(e.target.value || 1)))}
+                    />
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Attempt Number</label>
-                    <select
+                    <input
+                      type="number"
+                      min={1}
                       className="w-full bg-white border border-slate-300 rounded-lg px-4 py-3 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       value={attemptNo}
-                      onChange={(e) => setAttemptNo(Number(e.target.value))}
-                    >
-                      <option value={1}>First Attempt</option>
-                      <option value={2}>Second Attempt</option>
-                      <option value={3}>Third Attempt</option>
-                    </select>
+                      onChange={(e) => setAttemptNo(Math.max(1, Number(e.target.value || 1)))}
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Maximum Marks</label>
@@ -460,10 +806,13 @@ export default function MarksEntry() {
                     <input
                       type="text"
                       className="w-full bg-white border border-slate-300 rounded-lg px-4 py-3 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder={`Exam-${attemptNo}`}
+                      placeholder={`Exam-${examSlot}`}
                       value={examTitle}
                       onChange={(e) => setExamTitle(e.target.value)}
                     />
+                  </div>
+                  <div className="md:col-span-4 text-xs text-slate-500">
+                    Tip: In the <b>Marks</b> cell you can type <b>A</b> for Absent (saves as 0), <b>N</b> for Not Assigned, or a number 0–{maxMarks}.
                   </div>
                 </div>
               ) : (
@@ -505,7 +854,7 @@ export default function MarksEntry() {
         <div className="bg-white rounded-xl shadow-sm border border-slate-200">
 
           {/* Table Header */}
-          <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+          <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between no-print">
             <div className="flex items-center gap-3">
               <Users className="h-5 w-5 text-slate-600" />
               <div>
@@ -526,6 +875,15 @@ export default function MarksEntry() {
               >
                 <Download className="h-4 w-4" />
                 Export CSV
+              </button>
+
+              <button
+                onClick={handlePrint}
+                className="flex items-center gap-2 px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors duration-200"
+                title="Print this page"
+              >
+                <Printer className="h-4 w-4" />
+                Print
               </button>
 
               <button
@@ -560,7 +918,7 @@ export default function MarksEntry() {
 
           {/* Progress Bar */}
           {students.length > 0 && (
-            <div className="px-6 py-2 bg-slate-50 border-b border-slate-200">
+            <div className="px-6 py-2 bg-slate-50 border-b border-slate-200 no-print">
               <div className="flex items-center justify-between text-xs text-slate-600 mb-1">
                 <span>Progress</span>
                 <span>{Math.round((filledRows / students.length) * 100)}% complete</span>
@@ -569,7 +927,7 @@ export default function MarksEntry() {
                 <div
                   className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full transition-all duration-500"
                   style={{ width: `${(filledRows / students.length) * 100}%` }}
-                ></div>
+                />
               </div>
             </div>
           )}
@@ -580,7 +938,7 @@ export default function MarksEntry() {
             {mode === "exam" ? (
               <div className="grid grid-cols-12 bg-slate-50 border-b border-slate-200 text-sm font-medium text-slate-600">
                 <div className="col-span-4 p-4">Student Information</div>
-                <div className="col-span-2 p-4 text-center">Marks (/{maxMarks})</div>
+                <div className="col-span-2 p-4 text-center">Marks (/{maxMarks} or A/N)</div>
                 <div className="col-span-6 p-4">Remarks</div>
               </div>
             ) : (
@@ -598,21 +956,26 @@ export default function MarksEntry() {
             {/* Table Rows */}
             <div className="max-h-[60vh] overflow-auto">
               {students.map((s, idx) => {
-                const r = rows[s._id] || {};
+                const r = rows[s._id] as ExamRow & PracticalRow || {};
                 const displayName = s.name || s.username || s.email || s._id.slice(-6);
-                const hasData = mode === "exam" ? Number.isFinite((r as any).marks as number) : Number.isFinite((r as any).practicalTotal as number);
+                const hasData = mode === "exam"
+                  ? ((r as ExamRow)?.examOutcome != null || Number.isFinite((r as any).marks as number))
+                  : Number.isFinite((r as any).practicalTotal as number);
 
-                // ref helper
                 const setRef = (field: string) => (el: HTMLInputElement | null) => {
                   if (!cellRefs.current[s._id]) cellRefs.current[s._id] = {};
                   cellRefs.current[s._id][field] = el;
                 };
 
+                // display value for exam marks: A / N / number
+                const examDisplayVal =
+                  (r as ExamRow)?.examOutcome === "ab" ? "A" :
+                  (r as ExamRow)?.examOutcome === "not_assigned" ? "N" :
+                  ((r as ExamRow)?.marks ?? "");
+
                 return (
                   <div
-                    className={`grid grid-cols-12 border-b border-slate-100 hover:bg-slate-50 transition-colors duration-150 ${
-                      hasData ? "bg-green-50/50" : ""
-                    }`}
+                    className={`grid grid-cols-12 border-b border-slate-100 hover:bg-slate-50 transition-colors duration-150 ${hasData ? "bg-green-50/50" : ""}`}
                     key={s._id}
                   >
                     {mode === "exam" ? (
@@ -635,13 +998,16 @@ export default function MarksEntry() {
                             ref={setRef("marks")}
                             onKeyDown={handleCellKeyDown(idx, 0)}
                             onFocus={(e) => e.currentTarget.select()}
-                            type="number"
-                            min={0}
-                            max={maxMarks}
-                            className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-center focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            value={(r as any).marks ?? ""}
+                            type="text" /* allow A/N */
+                            className={[
+                              "w-full border rounded-lg px-3 py-2 text-center",
+                              "focus:ring-2 focus:border-transparent",
+                              "bg-white border-slate-300", // base
+                              examOutcomeClasses((r as ExamRow)?.examOutcome), // color by outcome
+                            ].join(" ")}
+                            value={mode === "exam" ? (examDisplayVal as any) : ""}
                             onChange={(e) => handleChangeRow(s._id, "marks", e.target.value)}
-                            placeholder={`0 - ${maxMarks}`}
+                            placeholder={`0 - ${maxMarks} or A/N`}
                             aria-label={`Marks for ${displayName}`}
                           />
                         </div>
@@ -784,13 +1150,16 @@ export default function MarksEntry() {
         </div>
 
         {/* Status Footer */}
-        <div className="mt-6 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <div className="mt-6 bg-white rounded-xl shadow-sm border border-slate-200 p-6 print-break-inside-avoid">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-6 text-sm">
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <div className="w-2 h-2 bg-blue-500 rounded-full no-print"></div>
                 <span className="text-slate-600">
-                  Selected: <span className="font-mono text-slate-800">{selectedCI || "None"}</span>
+                  Selected:{" "}
+                  <span className="font-mono text-slate-800">
+                    {selectedCI ? selectedCILabel : "None"}
+                  </span>
                 </span>
               </div>
 
@@ -798,7 +1167,7 @@ export default function MarksEntry() {
                 <div className="flex items-center gap-2">
                   <Award className="h-4 w-4 text-slate-500" />
                   <span className="text-slate-600">
-                    Exam Mode • Attempt {attemptNo} • Max {maxMarks} marks
+                    Exam Mode • Slot {examSlot} • Attempt {attemptNo} • Max {maxMarks} marks • Use A=Absent, N=Not Assigned
                   </span>
                 </div>
               ) : (
@@ -811,19 +1180,21 @@ export default function MarksEntry() {
               )}
             </div>
 
-            {!canSubmit && students.length > 0 && (
-              <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
-                <AlertCircle className="h-4 w-4" />
-                <span className="text-sm font-medium">Fill at least one entry to save</span>
-              </div>
-            )}
+            <div className="no-print">
+              {!canSubmit && students.length > 0 && (
+                <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
+                  <AlertCircle className="h-4 w-4" />
+                  <span className="text-sm font-medium">Fill at least one entry to save</span>
+                </div>
+              )}
 
-            {canSubmit && (
-              <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-2 rounded-lg">
-                <CheckCircle2 className="h-4 w-4" />
-                <span className="text-sm font-medium">Ready to save {filledRows} entries</span>
-              </div>
-            )}
+              {canSubmit && (
+                <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-2 rounded-lg">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span className="text-sm font-medium">Ready to save {filledRows} entries</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
