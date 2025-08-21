@@ -29,7 +29,7 @@ const sidebarItems: SidebarItems = [
   { id: 8, label: "Schedule Management", icon: <FaCalendarAlt />, page: "/admin/schedule" },
   { id: 9, label: "Assignment Monitoring", icon: <MdAssignment />, page: "/admin/assignments" },
   { id: 10, label: "Announcements", icon: <FaBullhorn />, page: "/admin/announcement" },
-  { id: 11, label: "Reports & Analytics", icon: <FaFileAlt />, page: "/admin/reports" },
+  { id: 11, label: "Exams & Reports", icon: <FaFileAlt />, page: "/admin/result" },
   { id: 12, label: "Reference", icon: <FaFileAlt />, page: "/admin/reference" },
 ];
 
