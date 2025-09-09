@@ -20,7 +20,7 @@ import { Home } from "lucide-react";
 
 const sidebarItems: SidebarItems = [
   { id: 1, label: "Home", icon: <Home />, page: "/admin" },
-  { id: 2, label: "Faculty Management", icon: <FaGraduationCap />, page: "/admin/faculty" },
+  { id: 2, label: "Program Management", icon: <FaGraduationCap />, page: "/admin/faculty" },
   { id: 3, label: "User Management", icon: <FaUser />, page: "/admin/users" },
   { id: 4, label: "Batch Management", icon: <BsFillPeopleFill />, page: "/admin/batch" },
   { id: 5, label: "Course Management", icon: <FaBook />, page: "/admin/course" },
@@ -38,50 +38,52 @@ export default function Sidebar() {
   const router = useRouter();
 
   const handleLogout = () => {
-    localStorage.removeItem("token"); // Clear the token
-    router.push("/admin_login"); // Redirect to login
+    localStorage.removeItem("token");
+    router.push("/admin_login");
   };
 
   return (
-    <aside className="fixed top-24 h-screen bg-[#F5F5F5] z-50 text-[#2E3094] group transition-all duration-300 w-20 hover:w-64 overflow-hidden overflow-y-auto">
-      <ul className="space-y-3 px-2">
-        {sidebarItems.map((item) => {
-          const isActive = item.page === "/admin"
-            ? pathname === "/admin"
-            : pathname.startsWith(item.page || "");
+    <aside className="fixed top-24 left-0 h-[calc(100vh-6rem)] bg-[#F5F5F5] z-50 text-[#2E3094] group transition-all duration-300 w-20 hover:w-64 overflow-hidden">
+      <div className="h-full overflow-y-auto">
+        <ul className="space-y-3 px-2 py-4">
+          {sidebarItems.map((item) => {
+            const isActive = item.page === "/admin"
+              ? pathname === "/admin"
+              : pathname.startsWith(item.page || "");
 
-          return (
-            <li key={item.id}>
-              <Link
-                href={item.page || ""}
-                className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${
-                  isActive ? "bg-[#2E3094] text-[#F5F5F5]" : "hover:bg-[#e0ec83]"
-                }`}
-              >
-                <div className="text-xl">{item.icon}</div>
-                <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  {item.label}
-                </span>
-              </Link>
-            </li>
-          );
-        })}
+            return (
+              <li key={item.id}>
+                <Link
+                  href={item.page || ""}
+                  className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${
+                    isActive ? "bg-[#2E3094] text-[#F5F5F5]" : "hover:bg-[#e0ec83]"
+                  }`}
+                >
+                  <div className="text-xl">{item.icon}</div>
+                  <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    {item.label}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
 
-        {/* LOGOUT BUTTON */}
-        <li>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 p-2 rounded w-full text-left transition-colors hover:bg-red-500 hover:text-white"
-          >
-            <div className="text-xl">
-              <FaSignOutAlt />
-            </div>
-            <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-              Logout
-            </span>
-          </button>
-        </li>
-      </ul>
+          {/* LOGOUT BUTTON */}
+          <li>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-3 p-2 rounded w-full text-left transition-colors hover:bg-red-500 hover:text-white"
+            >
+              <div className="text-xl">
+                <FaSignOutAlt />
+              </div>
+              <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                Logout
+              </span>
+            </button>
+          </li>
+        </ul>
+      </div>
     </aside>
   );
 }

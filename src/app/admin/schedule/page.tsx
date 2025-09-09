@@ -5,6 +5,7 @@
 import { useState } from "react";
 import AvailabilityAdminList from "./availability-list";
 import AdminScheduleSolverPage from "./schedule";
+import SchedulePage from "./schedule";
 
 type TabsProps = {
   availability: React.ReactNode;
@@ -64,7 +65,7 @@ export default function TimeTabs({
           </div>
         ) : (
           <div id="schedule-panel" role="tabpanel">
-            <AdminScheduleSolverPage />
+            <SchedulePage />
           </div>
         )}
       </div>
