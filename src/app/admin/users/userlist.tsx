@@ -4,6 +4,8 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "../types/type.user";
 import { Eye, Pencil, Trash2 } from "lucide-react";
+import EditUserModal from "./edit_form"; // adjust path if needed
+import ViewUserModal from "./view_details"; // adjust the path
 
 const roles = ["all", "student", "teacher", "admin", "superadmin"] as const;
 const MIN_LIMIT = 20;
@@ -37,6 +39,8 @@ const UserList: React.FC = () => {
   const [selectedFaculty, setSelectedFaculty] = useState<string>("");
   const [batches, setBatches] = useState<Batch[]>([]);
   const [selectedBatch, setSelectedBatch] = useState<string>("");
+  const [editUserId, setEditUserId] = useState<string | null>(null);
+  const [viewUserId, setViewUserId] = useState<string | null>(null);
 
   const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
 
@@ -392,18 +396,20 @@ const UserList: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <button
                         className="p-1 bg-blue-500 text-white rounded hover:bg-blue-600"
-                        onClick={() => alert(`View user: ${user.username}`)}
+                        onClick={() => setViewUserId(user._id)}
                         title="View"
                       >
                         <Eye size={18} />
                       </button>
+
                       <button
                         className="p-1 bg-yellow-500 text-white rounded hover:bg-yellow-600"
-                        onClick={() => alert(`Edit user: ${user.username}`)}
+                        onClick={() => setEditUserId(user._id)}
                         title="Edit"
                       >
                         <Pencil size={18} />
                       </button>
+
                       <button
                         className="p-1 bg-red-500 text-white rounded hover:bg-red-600"
                         onClick={() => setDeleteId(user._id)}
@@ -480,6 +486,25 @@ const UserList: React.FC = () => {
           onCancel={() => setDeleteId(null)}
         />
       )}
+      {editUserId && (
+        <EditUserModal
+          userId={editUserId}
+          onClose={() => setEditUserId(null)}
+          onSaved={() => {
+            setEditUserId(null);
+            fetchUsers();
+          }}
+        />
+      )}
+
+      {viewUserId && (
+        <ViewUserModal
+          userId={viewUserId}
+          onClose={() => setViewUserId(null)}
+        />
+      )}
+
+
     </div>
   );
 };
@@ -518,6 +543,7 @@ function ConfirmModal({
     </div>
   );
 }
+
 
 function increaseLimit(limit: number, totalCount: number, setLimit: (n: number) => void) {
   if (limit === 0) return;

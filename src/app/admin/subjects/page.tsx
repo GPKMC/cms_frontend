@@ -96,10 +96,10 @@ export default function CourseInstanceList() {
                 <th className="text-left px-4 py-2 border">Course</th>
                 <th className="text-left px-4 py-2 border">Type</th>
                 <th className="text-left px-4 py-2 border">Teacher</th>
-                <th className="text-center px-4 py-2 border">Assignments</th>
+                {/* <th className="text-center px-4 py-2 border">Assignments</th>
                 <th className="text-center px-4 py-2 border">Materials</th>
                 <th className="text-center px-4 py-2 border">Attendance</th>
-                <th className="text-center px-4 py-2 border">Grades</th>
+                <th className="text-center px-4 py-2 border">Grades</th> */}
                 <th className="text-center px-4 py-2 border">Active?</th>
                 <th className="text-left px-4 py-2 border">Created</th>
                 <th className="text-left px-4 py-2 border">Updated</th>
@@ -133,7 +133,7 @@ export default function CourseInstanceList() {
                     <span>{instance.teacher?.username}</span>
                     <div className="text-xs text-gray-500">{instance.teacher?.email}</div>
                   </td>
-                  <td className="px-4 py-2 border text-center">
+                  {/* <td className="px-4 py-2 border text-center">
                     <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">
                       {Array.isArray(instance.assignments) ? instance.assignments.length : 0}
                     </span>
@@ -152,7 +152,7 @@ export default function CourseInstanceList() {
                     <span className="bg-pink-100 text-pink-700 px-2 py-1 rounded text-xs">
                       {Array.isArray(instance.grades) ? instance.grades.length : 0}
                     </span>
-                  </td>
+                  </td> */}
                   <td className="px-4 py-2 border text-center">
                     {instance.isActive ? (
                       <span className="bg-green-200 text-green-900 px-2 py-1 rounded text-xs font-bold">
