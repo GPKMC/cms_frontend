@@ -141,71 +141,90 @@ if (field === "batch") {
   };
 
   // Submit bulk users
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setErrors(users.map(() => ({ username: "", email: "", password: "", role: "", faculty: "", batch: "" })));
+// Submit bulk users
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setLoading(true);
 
-    try {
-      const token = localStorage.getItem("token_admin");
-      if (!token) {
-        showToast("error", "Authorization token missing. Please login again.");
-        setLoading(false);
-        return;
-      }
+  // Reset all errors
+  setErrors(users.map(() => ({ username: "", email: "", password: "", role: "", faculty: "", batch: "" })));
 
-      let response;
-      if (file) {
-        const formData = new FormData();
-        formData.append("file", file);
-        response = await fetch(`${baseUrl}/user-api/users/bulk`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        });
-      } else {
-        const sendUsers = users.map(({ username, email, password, role, faculty, batch }) => ({
-          username,
-          email,
-          password,
-          role,
-          faculty,
-          batch,
-        }));
-
-        response = await fetch(`${baseUrl}/user-api/users/bulk`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ users: sendUsers }),
-        });
-      }
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        if (data.field && data.message) {
-          const updatedErrors = [...errors];
-          updatedErrors[0] = { ...updatedErrors[0], [data.field]: data.message };
-          setErrors(updatedErrors);
-          showToast("error", data.message);
-        } else {
-          showToast("error", data.message || "Submission failed");
-        }
-      } else {
-        showToast("success", data.message || "Users created successfully");
-        setUsers([{ username: "", email: "", password: "", role: "student" }]);
-        setErrors([{ username: "", email: "", password: "", role: "", faculty: "", batch: "" }]);
-        setFile(null);
-      }
-    } catch (error) {
-      showToast("error", "Something went wrong");
-    } finally {
+  try {
+    const token = localStorage.getItem("token_admin");
+    if (!token) {
+      showToast("error", "Authorization token missing. Please login again.");
       setLoading(false);
+      return;
     }
-  };
+
+    let response;
+
+    if (file) {
+      // CSV upload
+      const formData = new FormData();
+      formData.append("file", file);
+      response = await fetch(`${baseUrl}/user-api/users/bulk`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+    } else {
+      // JSON array
+      const sendUsers = users.map(({ username, email, password, role, faculty, batch }) => ({
+        username: username?.trim(),
+        email: email?.trim(),
+        password: password?.trim(),
+        role: role?.trim(),
+        faculty: faculty?.trim() || undefined,
+        batch: batch?.trim() || undefined,
+      }));
+
+      response = await fetch(`${baseUrl}/user-api/users/bulk`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ users: sendUsers }),
+      });
+    }
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      // Handle row-specific errors
+      if (data.field && data.message && typeof data.rowIndex === "number") {
+        const updatedErrors = [...errors];
+        updatedErrors[data.rowIndex] = {
+          ...updatedErrors[data.rowIndex],
+          [data.field]: data.message,
+        };
+        setErrors(updatedErrors);
+        showToast("error", `Row ${data.rowIndex + 1}: ${data.message}`);
+      } else if (data.field && data.message) {
+        // fallback if no rowIndex from backend
+        const updatedErrors = [...errors];
+        updatedErrors[0] = { ...updatedErrors[0], [data.field]: data.message };
+        setErrors(updatedErrors);
+        showToast("error", data.message);
+      } else {
+        showToast("error", data.message || "Submission failed");
+      }
+    } else {
+      showToast("success", data.message || "Users created successfully");
+      // Reset form
+      setUsers([{ username: "", email: "", password: "", role: "student" }]);
+      setErrors([{ username: "", email: "", password: "", role: "", faculty: "", batch: "" }]);
+      setFile(null);
+    }
+  } catch (error) {
+    console.error(error);
+    showToast("error", "Something went wrong");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
     <div className="relative">
