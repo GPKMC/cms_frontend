@@ -130,9 +130,8 @@ export default function FacultyManagement() {
             {filteredFaculties.map((f, i) => (
               <tr
                 key={f._id}
-                className={`${
-                  i % 2 === 0 ? "bg-white" : "bg-gray-50"
-                } hover:bg-blue-50 transition`}
+                className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"
+                  } hover:bg-blue-50 transition`}
               >
                 <td className="p-3 border-t border-r border-gray-300">
                   {f.name}
@@ -147,8 +146,11 @@ export default function FacultyManagement() {
                   {f.programLevel}
                 </td>
                 <td className="p-3 border-t border-r border-gray-300">
-                  {f.totalSemestersOrYears}
+                  {f.type === "yearly"
+                    ? `${f.totalSemestersOrYears} years`
+                    : `${f.totalSemestersOrYears} sems`}
                 </td>
+
                 <td className="p-3 border-t border-gray-300 flex gap-3">
                   <button
                     onClick={() =>
