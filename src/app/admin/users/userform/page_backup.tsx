@@ -14,7 +14,7 @@ export type Faculty = {
 export type Batch = {
   _id: string;
   batchname: string;
-  faculty: string;
+  faculty: string; // faculty _id
 };
 
 export type UserRow = {
@@ -82,7 +82,7 @@ const BulkUserForm: React.FC = () => {
   }, [baseUrl]);
 
   const fetchBatchesForFaculty = async (facultyId: string) => {
-    if (!facultyId || batchesByFaculty[facultyId]) return;
+    if (!facultyId || batchesByFaculty[facultyId]) return; // cached
     try {
       const token = localStorage.getItem("token_admin");
       if (!token) {
@@ -105,11 +105,12 @@ const BulkUserForm: React.FC = () => {
   // ---------- Handlers ----------
   const handleChange = (index: number, field: keyof UserRow, value: string) => {
     const updated = [...users];
+    // cast role safely
     const patch: Partial<UserRow> = field === "role" ? { role: value as UserRow["role"] } : { [field]: value } as any;
     updated[index] = { ...updated[index], ...patch };
 
     if (field === "faculty") {
-      updated[index].batch = "";
+      updated[index].batch = ""; // reset batch if faculty changes
       void fetchBatchesForFaculty(value);
     }
 
@@ -120,6 +121,7 @@ const BulkUserForm: React.FC = () => {
 
     setUsers(updated);
 
+    // clear field error on change
     const copy = [...errors];
     copy[index] = { ...copy[index], [field]: "" };
     if (field === "faculty") copy[index].batch = "";
@@ -138,8 +140,9 @@ const BulkUserForm: React.FC = () => {
 
   const clearFile = () => setFile(null);
 
+  // quick client-side guard (manual mode only)
   const validateManual = (): boolean => {
-    if (file) return true;
+    if (file) return true; // CSV mode
     const nextErrors = users.map((u) => ({ username: "", email: "", password: "", role: "", faculty: "", batch: "" }));
     let ok = true;
     users.forEach((u, i) => {
@@ -204,6 +207,7 @@ const BulkUserForm: React.FC = () => {
     if (!validateManual()) return;
 
     setLoading(true);
+    // reset errors for fresh server response mapping
     setErrors(users.map(() => ({ username: "", email: "", password: "", role: "", faculty: "", batch: "" })));
 
     try {
@@ -268,7 +272,7 @@ const BulkUserForm: React.FC = () => {
 
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Enhanced Toast */}
+      {/* Toast */}
       <AnimatePresence>
         {toast && (
           <motion.div
@@ -426,7 +430,6 @@ const BulkUserForm: React.FC = () => {
                           )}
                         </div>
                         
-                        <div className="grid grid-cols-1 gap-4 mt-6 md:grid-cols-6">
                           {/* Username */}
                           <div>
                             <label htmlFor={`username-${index}`} className="mb-2 block text-sm font-medium text-gray-700">
