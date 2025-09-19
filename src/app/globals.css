@@ -25,10 +25,15 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 } */
 
-@import "tailwindcss";
-@theme  {
-  --color-primary : #2E3094;
-  --color-secondary : #e0ec83;
+/* src/app/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+/* your custom styles below */
+
+:root {
+  --color-primary: #2E3094;
+  --color-secondary: #e0ec83;
 }
 
 /* globals.css */
