@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 
-// --------- Toast Component ----------
+/* ---------- Toast ---------- */
 function Toast({
   type = "info",
   message,
@@ -20,11 +20,13 @@ function Toast({
       className={`
         fixed top-8 right-8 z-50 min-w-[260px] max-w-[350px]
         flex items-center gap-3 px-6 py-4 rounded-lg shadow-xl border
-        ${type === "error"
-          ? "bg-red-600 text-white border-red-700"
-          : type === "success"
-          ? "bg-green-600 text-white border-green-700"
-          : "bg-blue-600 text-white border-blue-700"}
+        ${
+          type === "error"
+            ? "bg-red-600 text-white border-red-700"
+            : type === "success"
+            ? "bg-green-600 text-white border-green-700"
+            : "bg-blue-600 text-white border-blue-700"
+        }
         animate-toast-slide-in
       `}
       style={{ animation: "toast-slide-in .4s" }}
@@ -53,7 +55,7 @@ function Toast({
   );
 }
 
-// --------- Login Component ----------
+/* ---------- Types ---------- */
 type LoginResponse = {
   message: string;
   token?: string;
@@ -61,7 +63,7 @@ type LoginResponse = {
     id: string;
     username: string;
     email: string;
-    role: string;
+    role: "student" | "teacher" | "admin" | "superadmin";
   };
 };
 
@@ -71,10 +73,13 @@ export default function StudentLogin() {
   const [remember, setRemember] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  const [loadingGoogle, setLoadingGoogle] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
   const [success, setSuccess] = useState<string>("");
 
-  // Auto-close toast after 5 seconds
+  const baseurl = process.env.NEXT_PUBLIC_BACKEND_URL;
+
+  // Auto-close toast after 5s
   useEffect(() => {
     if (error || success) {
       const timer = setTimeout(() => {
@@ -90,14 +95,11 @@ export default function StudentLogin() {
     setLoading(true);
     setError("");
     setSuccess("");
-    const baseurl = process.env.NEXT_PUBLIC_BACKEND_URL;
 
     try {
       const res = await fetch(`${baseurl}/userAuth/login`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, role: "student" }),
       });
 
@@ -108,21 +110,36 @@ export default function StudentLogin() {
       } else {
         setSuccess("Login successful");
         if (data.token) {
-          if (remember) {
-            localStorage.setItem("token_student", data.token);
-          } else {
-            sessionStorage.setItem("token_student", data.token);
-          }
+          if (remember) localStorage.setItem("token_student", data.token);
+          else sessionStorage.setItem("token_student", data.token);
         }
         setTimeout(() => {
           window.location.href = "/student/dashboard";
-        }, 900); // Small delay so user sees the toast
+        }, 900);
       }
     } catch (err) {
       setError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGoogleLogin = () => {
+    setLoadingGoogle(true);
+    setError("");
+    setSuccess("");
+
+    // Stash “remember me” + intended fallback route so google-success can respect it
+    try {
+      localStorage.setItem("oauth_remember", remember ? "1" : "0");
+      // default target if role cannot be fetched (rare): student dashboard
+      localStorage.setItem("oauth_return", "/student/dashboard");
+    } catch {
+      /* ignore storage errors */
+    }
+
+    // Kick off OAuth with backend (mounted at /api/auth)
+    window.location.href = `${baseurl}/api/auth/google`;
   };
 
   return (
@@ -139,7 +156,7 @@ export default function StudentLogin() {
         />
       )}
 
-      {/* --- Left Panel (form, logo, text) --- */}
+      {/* Left Panel */}
       <div className="flex flex-col justify-center w-[50%] min-w-[420px] px-16 py-12 z-20">
         {/* Logo + College Name */}
         <div className="flex items-center gap-5 mb-8">
@@ -152,9 +169,7 @@ export default function StudentLogin() {
             <div className="font-bold text-xl leading-5 mb-1 text-white">
               G.P.Koirala Memorial <br /> College
             </div>
-            <div className="text-sm text-[#ececec] font-medium">
-              Sifal, Kathmandu
-            </div>
+            <div className="text-sm text-[#ececec] font-medium">Sifal, Kathmandu</div>
           </div>
         </div>
 
@@ -171,12 +186,13 @@ export default function StudentLogin() {
           onSubmit={handleSubmit}
           className="py-10 rounded-2xl bg-transparent w-full max-w-md flex flex-col items-center"
         >
-         <div className="w-full mb-6">
+          {/* Email */}
+          <div className="w-full mb-6">
             <input
               type="email"
               id="email"
               value={email}
-              onChange={e => setEmail(e.target.value)}
+              onChange={(e) => setEmail(e.target.value)}
               placeholder="Username"
               className="w-full text-lg px-2 py-3 bg-transparent text-start border-0 border-b-2 border-white focus:border-white focus:outline-none text-white placeholder-white/80 transition"
               required
@@ -186,12 +202,12 @@ export default function StudentLogin() {
           </div>
 
           {/* Password */}
-             <div className="w-full mb-8 relative">
+          <div className="w-full mb-8 relative">
             <input
               id="password"
               type={showPassword ? "text" : "password"}
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={(e) => setPassword(e.target.value)}
               placeholder="Password"
               className="w-full text-lg px-2 py-3 bg-transparent text-start border-0 border-b-2 border-white focus:border-white focus:outline-none text-white placeholder-white/80 transition"
               required
@@ -200,7 +216,7 @@ export default function StudentLogin() {
             />
             <button
               type="button"
-              onClick={() => setShowPassword(s => !s)}
+              onClick={() => setShowPassword((s) => !s)}
               className="absolute text-white right-2 top-1/2 -translate-y-1/2 hover:text-white/40 "
               tabIndex={-1}
               aria-label={showPassword ? "Hide password" : "Show password"}
@@ -209,25 +225,26 @@ export default function StudentLogin() {
             </button>
           </div>
 
-          {/* Remember me + Login button */}
+          {/* Remember + Submit */}
           <div className="w-full flex items-center justify-between mb-3">
             <label className="flex items-center text-white text-sm gap-2 select-none">
               <input
                 type="checkbox"
                 checked={remember}
-                onChange={e => setRemember(e.target.checked)}
+                onChange={(e) => setRemember(e.target.checked)}
                 className="accent-blue-500"
               />
               Remember me
             </label>
             <button
               type="submit"
-              className="px-8 py-2 rounded-full bg-[#F9D92F]  text-white text-base font-semibold shadow hover:bg-secondary transition-all"
+              className="px-8 py-2 rounded-full bg-[#F9D92F] text-white text-base font-semibold shadow hover:bg-secondary transition-all disabled:opacity-60"
               disabled={loading}
             >
               {loading ? "Logging in..." : "Login"}
             </button>
           </div>
+
           <div className="w-full text-left mt-1">
             <Link href="/student/forgot-password" className="text-white/80 text-sm hover:underline">
               Forgot password?
@@ -235,28 +252,34 @@ export default function StudentLogin() {
           </div>
         </form>
 
-        {/* Or Google login */}
-        <button className="flex items-center justify-center mt-8 py-3 rounded-xl border-2 border-white text-white font-semibold text-lg w-full max-w-md bg-transparent hover:bg-white hover:text-[#2E2EAD] transition">
-          <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="h-7 w-7 mr-3" />
-          Google
+        {/* Google login */}
+        <button
+          onClick={handleGoogleLogin}
+          className="flex items-center justify-center mt-8 py-3 rounded-xl border-2 border-white text-white font-semibold text-lg w-full max-w-md bg-transparent hover:bg-white hover:text-[#2E2EAD] transition disabled:opacity-60"
+          disabled={loadingGoogle}
+        >
+          <img
+            src="https://www.svgrepo.com/show/475656/google-color.svg"
+            alt="Google"
+            className="h-7 w-7 mr-3"
+          />
+          {loadingGoogle ? "Redirecting…" : "Continue with Google"}
         </button>
       </div>
 
-      {/* --- Right Rotated Panel --- */}
-      <div className=" hidden md:block w-[50%] min-w-[420px] h-full overflow-hidden">
-      <div
-        className="absolute top-20 right-[7%] h-[90%] w-[45%] bg-[#F9D92F] flex flex-col items-center justify-center"
-        style={{ transform: 'skewX(-20deg) skewY(10deg)' }}
-      >
-        </div>
-        {/* Straighten content if you want (optional) */}
-        <div className="absolute    transform right-30 bottom-0">
-          <Image 
-          src="/images/loginphoto.png"
-          alt="Login Illustration"
-          width={800}
-          height={600}
-          className="max-w-full h-auto object-contain"
+      {/* Right Panel */}
+      <div className="hidden md:block w-[50%] min-w-[420px] h-full overflow-hidden">
+        <div
+          className="absolute top-20 right-[7%] h-[90%] w-[45%] bg-[#F9D92F] flex flex-col items-center justify-center"
+          style={{ transform: "skewX(-20deg) skewY(10deg)" }}
+        />
+        <div className="absolute transform right-30 bottom-0">
+          <Image
+            src="/images/loginphoto.png"
+            alt="Login Illustration"
+            width={800}
+            height={600}
+            className="max-w-full h-auto object-contain"
           />
         </div>
       </div>
