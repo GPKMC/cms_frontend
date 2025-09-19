@@ -22,22 +22,22 @@ export default function TeacherLogin() {
   const [remember, setRemember] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  const [loadingGoogle, setLoadingGoogle] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
   const [success, setSuccess] = useState<string>("");
+
+  const baseurl = process.env.NEXT_PUBLIC_BACKEND_URL;
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError("");
     setSuccess("");
-    const baseurl = process.env.NEXT_PUBLIC_BACKEND_URL;
 
     try {
       const res = await fetch(`${baseurl}/userAuth/login`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, role: "teacher" }),
       });
 
@@ -48,11 +48,10 @@ export default function TeacherLogin() {
       } else {
         setSuccess("Login successful");
         if (data.token) {
-          // Remember me logic
           if (remember) {
-            localStorage.setItem("token_teacher", data.token);       // persists after browser close
+            localStorage.setItem("token_teacher", data.token);
           } else {
-            sessionStorage.setItem("token_teacher", data.token);     // session-only, gone after close
+            sessionStorage.setItem("token_teacher", data.token);
           }
         }
         window.location.href = "/teacher/dashboard";
@@ -64,12 +63,28 @@ export default function TeacherLogin() {
     }
   };
 
+  const handleGoogleLogin = () => {
+    setLoadingGoogle(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      // let the /google-success page know how to store and where to go
+      localStorage.setItem("oauth_remember", remember ? "1" : "0");
+      localStorage.setItem("oauth_return", "/teacher/dashboard");
+    } catch {
+      /* ignore storage errors */
+    }
+
+    window.location.href = `${baseurl}/api/auth/google`;
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#2E3094] to-[#F9D92F] relative">
       {/* Top-left logo and college info */}
       <div className="absolute top-7 left-10 flex items-center gap-4">
         <Image
-          src="/images/gpkoiralalogo.svg" // or "/college-logo.png" if you use another location
+          src="/images/gpkoiralalogo.svg"
           alt="College Logo"
           width={70}
           height={70}
@@ -113,7 +128,7 @@ export default function TeacherLogin() {
           </div>
 
           {/* Password */}
-          <div className="w-full mb-8 relative">
+          <div className="w-full mb-4 relative">
             <input
               id="password"
               type={showPassword ? "text" : "password"}
@@ -153,19 +168,41 @@ export default function TeacherLogin() {
             </label>
             <button
               type="submit"
-              className="px-8 py-2 rounded-full bg-[#2E3094] text-white text-base font-semibold shadow hover:bg-[#201f74] transition-all"
+              className="px-8 py-2 rounded-full bg-[#2E3094] text-white text-base font-semibold shadow hover:bg-[#201f74] transition-all disabled:opacity-60"
               disabled={loading}
             >
               {loading ? "Logging in as teacher" : "Login"}
             </button>
           </div>
-          <div>
+
+          {/* Forgot password */}
+          <div className="mb-4">
             <p className="text-white/80 text-sm">
-              <Link href="/teacher/forgot-password">
-                Forgot password?
-              </Link>
+              <Link href="/teacher/forgot-password">Forgot password?</Link>
             </p>
           </div>
+
+          {/* OR divider (optional) */}
+          <div className="w-full flex items-center gap-3 my-2 opacity-80">
+            <div className="h-px bg-white/40 flex-1" />
+            <span className="text-white text-sm">OR</span>
+            <div className="h-px bg-white/40 flex-1" />
+          </div>
+
+          {/* Google login */}
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            className="flex items-center justify-center mt-2 py-3 rounded-xl border-2 border-white text-white font-semibold text-lg w-full bg-transparent hover:bg-white hover:text-[#2E2EAD] transition disabled:opacity-60"
+            disabled={loadingGoogle}
+          >
+            <img
+              src="https://www.svgrepo.com/show/475656/google-color.svg"
+              alt="Google"
+              className="h-7 w-7 mr-3"
+            />
+            {loadingGoogle ? "Redirecting…" : "Continue with Google"}
+          </button>
         </form>
       </div>
     </div>
