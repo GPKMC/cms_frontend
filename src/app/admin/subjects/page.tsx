@@ -13,6 +13,8 @@ import {
   ChevronUp,
   ChevronDown,
 } from "lucide-react";
+import CourseInstanceViewModal from "./details";
+import CourseInstanceEditModal from "./editform";
 
 /** ===== Inline Types (kept here so everything compiles in one file) ===== */
 type CourseInstance = {
