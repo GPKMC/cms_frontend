@@ -34,7 +34,7 @@ import AssignmentEditForm from "./editAssignmentForm";
 import TopicModal from "./editTopicForm";
 import QuestionEditForm from "./question/editQuestionForm";
 import FeedItemFooter from "./footerbutton";
-import EditGroupAssignmentForm from "./groupAssignment/editGroupAssignmentForm";
+import EditGroupAssignmentForm from "./groupassignment/editGroupAssignmentForm";
 import QuizEditForm from "./quiz/editQuiz";
 
 // --- Type Definitions ---
@@ -1158,15 +1158,26 @@ export default function UnifiedFeed({
   const [loadingDelete, setLoadingDelete] = useState(false);
 
   // Students list
-  useEffect(() => {
-    async function fetchStudents() {
+useEffect(() => {
+  async function fetchStudents() {
+    try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/course-api/course-instance/${courseInstanceId}/students`
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/course-api/course-instance/${courseInstanceId}/students`,
+        { headers: { Authorization: `Bearer ${token}` } } // add if your API needs auth
       );
-      setAllStudents(await res.json());
+      const data = await res.json();
+      const list =
+        Array.isArray(data)
+          ? data
+          : data?.students || data?.users || data?.data || data?.instance?.students || [];
+      setAllStudents(Array.isArray(list) ? list : []);
+    } catch {
+      setAllStudents([]); // keep it an array on failure
     }
-    fetchStudents();
-  }, [courseInstanceId]);
+  }
+  fetchStudents();
+}, [courseInstanceId, token]);
+
 
   // Fetch feed
   const fetchFeed = async () => {
