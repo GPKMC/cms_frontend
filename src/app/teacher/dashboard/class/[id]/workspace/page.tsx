@@ -19,7 +19,7 @@ import MaterialList from "./workspacelist";
 import AssignmentForm from "./assignmentform";
 import QuestionForm from "./question/question";
 import QuizForm from "./quiz/quizform";
-import GroupAssignmentForm from "./groupAssignment/groupAssignmentform";
+import GroupAssignmentForm from "./groupassignment/groupAssignmentform";
 
 const menuOptions = [
   { label: "Assignment", icon: <FileText size={18} />, value: "assignment" },
