@@ -1,7 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useState, FormEvent } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { Eye, EyeOff } from "lucide-react";
 
 type LoginResponse = {
   message: string;
@@ -14,27 +16,28 @@ type LoginResponse = {
   };
 };
 
-export default function AdminLoginForm() {
+export default function AdminLogin() {
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
+  const [remember, setRemember] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  const [loadingGoogle, setLoadingGoogle] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
   const [success, setSuccess] = useState<string>("");
+
+  const baseurl = process.env.NEXT_PUBLIC_BACKEND_URL;
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError("");
     setSuccess("");
-    const baseurl = process.env.NEXT_PUBLIC_BACKEND_URL;
 
     try {
       const res = await fetch(`${baseurl}/userAuth/login`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, role: "admin" }),
       });
 
@@ -45,7 +48,11 @@ export default function AdminLoginForm() {
       } else {
         setSuccess("Login successful");
         if (data.token) {
-          localStorage.setItem("token_admin", data.token);
+          if (remember) {
+            localStorage.setItem("token_admin", data.token);
+          } else {
+            sessionStorage.setItem("token_admin", data.token);
+          }
         }
         window.location.href = "/admin";
       }
@@ -56,70 +63,148 @@ export default function AdminLoginForm() {
     }
   };
 
-  return (
-    <div className="max-w-md mx-auto p-6 bg-white rounded-xl shadow-md mt-12">
-      <h2 className="text-2xl font-bold mb-4 text-center">Admin Login</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block mb-1 font-medium" htmlFor="email">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            className="w-full border px-3 py-2 rounded-md"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            placeholder="admin@gpkmc.edu.np"
-          />
-        </div>
+  const handleGoogleLogin = () => {
+    setLoadingGoogle(true);
+    setError("");
+    setSuccess("");
 
+    try {
+      // let the /google-success page know how to store and where to go
+      localStorage.setItem("oauth_remember", remember ? "1" : "0");
+      localStorage.setItem("oauth_return", "/admin");
+    } catch {
+      /* ignore storage errors */
+    }
+
+    window.location.href = `${baseurl}/api/auth/google`;
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#2E3094] to-[#F9D92F] relative">
+      {/* Top-left logo and college info */}
+      <div className="absolute top-7 left-10 flex items-center gap-4">
+        <Image
+          src="/images/gpkoiralalogo.svg"
+          alt="College Logo"
+          width={70}
+          height={70}
+          className="rounded-full shadow-md bg-white"
+        />
         <div>
-          <label className="block mb-1 font-medium" htmlFor="password">
-            Password
-          </label>
-          <div className="relative">
+          <div className="text-xl md:text-2xl font-semibold text-white drop-shadow-md leading-tight">
+            G.P.Koirala Memorial <br /> College
+          </div>
+          <div className="text-sm text-white/90 mt-1">Sifal , Kathmandu</div>
+        </div>
+      </div>
+
+      {/* Centered Login Form */}
+      <div className="flex flex-1 items-center justify-center">
+        <form
+          onSubmit={handleSubmit}
+          className="bg-white/10 backdrop-blur-sm px-12 py-10 rounded-2xl shadow-2xl w-full max-w-md flex flex-col items-center"
+        >
+          {/* User Icon */}
+          <div className="bg-gradient-to-br from-[#41ead4] to-[#2d9fff] p-2 rounded-full shadow-lg mb-8">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" width={100} height={100} viewBox="0 0 24 24" stroke="white">
+              <circle cx="12" cy="8" r="4" stroke="white" strokeWidth="2" />
+              <path d="M4 20c0-4 8-4 8-4s8 0 8 4" stroke="white" strokeWidth="2" />
+            </svg>
+          </div>
+
+          {/* Email */}
+          <div className="w-full mb-6">
+            <input
+              type="email"
+              id="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="Username"
+              className="w-full text-lg px-2 py-3 bg-transparent text-center border-0 border-b-2 border-white focus:border-white focus:outline-none text-white placeholder-white/80 transition"
+              required
+              autoComplete="username"
+              style={{ letterSpacing: 1 }}
+            />
+          </div>
+
+          {/* Password */}
+          <div className="w-full mb-4 relative">
             <input
               id="password"
               type={showPassword ? "text" : "password"}
-              className="w-full border px-3 py-2 rounded-md"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Password"
+              className="w-full text-lg px-2 py-3 bg-transparent text-center border-0 border-b-2 border-white focus:border-white focus:outline-none text-white placeholder-white/80 transition"
               required
-              placeholder="••••••••"
+              autoComplete="current-password"
+              style={{ letterSpacing: 1 }}
             />
             <button
               type="button"
-              onClick={() => setShowPassword((prev) => !prev)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-gray-500 hover:text-gray-800"
+              onClick={() => setShowPassword(s => !s)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 hover:text-yellow-400 "
+              tabIndex={-1}
+              aria-label={showPassword ? "Hide password" : "Show password"}
             >
-              {showPassword ? "Hide" : "Show"}
+              {showPassword ? <EyeOff size={22} /> : <Eye size={22} />}
             </button>
           </div>
-        </div>
 
-        {error && <p className="text-red-600 text-sm">{error}</p>}
-        {success && <p className="text-green-600 text-sm">{success}</p>}
+          {/* Error / Success */}
+          {error && <p className="text-red-300 text-sm mb-2">{error}</p>}
+          {success && <p className="text-green-200 text-sm mb-2">{success}</p>}
 
-        <button
-          type="submit"
-          className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition"
-          disabled={loading}
-        >
-          {loading ? "Logging in..." : "Login as Admin"}
-        </button>
-      </form>
+          {/* Remember me + Login button */}
+          <div className="w-full flex items-center justify-between mb-3">
+            <label className="flex items-center text-white text-sm gap-2 select-none">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={e => setRemember(e.target.checked)}
+                className="accent-blue-500"
+              />
+              Remember me
+            </label>
+            <button
+              type="submit"
+              className="px-8 py-2 rounded-full bg-[#2E3094] text-white text-base font-semibold shadow hover:bg-[#201f74] transition-all disabled:opacity-60"
+              disabled={loading}
+            >
+              {loading ? "Logging in as admin" : "Login"}
+            </button>
+          </div>
 
-      <p className="mt-4 text-center text-sm text-gray-600">
-        Are you a <span className="font-medium">Superadmin</span>?{" "}
-        <Link
-          href="/superadmin_login"
-          className="text-blue-600 hover:underline font-medium"
-        >
-          Login here
-        </Link>
-      </p>
+          {/* Forgot password */}
+          <div className="mb-4">
+            <p className="text-white/80 text-sm">
+              <Link href="/admin/forgot-password">Forgot password?</Link>
+            </p>
+          </div>
+
+          {/* OR divider */}
+          <div className="w-full flex items-center gap-3 my-2 opacity-80">
+            <div className="h-px bg-white/40 flex-1" />
+            <span className="text-white text-sm">OR</span>
+            <div className="h-px bg-white/40 flex-1" />
+          </div>
+
+          {/* Google login */}
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            className="flex items-center justify-center mt-2 py-3 rounded-xl border-2 border-white text-white font-semibold text-lg w-full bg-transparent hover:bg-white hover:text-[#2E2EAD] transition disabled:opacity-60"
+            disabled={loadingGoogle}
+          >
+            <img
+              src="https://www.svgrepo.com/show/475656/google-color.svg"
+              alt="Google"
+              className="h-7 w-7 mr-3"
+            />
+            {loadingGoogle ? "Redirecting…" : "Continue with Google"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
