@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { SidebarItems } from "../types/type.sidebar";
@@ -16,8 +17,123 @@ import {
 } from "react-icons/fa";
 import { BsFillPeopleFill } from "react-icons/bs";
 import { MdAssignment } from "react-icons/md";
-import { Home } from "lucide-react";
+import { Home, CalendarRange } from "lucide-react"; // ✅ use CalendarRange (not Calendar1)
 
+/* ------------------------------------------------------------------ */
+/* LeavePendingIcon: calendar icon with red badge (pending leave count) */
+/* ------------------------------------------------------------------ */
+function getBackendBase(): string {
+  const envBase =
+    typeof process !== "undefined" && (process as any).env
+      ? (process as any).env.NEXT_PUBLIC_BACKEND_URL
+      : undefined;
+  // ts-expect-error optional window injection
+  const winBase: string | undefined = typeof window !== "undefined" ? (window as any).__BACKEND_URL__ : undefined;
+  const metaBase: string | null =
+    typeof document !== "undefined"
+      ? document.querySelector('meta[name="backend-url"]')?.getAttribute("content") || null
+      : null;
+  const chosen = (envBase || winBase || metaBase || "").toString().trim();
+  return chosen.replace(/\/$/, "");
+}
+function getApiBase(base: string) {
+  return base ? `${base}/leave` : "/leave";
+}
+function getAuthToken(): string | null {
+  const keys = ["token", "authToken", "admin_token", "teacher_token", "token_admin", "CMS_token", "token_student"];
+  for (const k of keys) {
+    const v = typeof window !== "undefined" ? localStorage.getItem(k) : null;
+    if (v) return v;
+  }
+  return null;
+}
+function authHeaders(): Headers {
+  const h = new Headers({ "Content-Type": "application/json" });
+  const t = getAuthToken();
+  if (t) h.set("Authorization", `Bearer ${t}`);
+  return h;
+}
+
+function LeavePendingIcon({
+  className = "h-5 w-5",
+  role = "all", // "all" | "teacher" | "student"
+  pollMs = 60000,
+  max = 99,
+}: {
+  className?: string;
+  role?: "all" | "teacher" | "student";
+  pollMs?: number;
+  max?: number;
+}) {
+  const API_BASE = useMemo(() => getApiBase(getBackendBase()), []);
+  const headers = useMemo(() => authHeaders(), []);
+  const [count, setCount] = useState<number>(0);
+
+  async function fetchCount() {
+    try {
+      const qs = role === "all" ? "" : `?role=${role}`;
+      // Preferred lightweight endpoint:
+      let res = await fetch(`${API_BASE}/admin/pending/count${qs}`, { headers, cache: "no-store" });
+      if (!res.ok && res.status === 404) {
+        // Fallback to list length if /count not implemented yet
+        res = await fetch(`${API_BASE}/admin/pending${qs}`, { headers, cache: "no-store" });
+        if (res.ok) {
+          const json = await res.json();
+          setCount(Array.isArray(json?.items) ? json.items.length : 0);
+          return;
+        }
+      }
+      if (res.ok) {
+        const json = await res.json();
+        setCount(Number(json?.count) || 0);
+      }
+    } catch {
+      // keep last value
+    }
+  }
+
+  useEffect(() => {
+    fetchCount();
+    const id = setInterval(fetchCount, pollMs);
+
+    // live refresh when approve/reject happens in admin page
+    const onChanged = () => fetchCount();
+    if (typeof window !== "undefined") {
+      window.addEventListener("leave:pending-changed", onChanged);
+    }
+    return () => {
+      clearInterval(id);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("leave:pending-changed", onChanged);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [API_BASE, role, pollMs]);
+
+  const label = count > max ? `${max}+` : String(count);
+
+  return (
+    <span className="relative inline-flex">
+      <CalendarRange className={className} />
+      {count > 0 && (
+        <span
+          className="
+            absolute -top-1.5 -right-1.5 min-w-[18px] px-1.5 py-[2px]
+            rounded-full bg-rose-600 text-white text-[10px] leading-none
+            font-semibold text-center shadow-sm
+          "
+          aria-label={`${count} pending leave request${count === 1 ? "" : "s"}`}
+        >
+          {label}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Sidebar config — swap Leave Request icon to <LeavePendingIcon />    */
+/* ------------------------------------------------------------------ */
 const sidebarItems: SidebarItems = [
   { id: 1, label: "Home", icon: <Home />, page: "/admin" },
   { id: 2, label: "Program Management", icon: <FaGraduationCap />, page: "/admin/faculty" },
@@ -27,12 +143,19 @@ const sidebarItems: SidebarItems = [
   { id: 6, label: "Subject Management", icon: <FaClipboardList />, page: "/admin/subjects" },
   { id: 7, label: "Semester Management", icon: <FaChalkboardTeacher />, page: "/admin/semOryear" },
   { id: 8, label: "Schedule Management", icon: <FaCalendarAlt />, page: "/admin/schedule" },
-  { id: 9, label: "Assignment Monitoring", icon: <MdAssignment />, page: "/admin/assignments" },
-  { id: 10, label: "Announcements", icon: <FaBullhorn />, page: "/admin/announcement" },
-  { id: 11, label: "Exams & Reports", icon: <FaFileAlt />, page: "/admin/result" },
-  { id: 12, label: "Reference", icon: <FaFileAlt />, page: "/admin/reference" },
+
+  // 🔔 shows pending count on the icon
+  { id: 9, label: "Leave Request", icon: <LeavePendingIcon className="h-5 w-5" />, page: "/admin/leave" },
+
+  { id: 10, label: "Assignment Monitoring", icon: <MdAssignment />, page: "/admin/assignments" },
+  { id: 11, label: "Announcements", icon: <FaBullhorn />, page: "/admin/announcement" },
+  { id: 12, label: "Exams & Reports", icon: <FaFileAlt />, page: "/admin/result" },
+  { id: 13, label: "Reference", icon: <FaFileAlt />, page: "/admin/reference" },
 ];
 
+/* ------------------------------------------------------------------ */
+/* Sidebar                                                             */
+/* ------------------------------------------------------------------ */
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
