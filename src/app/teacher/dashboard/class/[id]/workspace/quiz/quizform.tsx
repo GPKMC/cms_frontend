@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import React, { useState } from "react";
 import dynamic from "next/dynamic";
@@ -9,18 +9,22 @@ import {
   CheckCircle,
   AlertCircle,
   X,
-  Clock,
-  FileText,
   Hash,
   BookOpen,
   Sparkles,
-  Save
+  Save,
 } from "lucide-react";
-import type { TiptapEditorProps } from "./rtecomponent";
+
+export type TiptapEditorProps = {
+  content: string;
+  onChange: (html: string) => void;
+  placeholder?: string;
+  className?: string;
+};
 
 // Dynamically import the rich‐text editor component
 const TiptapEditor = dynamic<TiptapEditorProps>(
-  () => import("../quiz/rtecomponent"),
+  () => import("../quiz/rtecomponent"), // ← adjust if your path differs
   { ssr: false }
 );
 
@@ -43,7 +47,7 @@ export default function QuizForm({
   courseInstanceId,
   courseName,
   onClose,
-  onSuccess
+  onSuccess,
 }: {
   courseInstanceId: string;
   courseName: string;
@@ -54,136 +58,149 @@ export default function QuizForm({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
+
   // Questions state
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Independent loading states per button
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   // Helpers to manage questions
   const addQuestion = () => {
-    setQuestions(qs => [
+    setQuestions((qs) => [
       ...qs,
       {
-        id: Math.random().toString(36).substr(2, 9),
+        id: Math.random().toString(36).slice(2, 11),
         text: "",
         points: 1,
         options: [],
         feedbackCorrect: "",
-        feedbackIncorrect: ""
-      }
+        feedbackIncorrect: "",
+      },
     ]);
   };
+
   const removeQuestion = (qid: string) =>
-    setQuestions(qs => qs.filter(q => q.id !== qid));
+    setQuestions((qs) => qs.filter((q) => q.id !== qid));
+
   const updateQuestion = (qid: string, field: keyof Question, val: any) =>
-    setQuestions(qs =>
-      qs.map(q => (q.id === qid ? { ...q, [field]: val } : q))
-    );
+    setQuestions((qs) => qs.map((q) => (q.id === qid ? { ...q, [field]: val } : q)));
 
   // Helpers to manage options
   const addOption = (qid: string) =>
-    setQuestions(qs =>
-      qs.map(q =>
+    setQuestions((qs) =>
+      qs.map((q) =>
         q.id !== qid
           ? q
           : {
               ...q,
               options: [
                 ...q.options,
-                { id: Math.random().toString(36).substr(2, 9), text: "", isCorrect: false }
-              ]
+                { id: Math.random().toString(36).slice(2, 11), text: "", isCorrect: false },
+              ],
             }
       )
     );
+
   const updateOption = (qid: string, oid: string, text: string) =>
-    setQuestions(qs =>
-      qs.map(q =>
+    setQuestions((qs) =>
+      qs.map((q) =>
         q.id !== qid
           ? q
-          : { ...q, options: q.options.map(o => (o.id === oid ? { ...o, text } : o)) }
+          : { ...q, options: q.options.map((o) => (o.id === oid ? { ...o, text } : o)) }
       )
     );
+
   const toggleCorrect = (qid: string, oid: string) =>
-    setQuestions(qs =>
-      qs.map(q =>
+    setQuestions((qs) =>
+      qs.map((q) =>
         q.id !== qid
           ? q
           : {
               ...q,
-              options: q.options.map(o => ({
+              options: q.options.map((o) => ({
                 ...o,
-                isCorrect: o.id === oid
-              }))
+                isCorrect: o.id === oid, // single-correct MCQ
+              })),
             }
       )
     );
+
   const removeOption = (qid: string, oid: string) =>
-    setQuestions(qs =>
-      qs.map(q =>
-        q.id !== qid
-          ? q
-          : { ...q, options: q.options.filter(o => o.id !== oid) }
+    setQuestions((qs) =>
+      qs.map((q) =>
+        q.id !== qid ? q : { ...q, options: q.options.filter((o) => o.id !== oid) }
       )
     );
 
-  // Validation guard
+  // Validation guards
   const canSubmit =
     title.trim() !== "" &&
     questions.length > 0 &&
-    questions.every(q =>
-      q.text.trim() !== "" &&
-      q.points > 0 &&
-      q.options.length >= 2 &&
-      q.options.some(o => o.isCorrect)
+    questions.every(
+      (q) =>
+        q.text.trim() !== "" &&
+        q.points > 0 &&
+        q.options.length >= 2 &&
+        q.options.some((o) => o.isCorrect)
     );
 
-  async function handleSubmit() {
-    if (!canSubmit) {
-      toast.error("Fix validation errors before submitting.");
-      return;
-    }
+  // For publish: strict validation
+  const canPublish = canSubmit;
 
-    // dueDate must be in the future
-    if (dueDate) {
-      const ts = new Date(dueDate).getTime();
-      if (isNaN(ts) || ts <= Date.now()) {
-        toast.error("Due date must be in the future.");
-        return;
-      }
-    }
-
-    setIsSubmitting(true);
-    const token =
-      localStorage.getItem("token_teacher") ||
-      sessionStorage.getItem("token_teacher") ||
-      "";
+  async function handleSubmit(mode: "draft" | "publish") {
+    // Independent spinners
+    if (mode === "draft") setSavingDraft(true);
+    if (mode === "publish") setPublishing(true);
 
     try {
-      // 1) Create the quiz itself
-      const quizRes = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/quizrouter`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            title,
-            description,
-            dueDate,
-            courseInstance: courseInstanceId,
-          }),
-        }
-      );
-      if (!quizRes.ok) {
-        const err = await quizRes.json();
-        throw new Error(err.errors?.[0]?.msg || "Failed to create quiz");
+      // If publishing, enforce current strict checks
+      if (mode === "publish" && !canPublish) {
+        toast.error("Fix validation errors before publishing.");
+        return;
       }
-      const { _id: quizId } = await quizRes.json();
 
-      // 2) For each question, do a 2-step create & patch
+      // dueDate must be in the future (if provided)
+      if (dueDate) {
+        const ts = new Date(dueDate).getTime();
+        if (isNaN(ts) || ts <= Date.now()) {
+          toast.error("Due date must be in the future.");
+          return;
+        }
+      }
+
+      const token =
+        localStorage.getItem("token_teacher") ||
+        sessionStorage.getItem("token_teacher") ||
+        "";
+
+      // 1) Create the quiz (published depends on mode)
+      const quizRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/quizrouter`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title,
+          description,
+          dueDate, // datetime-local string is OK (ISO-ish)
+          courseInstance: courseInstanceId,
+          published: mode === "publish",
+        }),
+      });
+
+      if (!quizRes.ok) {
+        const err = await quizRes.json().catch(() => ({}));
+        throw new Error(err.errors?.[0]?.msg || err.message || "Failed to create quiz");
+      }
+      const createdQuiz = await quizRes.json();
+      const quizId = createdQuiz._id;
+
+      // 2) Create each question; then set correctOption by mapping index → server _id
       for (const q of questions) {
-        // 2a) POST without correctOption
+        // 2a) POST question without correctOption
         const createQRes = await fetch(
           `${process.env.NEXT_PUBLIC_BACKEND_URL}/quizrouter/${quizId}/questions`,
           {
@@ -196,28 +213,28 @@ export default function QuizForm({
               text: q.text,
               type: "mcq",
               points: q.points,
-              options: q.options.map(o => ({ text: o.text })),
+              options: q.options.map((o) => ({ text: o.text })),
               feedbackCorrect: q.feedbackCorrect,
               feedbackIncorrect: q.feedbackIncorrect,
             }),
           }
         );
+
         if (!createQRes.ok) {
-          const err = await createQRes.json();
-          throw new Error(err.errors?.[0]?.msg || "Failed to create question");
+          const err = await createQRes.json().catch(() => ({}));
+          throw new Error(err.errors?.[0]?.msg || err.message || "Failed to create question");
         }
         const updatedQuiz = await createQRes.json();
 
-        // 2b) Find that new question by text
+        // 2b) Identify the newly added question by text
         const newlyAdded = updatedQuiz.questions.find((qq: any) => qq.text === q.text);
-        if (!newlyAdded) {
-          throw new Error("Cannot find newly created question");
-        }
+        if (!newlyAdded) throw new Error("Cannot find newly created question");
 
-        // 2c) Get the correct option’s real _id
-        const correctIdx = q.options.findIndex(o => o.isCorrect);
+        // 2c) Find the correct option index from the client state
+        const correctIdx = q.options.findIndex((o) => o.isCorrect);
         if (correctIdx >= 0) {
-          const correctOptionId = newlyAdded.options[correctIdx]._id;
+          const correctOptionId = newlyAdded.options[correctIdx]?._id;
+          if (!correctOptionId) throw new Error("Cannot resolve correct option id");
 
           // 2d) PATCH to set correctOption
           const patchRes = await fetch(
@@ -231,51 +248,52 @@ export default function QuizForm({
               body: JSON.stringify({ correctOption: correctOptionId }),
             }
           );
+
           if (!patchRes.ok) {
-            const err = await patchRes.json();
-            throw new Error(err.errors?.[0]?.msg || "Failed to set correct option");
+            const err = await patchRes.json().catch(() => ({}));
+            throw new Error(err.errors?.[0]?.msg || err.message || "Failed to set correct option");
           }
         }
       }
 
-      toast.success("Quiz created successfully! 🎉");
-      // reset form state
+      toast.success(mode === "publish" ? "Quiz published! 🎉" : "Draft saved. 💾");
+
+      // Reset form state
       setTitle("");
       setDescription("");
       setDueDate("");
       setQuestions([]);
+
       onSuccess();
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Something went wrong");
     } finally {
-      setIsSubmitting(false);
+      if (mode === "draft") setSavingDraft(false);
+      if (mode === "publish") setPublishing(false);
     }
   }
 
-  // Calculate progress
+  // Progress bar (cosmetic)
   const totalFields = 3 + questions.length * 3;
   const completedFields =
     (title.trim() ? 1 : 0) +
     (description.trim() ? 1 : 0) +
     (dueDate ? 1 : 0) +
-    questions.reduce((acc, q) =>
-      acc +
-      (q.text.trim() ? 1 : 0) +
-      (q.points > 0 ? 1 : 0) +
-      (q.options.length >= 2 && q.options.some(o => o.isCorrect) ? 1 : 0)
-    , 0);
-  const completionPercent = totalFields > 0
-    ? Math.round((completedFields / totalFields) * 100)
-    : 0;
+    questions.reduce(
+      (acc, q) =>
+        acc +
+        (q.text.trim() ? 1 : 0) +
+        (q.points > 0 ? 1 : 0) +
+        (q.options.length >= 2 && q.options.some((o) => o.isCorrect) ? 1 : 0),
+      0
+    );
+  const completionPercent = totalFields > 0 ? Math.round((completedFields / totalFields) * 100) : 0;
 
   return (
     <>
       {/* Overlay */}
-      <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40" onClick={onClose} />
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -290,16 +308,13 @@ export default function QuizForm({
                   <p className="text-blue-200 text-sm">for {courseName}</p>
                 </div>
               </div>
-              <button onClick={onClose} className="hover:text-gray-200">
+              <button onClick={onClose} className="hover:text-gray-200" aria-label="Close">
                 <X size={24} />
               </button>
             </div>
             <div className="mt-4 flex items-center gap-3">
               <div className="flex-1 bg-white/20 h-2 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-green-400"
-                  style={{ width: `${completionPercent}%` }}
-                />
+                <div className="h-full bg-green-400" style={{ width: `${completionPercent}%` }} />
               </div>
               <span className="font-medium">{completionPercent}%</span>
             </div>
@@ -320,7 +335,7 @@ export default function QuizForm({
                     type="text"
                     className="w-full border rounded-xl px-4 py-3 focus:border-blue-500"
                     value={title}
-                    onChange={e => setTitle(e.target.value)}
+                    onChange={(e) => setTitle(e.target.value)}
                   />
                 </div>
                 <div className="lg:col-span-2">
@@ -340,7 +355,7 @@ export default function QuizForm({
                     type="datetime-local"
                     className="w-full border rounded-xl px-4 py-3 focus:border-blue-500"
                     value={dueDate}
-                    onChange={e => setDueDate(e.target.value)}
+                    onChange={(e) => setDueDate(e.target.value)}
                   />
                 </div>
               </div>
@@ -378,7 +393,11 @@ export default function QuizForm({
                       </div>
                       <span className="font-semibold">Question {idx + 1}</span>
                     </div>
-                    <button onClick={() => removeQuestion(q.id)} className="text-red-600 hover:text-red-800">
+                    <button
+                      onClick={() => removeQuestion(q.id)}
+                      className="text-red-600 hover:text-red-800"
+                      aria-label="Remove question"
+                    >
                       <Trash2 size={18} />
                     </button>
                   </div>
@@ -390,7 +409,7 @@ export default function QuizForm({
                       type="text"
                       className="w-full border rounded-xl px-4 py-3 focus:border-blue-500"
                       value={q.text}
-                      onChange={e => updateQuestion(q.id, "text", e.target.value)}
+                      onChange={(e) => updateQuestion(q.id, "text", e.target.value)}
                     />
                   </div>
 
@@ -402,7 +421,7 @@ export default function QuizForm({
                       min={1}
                       className="w-32 border rounded-xl px-4 py-3 focus:border-blue-500"
                       value={q.points}
-                      onChange={e => updateQuestion(q.id, "points", +e.target.value)}
+                      onChange={(e) => updateQuestion(q.id, "points", +e.target.value)}
                     />
                   </div>
 
@@ -410,13 +429,11 @@ export default function QuizForm({
                   <div className="space-y-4 mb-6">
                     <div className="flex items-center justify-between">
                       <span className="font-medium">Options *</span>
-                      <button
-                        onClick={() => addOption(q.id)}
-                        className="text-green-600 hover:text-green-700"
-                      >
+                      <button onClick={() => addOption(q.id)} className="text-green-600 hover:text-green-700">
                         <Plus size={16} /> Add
                       </button>
                     </div>
+
                     {q.options.map((o, optIdx) => (
                       <div key={o.id} className="flex items-center gap-3">
                         <input
@@ -433,21 +450,26 @@ export default function QuizForm({
                           type="text"
                           className="flex-1 border rounded-xl px-3 py-2"
                           value={o.text}
-                          onChange={e => updateOption(q.id, o.id, e.target.value)}
+                          onChange={(e) => updateOption(q.id, o.id, e.target.value)}
                           placeholder={`Option ${String.fromCharCode(65 + optIdx)}`}
                         />
-                        <button onClick={() => removeOption(q.id, o.id)} className="text-red-600">
+                        <button
+                          onClick={() => removeOption(q.id, o.id)}
+                          className="text-red-600"
+                          aria-label="Remove option"
+                        >
                           <Trash2 size={16} />
                         </button>
                       </div>
                     ))}
+
                     {q.options.length < 2 && (
                       <p className="text-sm text-red-600 flex items-center gap-2">
                         <AlertCircle size={14} />
                         At least two options required
                       </p>
                     )}
-                    {!q.options.some(o => o.isCorrect) && q.options.length >= 2 && (
+                    {!q.options.some((o) => o.isCorrect) && q.options.length >= 2 && (
                       <p className="text-sm text-amber-600 flex items-center gap-2">
                         <AlertCircle size={14} />
                         Mark one correct answer
@@ -463,7 +485,7 @@ export default function QuizForm({
                         type="text"
                         className="w-full border rounded-xl px-4 py-3 focus:border-green-500"
                         value={q.feedbackCorrect}
-                        onChange={e => updateQuestion(q.id, "feedbackCorrect", e.target.value)}
+                        onChange={(e) => updateQuestion(q.id, "feedbackCorrect", e.target.value)}
                         placeholder="Well done!"
                       />
                     </div>
@@ -473,7 +495,7 @@ export default function QuizForm({
                         type="text"
                         className="w-full border rounded-xl px-4 py-3 focus:border-red-500"
                         value={q.feedbackIncorrect}
-                        onChange={e => updateQuestion(q.id, "feedbackIncorrect", e.target.value)}
+                        onChange={(e) => updateQuestion(q.id, "feedbackIncorrect", e.target.value)}
                         placeholder="Try again."
                       />
                     </div>
@@ -481,35 +503,53 @@ export default function QuizForm({
                 </div>
               ))}
             </div>
+          </div>
 
-            {/* Submit Footer */}
-            <div className="sticky bottom-0 bg-white/90 p-6 border-t flex items-center justify-between">
-              <div>
-                {!canSubmit && (
-                  <div className="flex items-center gap-2 text-amber-600 mb-1">
-                    <AlertCircle size={16} />
-                    <span>Please complete all required fields</span>
-                  </div>
-                )}
-                <p className="text-sm text-gray-500">
-                  {questions.length} question{questions.length !== 1 && 's'} • {completionPercent}% complete
-                </p>
-              </div>
+          {/* Submit Footer */}
+          <div className="sticky bottom-0 bg-white/90 p-6 border-t flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+            <div>
+              {!canPublish && (
+                <div className="flex items-center gap-2 text-amber-600 mb-1">
+                  <AlertCircle size={16} />
+                  <span>Complete required fields to publish</span>
+                </div>
+              )}
+              <p className="text-sm text-gray-500">
+                {questions.length} question{questions.length !== 1 && "s"} • {completionPercent}% complete
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              {/* Save Draft: independent spinner */}
               <button
-                onClick={handleSubmit}
-                disabled={!canSubmit || isSubmitting}
+                onClick={() => handleSubmit("draft")}
+                disabled={savingDraft}
+                className="flex items-center gap-2 px-6 py-3 rounded-xl font-semibold border border-gray-300 hover:bg-gray-50"
+              >
+                {savingDraft ? (
+                  <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+                ) : (
+                  <Save size={18} />
+                )}
+                {savingDraft ? "Saving…" : "Save Draft"}
+              </button>
+
+              {/* Publish: independent spinner */}
+              <button
+                onClick={() => handleSubmit("publish")}
+                disabled={!canPublish || publishing}
                 className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white transition ${
-                  canSubmit
+                  canPublish
                     ? "bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
                     : "bg-gray-300 cursor-not-allowed"
                 }`}
               >
-                {isSubmitting ? (
+                {publishing ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                 ) : (
-                  <Save size={20} />
+                  <CheckCircle size={18} />
                 )}
-                {isSubmitting ? "Creating…" : "Create Quiz"}
+                {publishing ? "Publishing…" : "Publish"}
               </button>
             </div>
           </div>
