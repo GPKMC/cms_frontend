@@ -92,8 +92,8 @@ function ConfirmDialog({
           <p className="text-gray-600 leading-relaxed">{message}</p>
         </div>
         <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
-          <button 
-            onClick={onCancel} 
+          <button
+            onClick={onCancel}
             className="px-6 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-all"
           >
             {cancelText}
@@ -110,7 +110,7 @@ function ConfirmDialog({
   );
 }
 
-/* ======================= View Group Modal (READ-ONLY + per-row toggle) ======================= */
+/* ======================= View Group Modal (scrollable + per-row toggle) ======================= */
 function ViewGroupModal({
   open,
   onClose,
@@ -193,9 +193,16 @@ function ViewGroupModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="w-full max-w-6xl rounded-2xl bg-white shadow-2xl max-h-[90vh] overflow-hidden border border-gray-200">
-        <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+    // OVERLAY can scroll on small screens
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm overflow-y-auto overscroll-contain"
+      role="dialog"
+      aria-modal="true"
+    >
+      {/* PANEL is a flex column; body will scroll */}
+      <div className="w-full max-w-6xl max-h-[90vh] rounded-2xl bg-white shadow-2xl border border-gray-200 flex flex-col">
+        {/* HEADER (non-scrolling) */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50 shrink-0">
           <div>
             <h3 className="text-2xl font-bold text-gray-900">📅 Weekly Schedule</h3>
             <p className="text-sm text-gray-600 mt-1">{title}</p>
@@ -205,20 +212,20 @@ function ViewGroupModal({
               <>
                 <button
                   onClick={() => bulkToggle(true)}
-                  className="px-4 py-2.5 rounded-xl bg-amber-500 text-white hover:bg-amber-600 font-medium transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
+                  className="px-4 py-2.5 rounded-xl bg-amber-500 text-white hover:bg-amber-600 font-medium transition-all shadow-lg hover:shadow-xl"
                 >
                   🚫 Cancel All
                 </button>
                 <button
                   onClick={() => bulkToggle(false)}
-                  className="px-4 py-2.5 rounded-xl bg-green-500 text-white hover:bg-green-600 font-medium transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
+                  className="px-4 py-2.5 rounded-xl bg-green-500 text-white hover:bg-green-600 font-medium transition-all shadow-lg hover:shadow-xl"
                 >
                   ✅ Restore All
                 </button>
               </>
             )}
-            <button 
-              onClick={onClose} 
+            <button
+              onClick={onClose}
               className="px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-all"
             >
               Close
@@ -226,7 +233,8 @@ function ViewGroupModal({
           </div>
         </div>
 
-        <div className="p-6 overflow-auto bg-gray-50">
+        {/* BODY (scrolls vertically) */}
+        <div className="p-6 bg-gray-50 flex-1 min-h-0 overflow-y-auto">
           {([0, 1, 2, 3, 4, 5, 6] as const).map((d) => (
             <div key={d} className="mb-8 last:mb-0">
               <div className="flex items-center gap-3 mb-4">
@@ -235,102 +243,106 @@ function ViewGroupModal({
                 </div>
                 <h4 className="text-xl font-bold text-gray-900">{dayFull(d)}</h4>
               </div>
+
               {daywise[d].length === 0 ? (
                 <div className="bg-white rounded-xl p-8 text-center border border-gray-200 shadow-sm">
                   <div className="text-gray-400 text-4xl mb-2">📅</div>
                   <div className="text-gray-500 font-medium">No classes scheduled</div>
                 </div>
               ) : (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                  <table className="w-full">
-                    <thead className="bg-gradient-to-r from-gray-50 to-blue-50">
-                      <tr>
-                        <th className="p-4 text-left font-semibold text-gray-700 border-b border-gray-200">🕐 Time</th>
-                        <th className="p-4 text-left font-semibold text-gray-700 border-b border-gray-200">📚 Course</th>
-                        <th className="p-4 text-left font-semibold text-gray-700 border-b border-gray-200">👨‍🏫 Teacher</th>
-                        <th className="p-4 text-left font-semibold text-gray-700 border-b border-gray-200 w-48">⚡ Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {daywise[d].map((e, idx) => (
-                        <tr
-                          key={`${e._id}-${d}`}
-                          className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
-                            e.isCancelled ? "bg-red-50/50 text-gray-600" : ""
-                          } ${idx % 2 === 1 ? "bg-gray-25" : ""}`}
-                        >
-                          <td className="p-4 border-r border-gray-100 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 rounded-full bg-blue-400"></div>
-                              <span className="font-mono font-medium">
-                                {formatTime24(e.startMinutes)} – {formatTime24(e.endMinutes)}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="p-4 border-r border-gray-100">
-                            <div className="font-medium text-gray-900">
-                              {e.courseInstance?.course?.code && e.courseInstance.course.name
-                                ? `${e.courseInstance.course.code} — ${e.courseInstance.course.name}`
-                                : e.courseInstance?.course?.name || "-"}
-                            </div>
-                          </td>
-                          <td className="p-4 border-r border-gray-100">
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
-                                <span className="text-indigo-600 text-xs font-semibold">
-                                  {(e.courseInstance?.teacher?.name ||
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+                  {/* X-scroll wrapper so table never squeezes */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[720px]">
+                      <thead className="bg-gradient-to-r from-gray-50 to-blue-50">
+                        <tr>
+                          <th className="p-4 text-left font-semibold text-gray-700 border-b border-gray-200">🕐 Time</th>
+                          <th className="p-4 text-left font-semibold text-gray-700 border-b border-gray-200">📚 Course</th>
+                          <th className="p-4 text-left font-semibold text-gray-700 border-b border-gray-200">👨‍🏫 Teacher</th>
+                          <th className="p-4 text-left font-semibold text-gray-700 border-b border-gray-200 w-48">⚡ Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {daywise[d].map((e, idx) => (
+                          <tr
+                            key={`${e._id}-${d}`}
+                            className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
+                              e.isCancelled ? "bg-red-50/50 text-gray-600" : ""
+                            } ${idx % 2 === 1 ? "bg-gray-25" : ""}`}
+                          >
+                            <td className="p-4 border-r border-gray-100 whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-blue-400"></div>
+                                <span className="font-mono font-medium">
+                                  {formatTime24(e.startMinutes)} – {formatTime24(e.endMinutes)}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="p-4 border-r border-gray-100">
+                              <div className="font-medium text-gray-900">
+                                {e.courseInstance?.course?.code && e.courseInstance.course.name
+                                  ? `${e.courseInstance.course.code} — ${e.courseInstance.course.name}`
+                                  : e.courseInstance?.course?.name || "-"}
+                              </div>
+                            </td>
+                            <td className="p-4 border-r border-gray-100">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+                                  <span className="text-indigo-600 text-xs font-semibold">
+                                    {(e.courseInstance?.teacher?.name ||
+                                      e.teacher?.name ||
+                                      e.courseInstance?.teacher?.username ||
+                                      e.teacher?.username ||
+                                      "?")
+                                      .split(" ")
+                                      .map((n) => n[0])
+                                      .join("")
+                                      .slice(0, 2)
+                                      .toUpperCase()}
+                                  </span>
+                                </div>
+                                <span className="font-medium">
+                                  {e.courseInstance?.teacher?.name ||
                                     e.teacher?.name ||
                                     e.courseInstance?.teacher?.username ||
                                     e.teacher?.username ||
-                                    "?")
-                                    .split(" ")
-                                    .map(n => n[0])
-                                    .join("")
-                                    .slice(0, 2)
-                                    .toUpperCase()}
+                                    "-"}
                                 </span>
                               </div>
-                              <span className="font-medium">
-                                {e.courseInstance?.teacher?.name ||
-                                  e.teacher?.name ||
-                                  e.courseInstance?.teacher?.username ||
-                                  e.teacher?.username ||
-                                  "-"}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <div className="flex items-center justify-start gap-3">
-                              <span
-                                className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${
-                                  e.isCancelled
-                                    ? "bg-red-100 text-red-700 border border-red-200"
-                                    : "bg-green-100 text-green-700 border border-green-200"
-                                }`}
-                              >
-                                {e.isCancelled ? "🚫 Cancelled" : "✅ Active"}
-                              </span>
-                              <button
-                                onClick={() => toggleSingle(e)}
-                                disabled={workingId === e._id}
-                                className={`px-3 py-1.5 text-xs rounded-lg font-semibold transition-all ${
-                                  e.isCancelled
-                                    ? "bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg"
-                                    : "bg-red-500 text-white hover:bg-red-600 shadow-md hover:shadow-lg"
-                                } disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105`}
-                              >
-                                {workingId === e._id
-                                  ? "⏳ Saving…"
-                                  : e.isCancelled
-                                  ? "↩️ Restore"
-                                  : "❌ Cancel"}
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                            </td>
+                            <td className="p-4">
+                              <div className="flex items-center justify-start gap-3">
+                                <span
+                                  className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${
+                                    e.isCancelled
+                                      ? "bg-red-100 text-red-700 border border-red-200"
+                                      : "bg-green-100 text-green-700 border border-green-200"
+                                  }`}
+                                >
+                                  {e.isCancelled ? "🚫 Cancelled" : "✅ Active"}
+                                </span>
+                                <button
+                                  onClick={() => toggleSingle(e)}
+                                  disabled={workingId === e._id}
+                                  className={`px-3 py-1.5 text-xs rounded-lg font-semibold transition-all ${
+                                    e.isCancelled
+                                      ? "bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg"
+                                      : "bg-red-500 text-white hover:bg-red-600 shadow-md hover:shadow-lg"
+                                  } disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105`}
+                                >
+                                  {workingId === e._id
+                                    ? "⏳ Saving…"
+                                    : e.isCancelled
+                                    ? "↩️ Restore"
+                                    : "❌ Cancel"}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>
@@ -507,9 +519,6 @@ export default function SchedulePage() {
     const rows: string[][] = [];
     for (const s of events) {
       const code = s.courseInstance?.course?.code ?? "";
-      theLoop: {
-        /* no-op label; keeps indentation tools happy */
-      }
       const name = s.courseInstance?.course?.name ?? "";
       const days = s.daysOfWeek?.length ? s.daysOfWeek : [new Date(s.startDate).getDay()];
       for (const d of days) {
@@ -651,8 +660,8 @@ export default function SchedulePage() {
               <p className="text-gray-600">Manage class schedules, view timetables, and track schedule changes</p>
             </div>
             <div className="flex items-center gap-4">
-              <button 
-                onClick={fetchSchedules} 
+              <button
+                onClick={fetchSchedules}
                 className="px-6 py-3 rounded-xl bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium transition-all transform hover:scale-105 shadow-md"
               >
                 🔄 Refresh
@@ -775,7 +784,10 @@ export default function SchedulePage() {
           ) : (
             <div className="grid gap-6 md:grid-cols-2">
               {groups.map((g) => (
-                <div key={g.key} className="group bg-gradient-to-br from-white to-blue-50 rounded-2xl border-2 border-gray-200 p-6 hover:border-blue-300 hover:shadow-xl transition-all duration-300">
+                <div
+                  key={g.key}
+                  className="group bg-gradient-to-br from-white to-blue-50 rounded-2xl border-2 border-gray-200 p-6 hover:border-blue-300 hover:shadow-xl transition-all duration-300"
+                >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
@@ -783,25 +795,29 @@ export default function SchedulePage() {
                           <span className="text-blue-600 font-semibold text-sm">📚</span>
                         </div>
                         <h3 className="font-bold text-lg text-gray-900 group-hover:text-blue-700 transition-colors">
-                          {groupLabel(g)}
+                          {g.batchName} — {g.semesterName} schedule
                         </h3>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full">
-                          📊 {g.events.length} event{g.events.length !== 1 ? 's' : ''}
+                          📊 {g.events.length} event{g.events.length !== 1 ? "s" : ""}
                         </span>
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+                    {/* View */}
                     <button
-                      onClick={() => openGroupView(g.key)}
+                      onClick={() => {
+                        openGroupView(g.key);
+                      }}
                       className="px-3 py-2 rounded-lg bg-white border border-gray-200 hover:border-blue-300 hover:bg-blue-50 text-gray-700 hover:text-blue-700 font-medium text-sm transition-all transform hover:scale-105"
                     >
                       👁️ View
                     </button>
 
+                    {/* Export */}
                     <button
                       onClick={() => {
                         exportGroupCSV(
@@ -814,24 +830,57 @@ export default function SchedulePage() {
                       📁 Export
                     </button>
 
+                    {/* Cancel All */}
                     <button
-                      onClick={() => askCancelAll(g.batchId, g.semesterId, groupLabel(g))}
+                      onClick={() => {
+                        setConfirmPayload({
+                          type: "group",
+                          batchId: g.batchId,
+                          semesterId: g.semesterId,
+                          title: "Cancel All Events",
+                          message: `This will mark all events for ${groupLabel(g)} as cancelled. Continue?`,
+                          action: "cancelAll",
+                        });
+                        setConfirmOpen(true);
+                      }}
                       disabled={busyKey === g.key}
                       className="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-medium text-sm transition-all transform hover:scale-105 disabled:opacity-50 disabled:transform-none shadow-md"
                     >
                       {busyKey === g.key ? "⏳" : "🚫"} {busyKey === g.key ? "Working…" : "Cancel"}
                     </button>
 
+                    {/* Restore All */}
                     <button
-                      onClick={() => askUncancelAll(g.batchId, g.semesterId, groupLabel(g))}
+                      onClick={() => {
+                        setConfirmPayload({
+                          type: "group",
+                          batchId: g.batchId,
+                          semesterId: g.semesterId,
+                          title: "Uncancel All Events",
+                          message: `This will mark all events for ${groupLabel(g)} as ACTIVE. Continue?`,
+                          action: "uncancelAll",
+                        });
+                        setConfirmOpen(true);
+                      }}
                       disabled={busyKey === g.key}
                       className="px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white font-medium text-sm transition-all transform hover:scale-105 disabled:opacity-50 disabled:transform-none shadow-md"
                     >
                       {busyKey === g.key ? "⏳" : "✅"} {busyKey === g.key ? "Working…" : "Restore"}
                     </button>
 
+                    {/* Delete */}
                     <button
-                      onClick={() => askDeleteGroup(g.batchId, g.semesterId, groupLabel(g))}
+                      onClick={() => {
+                        setConfirmPayload({
+                          type: "group",
+                          batchId: g.batchId,
+                          semesterId: g.semesterId,
+                          title: "Delete Entire Schedule",
+                          message: `This will permanently delete ALL events for ${groupLabel(g)}. Continue?`,
+                          action: "delete",
+                        });
+                        setConfirmOpen(true);
+                      }}
                       disabled={busyKey === g.key}
                       className="px-3 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium text-sm transition-all transform hover:scale-105 disabled:opacity-50 disabled:transform-none shadow-md"
                     >
@@ -845,7 +894,7 @@ export default function SchedulePage() {
         </div>
       </div>
 
-      {/* Group View Modal (read-only + per-row toggle) */}
+      {/* Group View Modal */}
       <ViewGroupModal
         open={viewOpen}
         onClose={() => setViewOpen(false)}
