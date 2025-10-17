@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -10,7 +9,9 @@ import {
   Clock,
   Star,
   AlertCircle,
+  Activity,
 } from "lucide-react";
+import { useUser } from "./studentContext";
 
 /* ────────────────────────────────────────────────────────────────────────────
    Types
@@ -28,6 +29,23 @@ type LeaveItem = {
 
 type LeaveTypeTpl = { id: string; label: string; defaultReason?: string };
 
+type ScheduleEventItem = {
+  _id: string;
+  type?: string; // lecture | lab | tutorial | other
+  status: "past" | "current" | "upcoming";
+  startTime: string; // "HH:MM"
+  endTime: string; // "HH:MM"
+  // normalized convenience fields (from API)
+  courseName?: string;
+  batchName?: string;
+  facultyName?: string;
+  semLabel?: string; // semester or year label
+  teacherName?: string;
+
+  // server may send this to mark cancellations
+  isCancelled?: boolean;
+};
+
 /* ────────────────────────────────────────────────────────────────────────────
    Config & helpers
    ──────────────────────────────────────────────────────────────────────────── */
@@ -41,6 +59,23 @@ const ymdNepal = (d = new Date()) =>
     month: "2-digit",
     day: "2-digit",
   }).format(d); // "YYYY-MM-DD"
+
+const isYmd = (s: string) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+const addDaysNepal = (dateStr: string, delta: number) => {
+  if (!isYmd(dateStr)) return ymdNepal();
+  const d = new Date(`${dateStr}T00:00:00+05:45`);
+  if (isNaN(d.getTime())) return ymdNepal();
+  d.setDate(d.getDate() + delta);
+  return ymdNepal(d);
+};
+
+const weekdayNameNepal = (ymd: string) => {
+  if (!isYmd(ymd)) return "";
+  const d = new Date(`${ymd}T12:00:00+05:45`);
+  if (isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "long" }).format(d);
+};
 
 const stripHtml = (s: string) => s.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 const htmlIsEmpty = (html?: string) => !stripHtml(html || "").length;
@@ -57,10 +92,28 @@ const badgeForStatus = (s: LeaveItem["status"]) =>
 const dayPartLabel = (p: LeaveItem["dayPart"]) =>
   p === "first_half" ? "First Half" : p === "second_half" ? "Second Half" : "Full Day";
 
+const trimApiBase = (s: string) => s.replace(/\/+$/, "");
+
+/* summarize batch/sem/faculty chips from schedule items */
+const summarizeCtxFromSchedule = (items: ScheduleEventItem[]) => {
+  if (!Array.isArray(items) || items.length === 0) return null;
+  const firstNonEmpty = <T extends string | undefined>(
+    arr: any[],
+    pick: (v: any) => string | undefined
+  ) => arr.map(pick).find(Boolean);
+
+  const batchName = firstNonEmpty(items, (x) => x.batchName);
+  const semLabel = firstNonEmpty(items, (x) => x.semLabel);
+  const facultyName = firstNonEmpty(items, (x) => x.facultyName);
+  return { batchName, semLabel, facultyName };
+};
+
 /* ────────────────────────────────────────────────────────────────────────────
    Component
    ──────────────────────────────────────────────────────────────────────────── */
 export default function StudentDashboard() {
+  const { user } = useUser();
+
   const [showLeaveModal, setShowLeaveModal] = useState(false);
 
   const [leaveTypes, setLeaveTypes] = useState<LeaveTypeTpl[]>([]);
@@ -72,16 +125,12 @@ export default function StudentDashboard() {
 
   const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  const [form, setForm] = useState({
-    leaveDate: ymdNepal(),
-    type: "sick",
-    dayPart: "full" as "full" | "first_half" | "second_half",
-    reason: "",
-    // keep message simple (textarea) for student; backend supports HTML/plain text
-    customMessage: "",
-  });
+  // ── Daily schedule state
+  const [selectedDate, setSelectedDate] = useState<string>(ymdNepal());
+  const [loadingDaySchedule, setLoadingDaySchedule] = useState<boolean>(true);
+  const [daySchedule, setDaySchedule] = useState<ScheduleEventItem[]>([]);
 
-  // pick up student token; adjust keys if your app uses different names
+  // Token for authenticated calls (robust)
   const getToken = () =>
     (typeof window !== "undefined" &&
       (localStorage.getItem("token_student") ||
@@ -90,6 +139,16 @@ export default function StudentDashboard() {
         sessionStorage.getItem("token"))) ||
     "";
 
+  // Leave form
+  const [form, setForm] = useState({
+    leaveDate: ymdNepal(),
+    type: "sick",
+    dayPart: "full" as "full" | "first_half" | "second_half",
+    reason: "",
+    customMessage: "",
+  });
+
+  /* ---------------- Templates & Leaves ---------------- */
   const fetchTemplates = async () => {
     try {
       const token = getToken();
@@ -99,11 +158,12 @@ export default function StudentDashboard() {
       const data = await res.json();
       setLeaveTypes((data.types || []) as LeaveTypeTpl[]);
       setDayParts(data.dayParts || ["full", "first_half", "second_half"]);
-      // set default message if empty
+      // default message if empty
       const tpl = (data.types || []).find((t: any) => t.id === "sick");
       setForm((f) => ({
         ...f,
-        customMessage: htmlIsEmpty(f.customMessage) && tpl?.defaultReason ? tpl.defaultReason : f.customMessage,
+        customMessage:
+          htmlIsEmpty(f.customMessage) && tpl?.defaultReason ? tpl.defaultReason : f.customMessage,
       }));
     } catch (e) {
       console.error("Failed to fetch templates", e);
@@ -126,6 +186,75 @@ export default function StudentDashboard() {
     }
   };
 
+  /* ---------------- Student daily schedule ---------------- */
+  const fetchDaySchedule = async (dateStr: string, signal?: AbortSignal) => {
+    if (!API || !isYmd(dateStr)) {
+      setDaySchedule([]);
+      return;
+    }
+
+    setLoadingDaySchedule(true);
+
+    const token = getToken();
+    const headers: HeadersInit = {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    };
+
+    const base = trimApiBase(API);
+
+    const buildUrl = (paramName: "date" | "ymd" | "day") => {
+      const u = new URL(`${base}/studentSchedule/me/day`);
+      u.searchParams.set(paramName, dateStr); // server accepts date|ymd|day
+      return u.toString();
+    };
+
+    const doFetch = async (url: string) => {
+      const res = await fetch(url, { headers, signal });
+      const text = await res.text();
+      let json: any = null;
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {}
+      if (!res.ok) {
+        const msg = json?.error || json?.message || text || `HTTP ${res.status}`;
+        throw new Error(`GET ${url} -> ${res.status} ${msg}`);
+      }
+      return Array.isArray(json?.items) ? (json.items as ScheduleEventItem[]) : [];
+    };
+
+    try {
+      // Try ?date= first, then ?ymd=, then ?day=
+      try {
+        const items = await doFetch(buildUrl("date"));
+        setDaySchedule(items);
+      } catch {
+        try {
+          const items = await doFetch(buildUrl("ymd"));
+          setDaySchedule(items);
+        } catch {
+          const items = await doFetch(buildUrl("day"));
+          setDaySchedule(items);
+        }
+      }
+    } catch (e: any) {
+      // Quiet empty day / errors — still show “No classes today.”
+      const msg = String(e?.message || "");
+      const isClient404or400 = /->\s*(400|404)\b/i.test(msg);
+      const looksLikeNoSchedule = /no schedule|no class|no classes|not found|empty/i.test(msg);
+      const noContext = /no batch\/?semester/i.test(msg);
+
+      setDaySchedule([]);
+
+      if (!isClient404or400 && !looksLikeNoSchedule && !noContext) {
+        setToast({ ok: false, msg: "Could not load schedule" });
+        setTimeout(() => setToast(null), 3000);
+      }
+    } finally {
+      setLoadingDaySchedule(false);
+    }
+  };
+
   const defaultMsgForType = useMemo(() => {
     const t = leaveTypes.find((x) => x.id === form.type);
     return (t?.defaultReason || "").trim();
@@ -140,21 +269,24 @@ export default function StudentDashboard() {
       const token = getToken();
       const payload = {
         ...form,
-        // If message blank, fall back to template
         customMessage: htmlIsEmpty(form.customMessage) ? defaultMsgForType : form.customMessage,
-        customMessageText: htmlIsEmpty(form.customMessage) ? defaultMsgForType || form.reason : stripHtml(form.customMessage),
+        customMessageText: htmlIsEmpty(form.customMessage)
+          ? defaultMsgForType || form.reason
+          : stripHtml(form.customMessage),
       };
 
       const res = await fetch(`${API}/leave/student/request`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to request leave");
 
       setToast({ ok: true, msg: "Leave requested successfully." });
-      // reset form minimal
       setForm({
         leaveDate: ymdNepal(),
         type: "sick",
@@ -166,7 +298,6 @@ export default function StudentDashboard() {
     } catch (e: any) {
       setToast({ ok: false, msg: e.message || "Request failed" });
     } finally {
-      // Close modal regardless (as you wanted)
       setSubmittingLeave(false);
       setShowLeaveModal(false);
       setTimeout(() => setToast(null), 3000);
@@ -191,62 +322,311 @@ export default function StudentDashboard() {
     }
   };
 
+  /* ---------------- Effects ---------------- */
   useEffect(() => {
     fetchTemplates();
     fetchMyLeaves();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const today = new Date().toISOString().split("T")[0];
+  // fetch daily schedule when date changes (with debounce + cancel)
+  useEffect(() => {
+    if (!isYmd(selectedDate)) return;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => {
+      fetchDaySchedule(selectedDate, ctrl.signal);
+    }, 150);
 
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate]);
+
+  /* ---------------- Derived ---------------- */
+  const today = new Date().toISOString().split("T")[0];
+  const isTodaySelected = selectedDate === ymdNepal();
+  const selectedDatePretty = isYmd(selectedDate)
+    ? `${weekdayNameNepal(selectedDate)}, ${selectedDate}`
+    : `${weekdayNameNepal(ymdNepal())}, ${ymdNepal()}`;
+
+  const ctxFromSchedule = useMemo(() => summarizeCtxFromSchedule(daySchedule), [daySchedule]);
+
+  /* ────────────────────────────────────────────────────────────────────────────
+     Render
+     ────────────────────────────────────────────────────────────────────────── */
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 p-6">
-      <div className="max-w-5xl mx-auto space-y-6">
-        {/* Page header */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-xl">
-              <Calendar className="h-6 w-6 text-blue-600" />
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50/40 to-purple-100/30 p-6">
+      <div className="max-w-5xl mx-auto space-y-8">
+        {/* Header: show chips only when we have them; otherwise nothing */}
+        <div className="bg-gradient-to-br from-white via-blue-50/30 to-purple-50/20 rounded-2xl shadow-xl border border-gray-100/50 p-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Home</h1>
-              <p className="text-sm text-gray-600">Today: {today}</p>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 bg-clip-text text-transparent">
+                {user?.username ? `Welcome back, ${user.username}!` : "Welcome to your dashboard!"}
+              </h1>
+              <p className="text-gray-600 mt-2 flex items-center space-x-2">
+                <span className="font-medium">{user?.email || "Student Portal"}</span>
+                {user?.role && (
+                  <>
+                    <span className="text-gray-400">•</span>
+                    <span className="px-3 py-1 bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 rounded-full text-sm font-semibold capitalize border border-blue-200">
+                      {user.role}
+                    </span>
+                  </>
+                )}
+              </p>
+
+              <div className="mt-4 text-sm">
+                {loadingDaySchedule ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500/20 border-t-blue-500"></div>
+                    <span className="text-gray-500">Loading your academic details...</span>
+                  </div>
+                ) : ctxFromSchedule ? (
+                  <div className="flex flex-wrap gap-3">
+                    {ctxFromSchedule.batchName && (
+                      <span className="px-3 py-2 rounded-xl bg-gradient-to-r from-gray-100 to-gray-200 border border-gray-300 text-gray-700 font-semibold">
+                        📚 Batch: {ctxFromSchedule.batchName}
+                      </span>
+                    )}
+                    {ctxFromSchedule.semLabel && (
+                      <span className="px-3 py-2 rounded-xl bg-gradient-to-r from-blue-100 to-blue-200 border border-blue-300 text-blue-700 font-semibold">
+                        🎓 {ctxFromSchedule.semLabel}
+                      </span>
+                    )}
+                    {ctxFromSchedule.facultyName && (
+                      <span className="px-3 py-2 rounded-xl bg-gradient-to-r from-purple-100 to-purple-200 border border-purple-300 text-purple-700 font-semibold">
+                        🏛️ {ctxFromSchedule.facultyName}
+                      </span>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="text-center">
+                <div className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg">
+                  <Calendar className="h-5 w-5" />
+                  <div className="text-left">
+                    <div className="text-xs font-medium opacity-90">Today</div>
+                    <div className="text-sm font-bold">{today}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Daily Schedule */}
+        <div className="bg-gradient-to-br from-white via-indigo-50/30 to-blue-50/20 rounded-2xl shadow-xl border border-gray-100/50 p-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+                <Calendar className="h-7 w-7 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+                  {isTodaySelected ? "📅 Today's Schedule" : "📅 Daily Schedule"}
+                </h2>
+                <p className="text-gray-600 font-medium">{selectedDatePretty}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-xl p-2 border border-gray-200/50">
+              <button
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 border border-gray-300 text-gray-700 font-medium text-sm transition-all duration-200 hover:shadow-md"
+                onClick={() => setSelectedDate((d) => addDaysNepal(d, -1))}
+              >
+                ◀ Prev
+              </button>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setSelectedDate(isYmd(v) ? v : ymdNepal());
+                }}
+                className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+              />
+              <button
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 border border-gray-300 text-gray-700 font-medium text-sm transition-all duration-200 hover:shadow-md"
+                onClick={() => setSelectedDate((d) => addDaysNepal(d, +1))}
+              >
+                Next ▶
+              </button>
+              {!isTodaySelected && (
+                <button
+                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium text-sm hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl"
+                  onClick={() => setSelectedDate(ymdNepal())}
+                >
+                  Today
+                </button>
+              )}
             </div>
           </div>
 
-          <button
-            onClick={() => setShowLeaveModal(true)}
-            className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition"
-            title="Ask for leave"
-          >
-            <PlusCircle className="h-5 w-5" />
-            Ask for Leave
-          </button>
+          {/* Schedule list */}
+          <div className="space-y-4 mt-8">
+            {loadingDaySchedule ? (
+              <>
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="p-6 rounded-2xl bg-gradient-to-r from-gray-100 to-gray-200 animate-pulse h-24 border border-gray-200" />
+                ))}
+              </>
+            ) : daySchedule.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="p-6 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full w-20 h-20 mx-auto mb-6 flex items-center justify-center shadow-lg">
+                  <Calendar className="h-10 w-10 text-gray-500" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-700 mb-2">No classes scheduled</h3>
+                <p className="text-gray-500">Enjoy your free day! 🎉</p>
+              </div>
+            ) : (
+              daySchedule.map((ev, index) => {
+                const isCurrent = ev.status === "current";
+                const isCancelled = !!ev.isCancelled;
+
+                const colorDot = isCancelled
+                  ? "bg-red-500 shadow-red-200"
+                  : isCurrent
+                  ? "bg-green-500 shadow-green-200"
+                  : ev.status === "upcoming"
+                  ? "bg-blue-500 shadow-blue-200"
+                  : "bg-gray-400 shadow-gray-200";
+
+                const cardClasses = isCancelled
+                  ? "bg-gradient-to-r from-red-50 to-rose-100/50 border-red-300 shadow-red-100"
+                  : isCurrent
+                  ? "bg-gradient-to-r from-green-50 to-emerald-100/50 border-green-400 shadow-green-100"
+                  : "bg-gradient-to-r from-white to-gray-50/80 border-gray-200 shadow-gray-100";
+
+                return (
+                  <div
+                    key={ev._id || index}
+                    className={`p-6 rounded-2xl border-l-4 ${cardClasses} hover:shadow-xl transition-all duration-300 group`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-5">
+                        <div className={`w-4 h-4 rounded-full ${colorDot} shadow-lg group-hover:scale-110 transition-transform duration-200`} />
+                        <div>
+                          <h3 className="font-bold text-gray-900 text-lg group-hover:text-blue-700 transition-colors">
+                            {ev.courseName || "Class"}
+                          </h3>
+
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                            {isCancelled && (
+                              <span className="px-3 py-1 rounded-full bg-gradient-to-r from-red-100 to-red-200 text-red-700 border border-red-300 font-semibold">
+                                ⛔ Cancelled
+                              </span>
+                            )}
+                            {ev.teacherName && (
+                              <span className="px-3 py-1 rounded-full bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 border border-gray-300 font-medium">
+                                👨‍🏫 {ev.teacherName}
+                              </span>
+                            )}
+                            {ev.facultyName && (
+                              <span className="px-3 py-1 rounded-full bg-gradient-to-r from-purple-100 to-purple-200 text-purple-700 border border-purple-300 font-medium">
+                                🏛️ {ev.facultyName}
+                              </span>
+                            )}
+                            {ev.semLabel && (
+                              <span className="px-3 py-1 rounded-full bg-gradient-to-r from-blue-100 to-blue-200 text-blue-700 border border-blue-300 font-medium">
+                                🎓 {ev.semLabel}
+                              </span>
+                            )}
+                            <span className="px-3 py-1 rounded-full bg-gradient-to-r from-indigo-100 to-indigo-200 text-indigo-700 border border-indigo-300 font-medium capitalize">
+                              📚 {ev.type || "lecture"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <p
+                          className={`font-bold text-lg ${
+                            isCancelled ? "text-gray-500 line-through" : "text-gray-900"
+                          }`}
+                        >
+                          {ev.startTime} – {ev.endTime}
+                        </p>
+                        {!isCancelled && isCurrent && (
+                          <span className="inline-flex items-center gap-2 text-sm text-green-700 bg-gradient-to-r from-green-100 to-emerald-100 px-3 py-1 rounded-full mt-2 border border-green-300 font-semibold shadow-lg">
+                            <Activity className="h-4 w-4" />
+                            🔴 Live Now
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
 
         {/* Toast */}
         {toast && (
           <div
-            className={`rounded-xl p-3 border ${
-              toast.ok ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200"
+            className={`rounded-2xl p-4 border shadow-lg ${
+              toast.ok
+                ? "bg-gradient-to-r from-emerald-50 to-green-100/80 text-emerald-800 border-emerald-300"
+                : "bg-gradient-to-r from-red-50 to-rose-100/80 text-red-700 border-red-300"
             }`}
           >
-            {toast.msg}
+            <div className="flex items-center gap-2">
+              {toast.ok ? (
+                <span className="text-emerald-600">✅</span>
+              ) : (
+                <span className="text-red-600">❌</span>
+              )}
+              <span className="font-medium">{toast.msg}</span>
+            </div>
           </div>
         )}
-
-        {/* My leaves panel */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-yellow-100 rounded-xl">
-                <Star className="h-5 w-5 text-yellow-600" />
+        
+        {/* CTA: Ask for Leave */}
+        <div className="bg-gradient-to-br from-white via-indigo-50/30 to-purple-50/20 rounded-2xl shadow-xl border border-gray-100/50 p-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="p-4 bg-gradient-to-br from-orange-400 to-red-500 rounded-xl shadow-lg">
+                <Calendar className="h-7 w-7 text-white" />
               </div>
-              <h2 className="text-lg font-semibold text-gray-900">My Leave Requests</h2>
+              <div>
+                <h3 className="text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+                  🎯 Leave Center
+                </h3>
+                <p className="text-gray-600 mt-1">
+                  {user?.username ? `Need time off, ${user.username}? Submit your leave request here.` : "Need time off? Submit your leave request here."}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowLeaveModal(true)}
+              className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-6 py-3 rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl font-semibold"
+              title="Ask for leave"
+            >
+              <PlusCircle className="h-6 w-6" />
+              Request Leave
+            </button>
+          </div>
+        </div>
+        {/* My leaves panel */}
+        <div className="bg-gradient-to-br from-white via-yellow-50/20 to-orange-50/20 rounded-2xl shadow-xl border border-gray-100/50 p-8">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-xl shadow-lg">
+                <Star className="h-6 w-6 text-white" />
+              </div>
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+                📝 My Leave Requests
+              </h2>
             </div>
             <button
               onClick={fetchMyLeaves}
-              className="text-sm text-blue-600 hover:text-blue-700 inline-flex items-center gap-1"
+              className="text-sm text-blue-600 hover:text-blue-700 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 font-medium transition-all duration-200"
               title="Refresh"
             >
               <Clock className="h-4 w-4" />
@@ -301,6 +681,8 @@ export default function StudentDashboard() {
             </ul>
           )}
         </div>
+
+       
       </div>
 
       {/* Leave Modal */}
@@ -344,7 +726,6 @@ export default function StudentDashboard() {
                       setForm((f) => ({
                         ...f,
                         type: val,
-                        // if message empty, prefill with template
                         customMessage:
                           htmlIsEmpty(f.customMessage) && tpl?.defaultReason
                             ? tpl.defaultReason
@@ -402,10 +783,7 @@ export default function StudentDashboard() {
                 <button
                   type="button"
                   onClick={() =>
-                    setForm((f) => ({
-                      ...f,
-                      customMessage: defaultMsgForType || f.customMessage,
-                    }))
+                    setForm((f) => ({ ...f, customMessage: defaultMsgForType || f.customMessage }))
                   }
                   className="mt-2 text-xs text-blue-600 hover:text-blue-700"
                 >
@@ -441,7 +819,7 @@ export default function StudentDashboard() {
           </div>
         </div>
       )}
-      {/* this is the code  */}
+      {/* end modal */}
     </div>
   );
 }
