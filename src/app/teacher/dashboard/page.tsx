@@ -9,10 +9,8 @@ import {
   Sparkles,
   Calendar,
   Clock,
-  CheckCircle2,
   AlertCircle,
   ArrowRight,
-  Save,
   Sunrise,
   Sun,
   Sunset,
@@ -28,14 +26,14 @@ import {
 import { useUser } from "./teacherContext";
 import TiptapEditor from "./components/tiptap";
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Types
-// ──────────────────────────────────────────────────────────────────────────────
+/* ──────────────────────────────────────────────────────────────────────────────
+   Types
+   ──────────────────────────────────────────────────────────────────────────── */
 type ItemType = "Assignment" | "groupAssignment" | "Question" | "quiz";
 
 type ItemRow = {
   id: string;
-  type: string; // keep runtime flexible; we’ll normalize it
+  type: string; // runtime flexible
   title: string;
   courseInstanceId: string | null;
   dueAt?: string | null;
@@ -67,7 +65,11 @@ type LeaveItem = {
 
 type LeaveTypeTpl = { id: string; label: string; defaultReason?: string };
 
-// ──────────────────────────────────────────────────────────────────────────────
+type WeekDayBlock = { date: string; weekday: string; count: number; items: any[] };
+
+/* ──────────────────────────────────────────────────────────────────────────────
+   Constants / helpers
+   ──────────────────────────────────────────────────────────────────────────── */
 const TYPE_LABEL: Record<ItemType, string> = {
   Assignment: "Assignment",
   groupAssignment: "Group Assignment",
@@ -101,6 +103,23 @@ const ymdNepal = (d = new Date()) =>
     day: "2-digit",
   }).format(d); // YYYY-MM-DD
 
+const addDaysNepal = (dateStr: string, delta: number) => {
+  const d = new Date(`${dateStr}T00:00:00+05:45`);
+  d.setDate(d.getDate() + delta);
+  return ymdNepal(d);
+};
+
+const weekdayNameNepal = (ymd: string) =>
+  new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "long" })
+    .format(new Date(`${ymd}T12:00:00+05:45`));
+
+const mondayOfWeekNepal = (ymd: string) => {
+  const d = new Date(`${ymd}T00:00:00+05:45`);
+  const dow = d.getDay();                 // 0=Sun..6=Sat
+  const delta = (dow + 6) % 7;            // back to Monday
+  return addDaysNepal(ymd, -delta);
+};
+
 const getTimeBasedGreeting = () => {
   const hour = new Date().getHours();
   if (hour < 6) return { greeting: "Good Night", icon: Moon, color: "from-indigo-600 to-purple-600" };
@@ -113,32 +132,26 @@ const getTimeBasedGreeting = () => {
 // Normalize any backend/legacy values into your display keys
 const normalizeToDisplayType = (t: string): ItemType => {
   const s = String(t || "").trim();
-  if (/^assignments?$/i.test(s)) return "Assignment";           // "assignment" or "Assignments"
-  if (/^question$/i.test(s)) return "Question";                 // "question" or "Question"
+  if (/^assignments?$/i.test(s)) return "Assignment";
+  if (/^question$/i.test(s)) return "Question";
   if (/^group[-_ ]?assignment$/i.test(s)) return "groupAssignment";
   if (/^quiz$/i.test(s)) return "quiz";
-  // default to Assignment if unknown
   return "Assignment";
 };
 
-// Map display type to your route segment rules without changing your routes
+// Map display type to your route segment rules
 const routeTypeFor = (displayType: ItemType) => {
-  if (displayType === "Assignment") return "Assignment"; // keep route as "Assignments"
-  return displayType; // "Question", "quiz", "groupAssignment" stay as-is (per your note)
+  if (displayType === "Assignment") return "Assignment";
+  return displayType;
 };
-
-// Mock schedule (replace with your ScheduleEvent fetch)
-const mockSchedule = [
-  { subject: "Advanced Mathematics", time: "10:00 AM", room: "Room 101", status: "upcoming", color: "bg-blue-500" },
-  { subject: "Physics Lab", time: "01:00 PM", room: "Lab 205", status: "current", color: "bg-green-500" },
-  { subject: "English Literature", time: "03:00 PM", room: "Room 303", status: "upcoming", color: "bg-purple-500" },
-];
 
 // Small helpers
 const stripHtml = (s: string) => s.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 const htmlIsEmpty = (html?: string) => !stripHtml(html || "").length;
 
-// ──────────────────────────────────────────────────────────────────────────────
+/* ──────────────────────────────────────────────────────────────────────────────
+   Component
+   ──────────────────────────────────────────────────────────────────────────── */
 export default function TeacherDashboard() {
   const router = useRouter();
   const { user } = useUser();
@@ -150,13 +163,21 @@ export default function TeacherDashboard() {
   const [loading, setLoading] = useState(true);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loadingCalendar, setLoadingCalendar] = useState(true);
-  const [note, setNote] = useState("");
-  const [savedNote, setSavedNote] = useState(false);
+
+  // Daily schedule (REAL)
+  const [selectedDate, setSelectedDate] = useState<string>(ymdNepal());
+  const [daySchedule, setDaySchedule] = useState<any[]>([]);
+  const [loadingDaySchedule, setLoadingDaySchedule] = useState<boolean>(true);
+
+  // Weekly schedule
+  const [weekStart, setWeekStart] = useState<string>(() => mondayOfWeekNepal(ymdNepal()));
+  const [weekDays, setWeekDays] = useState<WeekDayBlock[]>([]);
+  const [loadingWeek, setLoadingWeek] = useState<boolean>(true);
 
   // Leave state
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaveTypes, setLeaveTypes] = useState<LeaveTypeTpl[]>([]);
-const [dayParts, setDayParts] = useState<string[]>([]);
+  const [dayParts, setDayParts] = useState<string[]>([]);
   const [myLeaves, setMyLeaves] = useState<LeaveItem[]>([]);
   const [loadingLeaves, setLoadingLeaves] = useState(true);
   const [submittingLeave, setSubmittingLeave] = useState(false);
@@ -173,7 +194,7 @@ const [dayParts, setDayParts] = useState<string[]>([]);
     (typeof window !== "undefined" &&
       (localStorage.getItem("token_teacher") || sessionStorage.getItem("token_teacher"))) || "";
 
-  // Fetchers
+  /* ---------------- Fetchers ---------------- */
   const fetchTemplates = async () => {
     try {
       const token = getToken();
@@ -260,13 +281,51 @@ const [dayParts, setDayParts] = useState<string[]>([]);
     }
   };
 
+  // REAL schedule for selectedDate (Nepal) — use /me/day
+  const fetchDaySchedule = async (dateStr: string) => {
+    if (!API) return;
+    setLoadingDaySchedule(true);
+    try {
+      const token = getToken();
+      const res = await fetch(`${API}/teacherSchedule/me/day?date=${dateStr}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setDaySchedule(Array.isArray(data.items) ? data.items : []);
+    } catch (e) {
+      console.error("Failed to load schedule", e);
+      setDaySchedule([]);
+    } finally {
+      setLoadingDaySchedule(false);
+    }
+  };
+
+  // Weekly schedule — /me/week
+  const fetchWeekSchedule = async (startYmd: string) => {
+    if (!API) return;
+    setLoadingWeek(true);
+    try {
+      const token = getToken();
+      const res = await fetch(`${API}/teacherSchedule/me/week?start=${startYmd}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setWeekDays(Array.isArray(data.days) ? (data.days as WeekDayBlock[]) : []);
+    } catch (e) {
+      console.error("Failed to load weekly schedule", e);
+      setWeekDays([]);
+    } finally {
+      setLoadingWeek(false);
+    }
+  };
+
   // Defaults based on selected type
   const defaultMsgForType = useMemo(() => {
     const t = leaveTypes.find((x) => x.id === leaveForm.type);
     return (t?.defaultReason || "").trim();
   }, [leaveTypes, leaveForm.type]);
 
-  // Submit Leave — close modal on both success & failure
+  // Submit Leave
   const submitLeave = async () => {
     if (submittingLeave) return;
     setSubmittingLeave(true);
@@ -309,6 +368,7 @@ const [dayParts, setDayParts] = useState<string[]>([]);
       });
       setLeaveToast({ ok: true, msg: "Leave requested successfully." });
       fetchMyLeaves();
+      fetchDaySchedule(selectedDate);
     } catch (e: any) {
       setLeaveToast({ ok: false, msg: e.message });
     } finally {
@@ -331,6 +391,7 @@ const [dayParts, setDayParts] = useState<string[]>([]);
       }
       setLeaveToast({ ok: true, msg: "Leave cancelled." });
       fetchMyLeaves();
+      fetchDaySchedule(selectedDate);
     } catch (e: any) {
       setLeaveToast({ ok: false, msg: e.message });
     } finally {
@@ -338,30 +399,35 @@ const [dayParts, setDayParts] = useState<string[]>([]);
     }
   };
 
-  // Effects
-  useEffect(() => {
-    const savedNote = localStorage.getItem("dailyNote") || "";
-    setNote(savedNote);
-  }, []);
-
+  /* ---------------- Effects ---------------- */
   useEffect(() => {
     fetchCourses();
     fetchTemplates();
     fetchMyLeaves();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teacherId]);
 
   useEffect(() => {
     fetchAssignments();
     fetchCalendar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courses]);
 
-  // Helpers
-  const saveNote = () => {
-    localStorage.setItem("dailyNote", note);
-    setSavedNote(true);
-    setTimeout(() => setSavedNote(false), 2000);
-  };
+  // fetch schedule when teacher or selectedDate changes
+  useEffect(() => {
+    if (!teacherId) return;
+    fetchDaySchedule(selectedDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teacherId, selectedDate]);
 
+  // fetch weekly when teacher or weekStart changes
+  useEffect(() => {
+    if (!teacherId) return;
+    fetchWeekSchedule(weekStart);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teacherId, weekStart]);
+
+  /* ---------------- Derived ---------------- */
   const today = new Date().toISOString().split("T")[0];
   const todayEvents = holidays.filter((h) => h.date === today);
   const { greeting, icon: GreetingIcon, color } = getTimeBasedGreeting();
@@ -387,9 +453,39 @@ const [dayParts, setDayParts] = useState<string[]>([]);
   const dayPartLabel = (p: LeaveItem["dayPart"]) =>
     p === "first_half" ? "First Half" : p === "second_half" ? "Second Half" : "Full Day";
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // Render
-  // ────────────────────────────────────────────────────────────────────────────
+  const isTodaySelected = selectedDate === ymdNepal();
+  const selectedDatePretty = new Date(`${selectedDate}T12:00:00+05:45`).toLocaleDateString(undefined, {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+
+  // Unique batches & faculties present in today's schedule
+  const uniqueBatches = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const ev of daySchedule) {
+      const b = ev?.courseInstance?.batch || ev?.batch;
+      const id = b?._id || b?.id;
+      const name = b?.batchname;
+      if (id && name && !map.has(id)) map.set(id, name);
+    }
+    return Array.from(map, ([id, name]) => ({ id, name }));
+  }, [daySchedule]);
+
+  const uniqueFaculties = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const ev of daySchedule) {
+      const f =
+        ev?.courseInstance?.course?.semesterOrYear?.faculty ||
+        ev?.faculty;
+      const id = f?._id || f?.id;
+      const name = f?.shortName || f?.name;
+      if (id && name && !map.has(id)) map.set(id, name);
+    }
+    return Array.from(map, ([id, name]) => ({ id, name }));
+  }, [daySchedule]);
+
+  /* ────────────────────────────────────────────────────────────────────────────
+     Render
+     ────────────────────────────────────────────────────────────────────────── */
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 p-6">
       <div className="max-w-7xl mx-auto space-y-8">
@@ -453,49 +549,195 @@ const [dayParts, setDayParts] = useState<string[]>([]);
 
         {/* Main Dashboard Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Today's Schedule */}
+          {/* Daily Schedule */}
           <div className="lg:col-span-2 bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-200 p-8">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 rounded-xl">
                   <Calendar className="h-6 w-6 text-blue-600" />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900">Today's Schedule</h2>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {isTodaySelected ? "Today's Schedule" : "Daily Schedule"}
+                  </h2>
+                  <p className="text-sm text-gray-500">{selectedDatePretty}</p>
+                </div>
               </div>
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <Clock className="h-4 w-4" />
-                <span>{new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+
+              {/* Date controls */}
+              <div className="flex items-center gap-2">
+                <button
+                  className="px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm"
+                  onClick={() => setSelectedDate((d) => addDaysNepal(d, -1))}
+                >
+                  ◀ Prev
+                </button>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="px-3 py-2 rounded-lg border border-gray-300 text-sm"
+                />
+                <button
+                  className="px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm"
+                  onClick={() => setSelectedDate((d) => addDaysNepal(d, +1))}
+                >
+                  Next ▶
+                </button>
+                {!isTodaySelected && (
+                  <button
+                    className="px-3 py-2 rounded-lg border border-blue-600 text-blue-600 hover:bg-blue-50 text-sm"
+                    onClick={() => setSelectedDate(ymdNepal())}
+                  >
+                    Today
+                  </button>
+                )}
               </div>
             </div>
 
-            <div className="space-y-4">
-              {mockSchedule.map((item, index) => (
-                <div
-                  key={index}
-                  className={`p-4 rounded-xl border-l-4 ${
-                    item.status === "current" ? "bg-green-50 border-green-500" : "bg-gray-50 border-gray-300"
-                  } hover:shadow-md transition-all duration-200`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className={`w-3 h-3 rounded-full ${item.color}`}></div>
-                      <div>
-                        <h3 className="font-semibold text-gray-900">{item.subject}</h3>
-                        <p className="text-sm text-gray-600">{item.room}</p>
+            {/* Unique Batches & Faculties for the day */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
+              <div className="rounded-xl border border-gray-200 p-4 bg-gray-50">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm font-semibold text-gray-800">Batches (Today)</div>
+                  <span className="text-xs text-gray-500">{uniqueBatches.length}</span>
+                </div>
+                {loadingDaySchedule ? (
+                  <p className="text-sm text-gray-400">Loading…</p>
+                ) : uniqueBatches.length === 0 ? (
+                  <p className="text-sm text-gray-500">None scheduled</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {uniqueBatches.map((b) => (
+                      <span
+                        key={b.id}
+                        className="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100"
+                      >
+                        {b.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-gray-200 p-4 bg-gray-50">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm font-semibold text-gray-800">Faculties (Today)</div>
+                  <span className="text-xs text-gray-500">{uniqueFaculties.length}</span>
+                </div>
+                {loadingDaySchedule ? (
+                  <p className="text-sm text-gray-400">Loading…</p>
+                ) : uniqueFaculties.length === 0 ? (
+                  <p className="text-sm text-gray-500">None scheduled</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {uniqueFaculties.map((f) => (
+                      <span
+                        key={f.id}
+                        className="text-xs px-2 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-100"
+                      >
+                        {f.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Schedule list */}
+            <div className="space-y-4 mt-6">
+              {loadingDaySchedule ? (
+                <>
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="p-4 rounded-xl bg-gray-100 animate-pulse h-20" />
+                  ))}
+                </>
+              ) : daySchedule.length === 0 ? (
+                <div className="text-center py-10">
+                  <div className="p-4 bg-gray-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                    <Calendar className="h-8 w-8 text-gray-400" />
+                  </div>
+                  <p className="text-gray-600">No classes scheduled for this day.</p>
+                </div>
+              ) : (
+                daySchedule.map((ev, index) => {
+                  const isCurrent = ev.status === "current";
+                  const colorDot =
+                    isCurrent ? "bg-green-500" : ev.status === "upcoming" ? "bg-blue-500" : "bg-gray-400";
+
+                  const courseName =
+                    ev?.courseInstance?.course?.name ||
+                    ev?.courseInstance?.course?.code ||
+                    "Class";
+                  const batchName =
+                    ev?.courseInstance?.batch?.batchname ||
+                    ev?.batch?.batchname ||
+                    "";
+                  const facultyName =
+                    ev?.courseInstance?.course?.semesterOrYear?.faculty?.shortName ||
+                    ev?.courseInstance?.course?.semesterOrYear?.faculty?.name ||
+                    ev?.faculty?.shortName ||
+                    ev?.faculty?.name ||
+                    "";
+
+                  // NEW: semester/year label for daily list
+                  const semLabelDaily =
+                    ev?.courseInstance?.course?.semesterOrYear?.name ||
+                    ev?.semesterOrYear?.name ||
+                    "";
+
+                  return (
+                    <div
+                      key={ev._id || index}
+                      className={`p-4 rounded-xl border-l-4 ${
+                        isCurrent ? "bg-green-50 border-green-500" : "bg-gray-50 border-gray-300"
+                      } hover:shadow-md transition-all duration-200`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-3 h-3 rounded-full ${colorDot}`}></div>
+                          <div>
+                            <h3 className="font-semibold text-gray-900">{courseName}</h3>
+
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                              {batchName && (
+                                <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                                  {batchName}
+                                </span>
+                              )}
+                              <span className="px-2 py-1 rounded-full bg-gray-100 text-gray-700 border border-gray-200 capitalize">
+                                {ev?.type || "lecture"}
+                              </span>
+                              {facultyName && (
+                                <span className="px-2 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-100">
+                                  {facultyName}
+                                </span>
+                              )}
+                              {semLabelDaily && (
+                                <span className="px-2 py-1 rounded-full bg-pink-50 text-pink-700 border border-pink-100">
+                                  {semLabelDaily}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <p className="font-medium text-gray-900">
+                            {ev.startTime} – {ev.endTime}
+                          </p>
+                          {isCurrent && (
+                            <span className="inline-flex items-center gap-1 text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full mt-1">
+                              <Activity className="h-3 w-3" />
+                              Live
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-medium text-gray-900">{item.time}</p>
-                      {item.status === "current" && (
-                        <span className="inline-flex items-center gap-1 text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full">
-                          <Activity className="h-3 w-3" />
-                          Live
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  );
+                })
+              )}
             </div>
 
             <button
@@ -584,57 +826,234 @@ const [dayParts, setDayParts] = useState<string[]>([]);
               <ArrowRight className="h-5 w-5" />
             </button>
           </div>
+
+          {/* Weekly Schedule (Mon..Sun) */}
+          <div className="lg:col-span-3 bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-200 p-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 rounded-xl">
+                  <Calendar className="h-6 w-6 text-indigo-600" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">This Week</h2>
+                  <p className="text-sm text-gray-500">
+                    {weekStart} → {addDaysNepal(weekStart, 6)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  className="px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm"
+                  onClick={() => setWeekStart((d) => addDaysNepal(d, -7))}
+                >
+                  ◀ Prev Week
+                </button>
+                <button
+                  className="px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm"
+                  onClick={() => setWeekStart(mondayOfWeekNepal(ymdNepal()))}
+                >
+                  This Week
+                </button>
+                <button
+                  className="px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm"
+                  onClick={() => setWeekStart((d) => addDaysNepal(d, +7))}
+                >
+                  Next Week ▶
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-6 space-y-6">
+              {loadingWeek ? (
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="h-16 bg-gray-100 rounded-xl animate-pulse" />
+                  ))}
+                </div>
+              ) : weekDays.length === 0 ? (
+                <div className="text-center py-8 text-gray-600">No weekly classes found.</div>
+              ) : (
+                weekDays.map((day) => (
+                  <div key={day.date} className="border rounded-xl overflow-hidden">
+                    {/* Day header */}
+                    <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b">
+                      <div className="font-semibold text-gray-800">
+                        {weekdayNameNepal(day.date)} — {day.date}
+                      </div>
+                      <div className="text-xs text-gray-500">{day.count} item(s)</div>
+                    </div>
+
+                    {/* Table header */}
+                    <div className="hidden md:grid grid-cols-6 gap-3 px-4 py-2 text-xs font-semibold text-gray-600 bg-white">
+                      <div>coursename</div>
+                      <div>time</div>
+                      <div>batch</div>
+                      <div>faculty</div>
+                      <div>semester</div>
+                      <div>status</div>
+                    </div>
+
+                    {/* Rows */}
+                    {day.items.length === 0 ? (
+                      <div className="px-4 py-4 text-sm text-gray-500 bg-white">No classes.</div>
+                    ) : (
+                      <div className="divide-y">
+                        {day.items.map((ev: any, idx: number) => {
+                          const courseName =
+                            ev?.courseInstance?.course?.name ||
+                            ev?.courseInstance?.course?.code ||
+                            "Class";
+                          const batchName =
+                            ev?.courseInstance?.batch?.batchname || ev?.batch?.batchname || "";
+                          const facultyName =
+                            ev?.courseInstance?.course?.semesterOrYear?.faculty?.shortName ||
+                            ev?.courseInstance?.course?.semesterOrYear?.faculty?.name ||
+                            ev?.faculty?.shortName ||
+                            ev?.faculty?.name ||
+                            "";
+                          const semLabel =
+                            ev?.courseInstance?.course?.semesterOrYear?.name ||
+                            ev?.semesterOrYear?.name ||
+                            "";
+
+                          const statusChip =
+                            ev.status === "current"
+                              ? "bg-green-100 text-green-700"
+                              : ev.status === "upcoming"
+                              ? "bg-blue-100 text-blue-700"
+                              : "bg-gray-100 text-gray-700";
+
+                          return (
+                            <div
+                              key={ev._id || `${day.date}-${idx}`}
+                              className="grid md:grid-cols-6 grid-cols-1 gap-3 px-4 py-3 bg-white"
+                            >
+                              <div className="font-medium text-gray-900">{courseName}</div>
+                              <div className="text-gray-700">
+                                {ev.startTime} – {ev.endTime}
+                              </div>
+                              <div className="text-gray-700">{batchName || "-"}</div>
+                              <div className="text-gray-700">{facultyName || "-"}</div>
+                              <div className="text-gray-700">{semLabel || "-"}</div>
+                              <div>
+                                <span className={`text-xs px-2 py-1 rounded-full ${statusChip}`}>
+                                  {ev.status || "upcoming"}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Bottom Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Daily Notes */}
+          {/* My Leave Requests */}
           <div className="lg:col-span-2 bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-200 p-8">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-green-100 rounded-xl">
                   <Coffee className="h-6 w-6 text-green-600" />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900">Daily Notes</h2>
+                <h2 className="text-2xl font-bold text-gray-900">My Leave Requests</h2>
               </div>
-              <div className="text-sm text-gray-500">
-                {new Date().toLocaleDateString(undefined, {
-                  weekday: "long",
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={fetchMyLeaves}
+                  className="text-sm text-gray-600 hover:text-gray-900 border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50"
+                >
+                  Refresh
+                </button>
+                <button
+                  onClick={() => setShowLeaveModal(true)}
+                  className="text-sm text-white bg-gradient-to-r from-blue-600 to-purple-600 px-3 py-2 rounded-lg hover:from-blue-700 hover:to-purple-700"
+                >
+                  Request Leave
+                </button>
               </div>
             </div>
 
-            <textarea
-              placeholder="What's on your mind today? Jot down important reminders, observations, or reflections..."
-              className="w-full border border-gray-300 rounded-xl p-4 h-36 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none bg-white/50 backdrop-blur-sm transition-all"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-            />
+            {/* Quick stats */}
+            {(() => {
+              const pending = myLeaves.filter((l) => l.status === "pending").length;
+              const approved = myLeaves.filter((l) => l.status === "approved").length;
+              const rejected = myLeaves.filter((l) => l.status === "rejected").length;
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <div className="text-xs text-amber-700">Pending</div>
+                    <div className="text-2xl font-semibold text-amber-800">{pending}</div>
+                  </div>
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                    <div className="text-xs text-emerald-700">Approved</div>
+                    <div className="text-2xl font-semibold text-emerald-800">{approved}</div>
+                  </div>
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                    <div className="text-xs text-rose-700">Rejected</div>
+                    <div className="text-2xl font-semibold text-rose-800">{rejected}</div>
+                  </div>
+                </div>
+              );
+            })()}
 
-            <button
-              className={`mt-4 flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all ${
-                savedNote ? "bg-green-500 text-white" : "bg-blue-600 text-white hover:bg-blue-700"
-              }`}
-              onClick={saveNote}
-            >
-              {savedNote ? (
-                <>
-                  <CheckCircle2 className="h-5 w-5" />
-                  Note Saved!
-                </>
-              ) : (
-                <>
-                  <Save className="h-5 w-5" />
-                  Save Note
-                </>
-              )}
-            </button>
+            {/* List */}
+            {loadingLeaves ? (
+              <div className="space-y-3">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="h-14 rounded-xl bg-gray-100 animate-pulse" />
+                ))}
+              </div>
+            ) : myLeaves.length === 0 ? (
+              <div className="text-center py-10">
+                <div className="p-4 bg-gray-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                  <Calendar className="h-8 w-8 text-gray-400" />
+                </div>
+                <p className="text-gray-600">You haven’t requested any leave yet.</p>
+              </div>
+            ) : (
+              <ul className="divide-y divide-gray-100 bg-gray-50">
+                {myLeaves.map((lv) => (
+                  <li key={lv._id} className="py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-blue-50 border border-blue-100">
+                        <Calendar className="h-4 w-4 text-blue-600" />
+                      </div>
+                      <div>
+                        <div className="font-medium text-gray-900">
+                          {lv.leaveDate} • {dayPartLabel(lv.dayPart)}
+                        </div>
+                        <div className="text-sm text-gray-600 capitalize">
+                          {lv.type} {lv.reason ? `— ${lv.reason}` : ""}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs px-2.5 py-1 rounded-full ${badgeForStatus(lv.status)}`}>
+                        {lv.status}
+                      </span>
+                      {lv.status === "pending" && (
+                        <button
+                          onClick={() => cancelLeave(lv._id)}
+                          className="text-xs px-3 py-1 rounded-md border border-gray-300 hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
-          {/* Calendar & Today's Events + My Leaves */}
+          {/* Right column: Today */}
           <div className="space-y-6">
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center gap-3 mb-6">
@@ -649,13 +1068,15 @@ const [dayParts, setDayParts] = useState<string[]>([]);
                 <p className="text-gray-600 font-medium">
                   {new Date().toLocaleString("default", { month: "long", year: "numeric" })}
                 </p>
-                <p className="text-sm text-gray-500 mt-1">{new Date().toLocaleString("default", { weekday: "long" })}</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  {new Date().toLocaleString("default", { weekday: "long" })}
+                </p>
               </div>
 
               <div>
                 <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-purple-500" />
-                  Today's Events
+                  Today&apos;s Events
                 </h3>
 
                 {loadingCalendar ? (
@@ -690,52 +1111,6 @@ const [dayParts, setDayParts] = useState<string[]>([]);
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* My Leaves */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-900">My Leave Requests</h2>
-                <button onClick={fetchMyLeaves} className="text-sm text-blue-600 hover:text-blue-700">
-                  Refresh
-                </button>
-              </div>
-
-              {loadingLeaves ? (
-                <div className="space-y-2">
-                  {[...Array(3)].map((_, i) => (
-                    <div key={i} className="h-12 bg-gray-100 rounded animate-pulse" />
-                  ))}
-                </div>
-              ) : myLeaves.length === 0 ? (
-                <p className="text-sm text-gray-500">You haven’t requested any leave yet.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {myLeaves.map((lv) => (
-                    <li key={lv._id} className="p-3 rounded-lg border border-gray-200 flex items-center justify-between">
-                      <div>
-                        <div className="font-medium text-gray-900">
-                          {lv.leaveDate} • {dayPartLabel(lv.dayPart)}
-                        </div>
-                        <div className="text-sm text-gray-600 capitalize">
-                          {lv.type} {lv.reason ? `— ${lv.reason}` : ""}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs px-2 py-1 rounded-full ${badgeForStatus(lv.status)}`}>{lv.status}</span>
-                        {lv.status === "pending" && (
-                          <button
-                            onClick={() => cancelLeave(lv._id)}
-                            className="text-xs px-2 py-1 rounded-md border border-gray-300 hover:bg-gray-50"
-                          >
-                            Cancel
-                          </button>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
           </div>
         </div>
@@ -856,19 +1231,6 @@ const [dayParts, setDayParts] = useState<string[]>([]);
                     placeholder="📝 Provide detailed information about your leave request...&#10;&#10;💡 Consider including:&#10;• Specific dates and time requirements&#10;• Coverage arrangements or substitutions&#10;• Emergency contact information&#10;• Reason for leave (if comfortable sharing)&#10;• Any special circumstances&#10;&#10;✨ Use the formatting toolbar above to organize longer messages with headings, lists, and emphasis."
                     className="bg-white min-h-[250px]"
                   />
-                </div>
-
-                <div className="flex items-start gap-2 mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="text-blue-500 text-lg mt-0.5">💡</div>
-                  <div>
-                    <p className="text-xs text-blue-800 font-medium mb-1">Tips for effective leave requests:</p>
-                    <ul className="text-xs text-blue-700 space-y-1">
-                      <li>• Be specific about dates and duration</li>
-                      <li>• Mention any work arrangements or coverage plans</li>
-                      <li>• Include emergency contact details if needed</li>
-                      <li>• Use formatting tools above to organize longer messages</li>
-                    </ul>
-                  </div>
                 </div>
               </div>
             </div>
