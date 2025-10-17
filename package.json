@@ -27,7 +27,7 @@
     "he": "^1.2.0",
     "isomorphic-dompurify": "^2.26.0",
     "lucide-react": "^0.514.0",
-    "next": "15.3.3",
+    "next": "^15.5.4",
     "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
