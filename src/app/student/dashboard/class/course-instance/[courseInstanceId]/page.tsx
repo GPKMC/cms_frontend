@@ -142,12 +142,12 @@ export default function CourseInstanceOverview() {
     : "";
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-3 sm:p-6 max-w-6xl mx-auto">
       {/* Header Section */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">{data.course.name}</h1>
-        <div className="flex items-center gap-4 text-sm text-gray-600 mb-6">
-          <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
+      <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-3 sm:mb-2 leading-tight">{data.course.name}</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-gray-600 mb-4 sm:mb-6">
+          <span className="bg-blue-100 text-blue-800 px-3 py-1.5 sm:px-2 sm:py-1 rounded-full font-medium text-xs sm:text-sm w-fit">
             {data.course.code}
           </span>
           <span className="flex items-center gap-1">
@@ -156,36 +156,43 @@ export default function CourseInstanceOverview() {
           </span>
         </div>
 
-        {/* Top Row with Key Details */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        {/* Top Row with Key Details - Mobile Optimized */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
           {/* Instructor */}
-          <div className="bg-blue-50 rounded-lg p-4">
+          <div className="bg-blue-50 rounded-lg p-3 sm:p-4 col-span-2 sm:col-span-1">
             <div className="flex items-center gap-2 mb-2">
-              <User className="h-4 w-4 text-blue-600" />
-              <h3 className="text-sm font-medium text-blue-900">Instructor</h3>
+              <div className="p-1 bg-blue-100 rounded-md">
+                <User className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
+              </div>
+              <h3 className="text-xs sm:text-sm font-medium text-blue-900">Instructor</h3>
             </div>
-            <p className="font-semibold text-gray-900">{data.teacher.username}</p>
+            <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{data.teacher.username}</p>
+            <p className="text-xs text-gray-600 mt-1 truncate">{data.teacher.email}</p>
           </div>
 
           {/* Batch Details */}
-          <div className="bg-green-50 rounded-lg p-4">
+          <div className="bg-green-50 rounded-lg p-3 sm:p-4">
             <div className="flex items-center gap-2 mb-2">
-              <Users className="h-4 w-4 text-green-600" />
-              <h3 className="text-sm font-medium text-green-900">Batch</h3>
+              <div className="p-1 bg-green-100 rounded-md">
+                <Users className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
+              </div>
+              <h3 className="text-xs sm:text-sm font-medium text-green-900">Batch</h3>
             </div>
-            <p className="font-semibold text-gray-900">{data.batch.batchname}</p>
+            <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{data.batch.batchname}</p>
             <p className="text-xs text-gray-600 mt-1">{data.batch.faculty.code}</p>
           </div>
 
           {/* Academic Period */}
-          <div className="bg-purple-50 rounded-lg p-4">
+          <div className="bg-purple-50 rounded-lg p-3 sm:p-4">
             <div className="flex items-center gap-2 mb-2">
-              <Calendar className="h-4 w-4 text-purple-600" />
-              <h3 className="text-sm font-medium text-purple-900">Period</h3>
+              <div className="p-1 bg-purple-100 rounded-md">
+                <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-purple-600" />
+              </div>
+              <h3 className="text-xs sm:text-sm font-medium text-purple-900">Period</h3>
             </div>
             <div className="space-y-1">
               {data.course.semesterOrYear?.name && (
-                <p className="font-semibold text-gray-900">{data.course.semesterOrYear.name}</p>
+                <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{data.course.semesterOrYear.name}</p>
               )}
               {data.course.semesterOrYear?.semesterNumber && (
                 <p className="text-xs text-gray-600">
@@ -202,12 +209,14 @@ export default function CourseInstanceOverview() {
 
           {/* Enrollment */}
           {data.studentCount !== undefined && (
-            <div className="bg-orange-50 rounded-lg p-4">
+            <div className="bg-orange-50 rounded-lg p-3 sm:p-4">
               <div className="flex items-center gap-2 mb-2">
-                <Users className="h-4 w-4 text-orange-600" />
-                <h3 className="text-sm font-medium text-orange-900">Enrollment</h3>
+                <div className="p-1 bg-orange-100 rounded-md">
+                  <Users className="h-3 w-3 sm:h-4 sm:w-4 text-orange-600" />
+                </div>
+                <h3 className="text-xs sm:text-sm font-medium text-orange-900">Enrollment</h3>
               </div>
-              <p className="text-2xl font-bold text-gray-900">{data.studentCount}</p>
+              <p className="text-lg sm:text-2xl font-bold text-gray-900">{data.studentCount}</p>
               <p className="text-xs text-gray-600">Students</p>
             </div>
           )}
@@ -215,12 +224,12 @@ export default function CourseInstanceOverview() {
 
         {/* Course Overview Section */}
         {data.course.description && (
-          <div className="bg-gray-50 rounded-lg p-4">
-            <h3 className="font-medium text-gray-900 mb-3">Course Overview</h3>
+          <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
+            <h3 className="font-medium text-gray-900 mb-3 text-sm sm:text-base">Course Overview</h3>
 
           <div
-  className={`text-gray-700 leading-relaxed transition-all duration-300 ease-in-out ${
-    showFullDescription ? "max-h-[600px] overflow-y-auto" : "max-h-[120px] overflow-hidden"
+  className={`text-gray-700 leading-relaxed transition-all duration-300 ease-in-out text-sm sm:text-base ${
+    showFullDescription ? "max-h-[600px] overflow-y-auto" : "max-h-[100px] sm:max-h-[120px] overflow-hidden"
   }`}
 >
   <p>
@@ -234,7 +243,7 @@ export default function CourseInstanceOverview() {
             {data.course.description.length > 150 && (
               <button
                 onClick={() => setShowFullDescription(!showFullDescription)}
-                className="mt-3 text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors duration-200 flex items-center gap-1"
+                className="mt-3 text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors duration-200 flex items-center gap-1 w-full sm:w-auto justify-center sm:justify-start"
               >
                 {showFullDescription ? (
                   <>
@@ -277,11 +286,11 @@ export default function CourseInstanceOverview() {
         )}
       </div>
        <div
-    className="w-4xl h-[110px] flex flex-col items-center justify-center bg-amber-50 border-2 border-dashed border-blue-300 rounded-2xl shadow cursor-pointer hover:bg-blue-100 transition"
+    className="w-full h-[80px] sm:h-[110px] flex flex-col items-center justify-center bg-amber-50 border-2 border-dashed border-blue-300 rounded-xl sm:rounded-2xl shadow cursor-pointer hover:bg-blue-100 transition mb-4 sm:mb-6"
     onClick={() => setOpenAnnouncement(true)}
   >
     {/* <Plus className="mb-1 text-blue-600" size={32} /> */}
-    <span className="text-lg font-semibold text-blue-700">Add your announcement</span>
+    <span className="text-base sm:text-lg font-semibold text-blue-700">Add your announcement</span>
     <span className="text-xs text-blue-500 mt-1">Click to open form</span>
   </div>
   <CourseFeed courseInstanceId={courseInstanceId}/>

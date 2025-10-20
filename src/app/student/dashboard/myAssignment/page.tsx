@@ -135,97 +135,97 @@ export default function SemListMinimal() {
   const urlType = faculty.type === "yearly" ? "year" : "semester";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-8 px-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-4 sm:py-8 px-3 sm:px-6 pb-20 md:pb-8">
       <div className="max-w-6xl mx-auto">
         {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
-          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all duration-300">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-blue-100 rounded-xl flex items-center justify-center">
-                <Users className="w-7 h-7 text-blue-600" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-12">
+          <div className="bg-white rounded-lg sm:rounded-2xl shadow-lg p-3 sm:p-6 border border-gray-100 hover:shadow-xl transition-all duration-300">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 bg-blue-100 rounded-lg sm:rounded-xl flex items-center justify-center mx-auto sm:mx-0">
+                <Users className="w-5 h-5 sm:w-7 sm:h-7 text-blue-600" />
               </div>
-              <div>
-                <h3 className="text-2xl font-bold text-gray-900">{batch.batchname}</h3>
-                <p className="text-gray-600 font-medium">Your Batch</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all duration-300">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-green-100 rounded-xl flex items-center justify-center">
-                <TrendingUp className="w-7 h-7 text-green-600" />
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold text-gray-900">{current}</h3>
-                <p className="text-gray-600 font-medium">Current {faculty.type === "semester" ? "Semester" : "Year"}</p>
+              <div className="text-center sm:text-left">
+                <h3 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">{batch.batchname}</h3>
+                <p className="text-gray-600 font-medium text-xs sm:text-base">Your Batch</p>
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all duration-300">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-purple-100 rounded-xl flex items-center justify-center">
-                <BookmarkCheck className="w-7 h-7 text-purple-600" />
+          <div className="bg-white rounded-lg sm:rounded-2xl shadow-lg p-3 sm:p-6 border border-gray-100 hover:shadow-xl transition-all duration-300">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 bg-green-100 rounded-lg sm:rounded-xl flex items-center justify-center mx-auto sm:mx-0">
+                <TrendingUp className="w-5 h-5 sm:w-7 sm:h-7 text-green-600" />
               </div>
-              <div>
-                <h3 className="text-2xl font-bold text-gray-900">{filtered.length}</h3>
-                <p className="text-gray-600 font-medium">Available {faculty.type}s</p>
+              <div className="text-center sm:text-left">
+                <h3 className="text-lg sm:text-2xl font-bold text-gray-900">{current}</h3>
+                <p className="text-gray-600 font-medium text-xs sm:text-base">Current {faculty.type === "semester" ? "Sem" : "Year"}</p>
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all duration-300">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-orange-100 rounded-xl flex items-center justify-center">
-                <Star className="w-7 h-7 text-orange-600" />
+          <div className="bg-white rounded-lg sm:rounded-2xl shadow-lg p-3 sm:p-6 border border-gray-100 hover:shadow-xl transition-all duration-300">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 bg-purple-100 rounded-lg sm:rounded-xl flex items-center justify-center mx-auto sm:mx-0">
+                <BookmarkCheck className="w-5 h-5 sm:w-7 sm:h-7 text-purple-600" />
               </div>
-              <div>
-                <h3 className="text-2xl font-bold text-gray-900">{Math.round(progressPercentage)}%</h3>
-                <p className="text-gray-600 font-medium">Progress</p>
+              <div className="text-center sm:text-left">
+                <h3 className="text-lg sm:text-2xl font-bold text-gray-900">{filtered.length}</h3>
+                <p className="text-gray-600 font-medium text-xs sm:text-base">Available</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg sm:rounded-2xl shadow-lg p-3 sm:p-6 border border-gray-100 hover:shadow-xl transition-all duration-300">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 bg-orange-100 rounded-lg sm:rounded-xl flex items-center justify-center mx-auto sm:mx-0">
+                <Star className="w-5 h-5 sm:w-7 sm:h-7 text-orange-600" />
+              </div>
+              <div className="text-center sm:text-left">
+                <h3 className="text-lg sm:text-2xl font-bold text-gray-900">{Math.round(progressPercentage)}%</h3>
+                <p className="text-gray-600 font-medium text-xs sm:text-base">Progress</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Main Content Card */}
-        <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100">
+        <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden border border-gray-100">
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 px-8 py-10">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-6">
-                <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                  <Calendar className="w-8 h-8 text-white" />
+          <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 px-4 py-6 sm:px-8 sm:py-10">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-0">
+              <div className="flex items-center gap-3 sm:gap-6">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-white/20 backdrop-blur-sm rounded-xl sm:rounded-2xl flex items-center justify-center">
+                  <Calendar className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-3xl font-bold text-white mb-2">
+                  <h2 className="text-xl sm:text-3xl font-bold text-white mb-1 sm:mb-2">
                     Assignment Timeline
                   </h2>
-                  <p className="text-blue-100 text-lg">
-                    Choose a {faculty.type} to view detailed assignment information and track your progress
+                  <p className="text-blue-100 text-sm sm:text-lg">
+                    Choose a {faculty.type} to view assignments
                   </p>
                 </div>
               </div>
               <div className="hidden md:block">
                 <div className="text-right text-white">
-                  <div className="text-3xl font-bold">{faculty.name}</div>
+                  <div className="text-2xl sm:text-3xl font-bold">{faculty.name}</div>
                   <div className="text-blue-200">Faculty</div>
                 </div>
               </div>
             </div>
             {/* Progress Bar */}
-            <div className="mt-8">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-white font-medium">Academic Progress</span>
-                <span className="text-white font-bold">{Math.round(progressPercentage)}%</span>
+            <div className="mt-4 sm:mt-8">
+              <div className="flex items-center justify-between mb-2 sm:mb-3">
+                <span className="text-white font-medium text-sm sm:text-base">Academic Progress</span>
+                <span className="text-white font-bold text-sm sm:text-base">{Math.round(progressPercentage)}%</span>
               </div>
-              <div className="w-full bg-white/20 rounded-full h-3">
+              <div className="w-full bg-white/20 rounded-full h-2 sm:h-3">
                 <div 
-                  className="bg-white h-3 rounded-full transition-all duration-1000 ease-out shadow-lg"
+                  className="bg-white h-2 sm:h-3 rounded-full transition-all duration-1000 ease-out shadow-lg"
                   style={{ width: `${progressPercentage}%` }}
                 ></div>
               </div>
-              <p className="text-blue-100 text-sm mt-2">
+              <p className="text-blue-100 text-xs sm:text-sm mt-1 sm:mt-2">
                 {filtered.length} of {faculty.total} {faculty.type}s completed
               </p>
             </div>
