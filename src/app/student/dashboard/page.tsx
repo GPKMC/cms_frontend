@@ -29,20 +29,19 @@ type LeaveItem = {
 
 type LeaveTypeTpl = { id: string; label: string; defaultReason?: string };
 
+type ScheduleStatus = "past" | "current" | "upcoming";
+
 type ScheduleEventItem = {
   _id: string;
   type?: string; // lecture | lab | tutorial | other
-  status: "past" | "current" | "upcoming";
+  status: ScheduleStatus;
   startTime: string; // "HH:MM"
-  endTime: string; // "HH:MM"
-  // normalized convenience fields (from API)
+  endTime: string;   // "HH:MM"
   courseName?: string;
   batchName?: string;
   facultyName?: string;
-  semLabel?: string; // semester or year label
+  semLabel?: string;
   teacherName?: string;
-
-  // server may send this to mark cancellations
   isCancelled?: boolean;
 };
 
@@ -87,7 +86,7 @@ const badgeForStatus = (s: LeaveItem["status"]) =>
     ? "bg-rose-100 text-rose-700"
     : s === "cancelled"
     ? "bg-gray-100 text-gray-600"
-    : "bg-amber-100 text-amber-700"; // pending
+    : "bg-amber-100 text-amber-700";
 
 const dayPartLabel = (p: LeaveItem["dayPart"]) =>
   p === "first_half" ? "First Half" : p === "second_half" ? "Second Half" : "Full Day";
@@ -158,7 +157,6 @@ export default function StudentDashboard() {
       const data = await res.json();
       setLeaveTypes((data.types || []) as LeaveTypeTpl[]);
       setDayParts(data.dayParts || ["full", "first_half", "second_half"]);
-      // default message if empty
       const tpl = (data.types || []).find((t: any) => t.id === "sick");
       setForm((f) => ({
         ...f,
@@ -223,22 +221,35 @@ export default function StudentDashboard() {
       return Array.isArray(json?.items) ? (json.items as ScheduleEventItem[]) : [];
     };
 
+    // Normalize "current" → "past" when selectedDate is not today (TS-safe)
+    const setItemsForDate = (items: ScheduleEventItem[]) => {
+      const todayLocal = ymdNepal();
+      if (dateStr === todayLocal) {
+        setDaySchedule(items);
+        return;
+      }
+      const fixed: ScheduleEventItem[] = items.map((ev) =>
+        ev.status === "current"
+          ? { ...ev, status: "past" as ScheduleEventItem["status"] }
+          : ev
+      );
+      setDaySchedule(fixed);
+    };
+
     try {
-      // Try ?date= first, then ?ymd=, then ?day=
       try {
         const items = await doFetch(buildUrl("date"));
-        setDaySchedule(items);
+        setItemsForDate(items);
       } catch {
         try {
           const items = await doFetch(buildUrl("ymd"));
-          setDaySchedule(items);
+          setItemsForDate(items);
         } catch {
           const items = await doFetch(buildUrl("day"));
-          setDaySchedule(items);
+          setItemsForDate(items);
         }
       }
     } catch (e: any) {
-      // Quiet empty day / errors — still show “No classes today.”
       const msg = String(e?.message || "");
       const isClient404or400 = /->\s*(400|404)\b/i.test(msg);
       const looksLikeNoSchedule = /no schedule|no class|no classes|not found|empty/i.test(msg);
@@ -328,14 +339,12 @@ export default function StudentDashboard() {
     fetchMyLeaves();
   }, []);
 
-  // fetch daily schedule when date changes (with debounce + cancel)
   useEffect(() => {
     if (!isYmd(selectedDate)) return;
     const ctrl = new AbortController();
     const t = setTimeout(() => {
       fetchDaySchedule(selectedDate, ctrl.signal);
-    }, 150);
-
+    }, 120);
     return () => {
       clearTimeout(t);
       ctrl.abort();
@@ -344,11 +353,11 @@ export default function StudentDashboard() {
   }, [selectedDate]);
 
   /* ---------------- Derived ---------------- */
-  const today = new Date().toISOString().split("T")[0];
-  const isTodaySelected = selectedDate === ymdNepal();
+  const today = ymdNepal();
+  const isTodaySelected = selectedDate === today;
   const selectedDatePretty = isYmd(selectedDate)
     ? `${weekdayNameNepal(selectedDate)}, ${selectedDate}`
-    : `${weekdayNameNepal(ymdNepal())}, ${ymdNepal()}`;
+    : `${weekdayNameNepal(today)}, ${today}`;
 
   const ctxFromSchedule = useMemo(() => summarizeCtxFromSchedule(daySchedule), [daySchedule]);
 
@@ -356,87 +365,74 @@ export default function StudentDashboard() {
      Render
      ────────────────────────────────────────────────────────────────────────── */
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50/40 to-purple-100/30 p-6">
-      <div className="max-w-5xl mx-auto space-y-8">
-        {/* Header: show chips only when we have them; otherwise nothing */}
-        <div className="bg-gradient-to-br from-white via-blue-50/30 to-purple-50/20 rounded-2xl shadow-xl border border-gray-100/50 p-8">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50/40 to-purple-100/30 p-3 sm:p-6 pb-20 md:pb-8">
+      <div className="max-w-5xl mx-auto space-y-4 sm:space-y-8">
+        {/* Header */}
+        <div className="bg-gradient-to-br from-white via-blue-50/30 to-purple-50/20 rounded-xl sm:rounded-2xl shadow-xl border border-gray-100/50 p-4 sm:p-8">
+          <div className="flex flex-col gap-4 sm:gap-6 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 bg-clip-text text-transparent">
+              <h1 className="text-xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 bg-clip-text text-transparent leading-tight">
                 {user?.username ? `Welcome back, ${user.username}!` : "Welcome to your dashboard!"}
               </h1>
-              <p className="text-gray-600 mt-2 flex items-center space-x-2">
-                <span className="font-medium">{user?.email || "Student Portal"}</span>
+              <div className="text-gray-600 mt-2 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                <span className="font-medium text-sm sm:text-base">{user?.email || "Student Portal"}</span>
                 {user?.role && (
-                  <>
-                    <span className="text-gray-400">•</span>
-                    <span className="px-3 py-1 bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 rounded-full text-sm font-semibold capitalize border border-blue-200">
-                      {user.role}
-                    </span>
-                  </>
+                  <span className="px-2 py-1 sm:px-3 sm:py-1 bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 rounded-full text-xs sm:text-sm font-semibold capitalize border border-blue-200 w-fit">
+                    {user.role}
+                  </span>
                 )}
-              </p>
-
-              <div className="mt-4 text-sm">
-                {loadingDaySchedule ? (
-                  <div className="flex items-center space-x-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500/20 border-t-blue-500"></div>
-                    <span className="text-gray-500">Loading your academic details...</span>
-                  </div>
-                ) : ctxFromSchedule ? (
-                  <div className="flex flex-wrap gap-3">
-                    {ctxFromSchedule.batchName && (
-                      <span className="px-3 py-2 rounded-xl bg-gradient-to-r from-gray-100 to-gray-200 border border-gray-300 text-gray-700 font-semibold">
-                        📚 Batch: {ctxFromSchedule.batchName}
-                      </span>
-                    )}
-                    {ctxFromSchedule.semLabel && (
-                      <span className="px-3 py-2 rounded-xl bg-gradient-to-r from-blue-100 to-blue-200 border border-blue-300 text-blue-700 font-semibold">
-                        🎓 {ctxFromSchedule.semLabel}
-                      </span>
-                    )}
-                    {ctxFromSchedule.facultyName && (
-                      <span className="px-3 py-2 rounded-xl bg-gradient-to-r from-purple-100 to-purple-200 border border-purple-300 text-purple-700 font-semibold">
-                        🏛️ {ctxFromSchedule.facultyName}
-                      </span>
-                    )}
-                  </div>
-                ) : null}
               </div>
+
+              {!!ctxFromSchedule && (
+                <div className="mt-3 sm:mt-4 flex flex-wrap gap-2 sm:gap-3 text-xs sm:text-sm">
+                  {ctxFromSchedule.batchName && (
+                    <span className="px-2 py-1 sm:px-3 sm:py-2 rounded-lg sm:rounded-xl bg-gradient-to-r from-gray-100 to-gray-200 border border-gray-300 text-gray-700 font-semibold">
+                      📚 {ctxFromSchedule.batchName}
+                    </span>
+                  )}
+                  {ctxFromSchedule.semLabel && (
+                    <span className="px-2 py-1 sm:px-3 sm:py-2 rounded-lg sm:rounded-xl bg-gradient-to-r from-blue-100 to-blue-200 border border-blue-300 text-blue-700 font-semibold">
+                      🎓 {ctxFromSchedule.semLabel}
+                    </span>
+                  )}
+                  {ctxFromSchedule.facultyName && (
+                    <span className="px-2 py-1 sm:px-3 sm:py-2 rounded-lg sm:rounded-xl bg-gradient-to-r from-purple-100 to-purple-200 border border-purple-300 text-purple-700 font-semibold">
+                      🏛️ {ctxFromSchedule.facultyName}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="text-center">
-                <div className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg">
-                  <Calendar className="h-5 w-5" />
-                  <div className="text-left">
-                    <div className="text-xs font-medium opacity-90">Today</div>
-                    <div className="text-sm font-bold">{today}</div>
-                  </div>
-                </div>
+            <div className="inline-flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg w-fit">
+              <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />
+              <div className="text-left">
+                <div className="text-[11px] sm:text-xs font-medium opacity-90">Today</div>
+                <div className="text-xs sm:text-sm font-bold">{today}</div>
               </div>
             </div>
           </div>
         </div>
 
         {/* Daily Schedule */}
-        <div className="bg-gradient-to-br from-white via-indigo-50/30 to-blue-50/20 rounded-2xl shadow-xl border border-gray-100/50 p-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
-                <Calendar className="h-7 w-7 text-white" />
+        <div className="bg-gradient-to-br from-white via-indigo-50/30 to-blue-50/20 rounded-xl sm:rounded-2xl shadow-xl border border-gray-100/50 p-4 sm:p-8">
+          {/* Title + Controls */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg sm:rounded-xl shadow-lg">
+                <Calendar className="h-5 w-5 sm:h-7 sm:w-7 text-white" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+                <h2 className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
                   {isTodaySelected ? "📅 Today's Schedule" : "📅 Daily Schedule"}
                 </h2>
-                <p className="text-gray-600 font-medium">{selectedDatePretty}</p>
+                <p className="text-gray-600 font-medium text-xs sm:text-base">{selectedDatePretty}</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-xl p-2 border border-gray-200/50">
+            <div className="flex items-center gap-2 sm:gap-3 bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl p-2 border border-gray-200/50 overflow-x-auto">
               <button
-                className="px-4 py-2 rounded-lg bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 border border-gray-300 text-gray-700 font-medium text-sm transition-all duration-200 hover:shadow-md"
+                className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-md sm:rounded-lg bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 border border-gray-300 text-gray-700 font-medium text-xs sm:text-sm transition-all duration-200 hover:shadow-md whitespace-nowrap"
                 onClick={() => setSelectedDate((d) => addDaysNepal(d, -1))}
               >
                 ◀ Prev
@@ -448,17 +444,17 @@ export default function StudentDashboard() {
                   const v = e.target.value;
                   setSelectedDate(isYmd(v) ? v : ymdNepal());
                 }}
-                className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                className="px-2 py-1.5 sm:px-3 sm:py-2 rounded-md sm:rounded-lg border border-gray-300 text-xs sm:text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 min-w-0 flex-shrink-0"
               />
               <button
-                className="px-4 py-2 rounded-lg bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 border border-gray-300 text-gray-700 font-medium text-sm transition-all duration-200 hover:shadow-md"
+                className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-md sm:rounded-lg bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 border border-gray-300 text-gray-700 font-medium text-xs sm:text-sm transition-all duration-200 hover:shadow-md whitespace-nowrap"
                 onClick={() => setSelectedDate((d) => addDaysNepal(d, +1))}
               >
                 Next ▶
               </button>
               {!isTodaySelected && (
                 <button
-                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium text-sm hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl"
+                  className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-md sm:rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium text-xs sm:text-sm hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl whitespace-nowrap"
                   onClick={() => setSelectedDate(ymdNepal())}
                 >
                   Today
@@ -468,24 +464,24 @@ export default function StudentDashboard() {
           </div>
 
           {/* Schedule list */}
-          <div className="space-y-4 mt-8">
+          <div className="space-y-3 sm:space-y-4 mt-6 sm:mt-8">
             {loadingDaySchedule ? (
               <>
                 {[...Array(3)].map((_, i) => (
-                  <div key={i} className="p-6 rounded-2xl bg-gradient-to-r from-gray-100 to-gray-200 animate-pulse h-24 border border-gray-200" />
+                  <div key={i} className="p-4 sm:p-6 rounded-xl sm:rounded-2xl bg-gradient-to-r from-gray-100 to-gray-200 animate-pulse h-20 sm:h-24 border border-gray-200" />
                 ))}
               </>
             ) : daySchedule.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="p-6 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full w-20 h-20 mx-auto mb-6 flex items-center justify-center shadow-lg">
-                  <Calendar className="h-10 w-10 text-gray-500" />
+              <div className="text-center py-8 sm:py-12">
+                <div className="p-4 sm:p-6 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 sm:mb-6 flex items-center justify-center shadow-lg">
+                  <Calendar className="h-8 w-8 sm:h-10 sm:w-10 text-gray-500" />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-700 mb-2">No classes scheduled</h3>
-                <p className="text-gray-500">Enjoy your free day! 🎉</p>
+                <h3 className="text-lg sm:text-xl font-semibold text-gray-700 mb-2">No classes scheduled</h3>
+                <p className="text-gray-500 text-sm sm:text-base">Enjoy your free day! 🎉</p>
               </div>
             ) : (
               daySchedule.map((ev, index) => {
-                const isCurrent = ev.status === "current";
+                const isCurrent = isTodaySelected && ev.status === "current";
                 const isCancelled = !!ev.isCancelled;
 
                 const colorDot = isCancelled
@@ -505,56 +501,63 @@ export default function StudentDashboard() {
                 return (
                   <div
                     key={ev._id || index}
-                    className={`p-6 rounded-2xl border-l-4 ${cardClasses} hover:shadow-xl transition-all duration-300 group`}
+                    className={`p-3 sm:p-6 rounded-xl sm:rounded-2xl border-l-4 ${cardClasses} hover:shadow-xl transition-all duration-300 group`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-5">
-                        <div className={`w-4 h-4 rounded-full ${colorDot} shadow-lg group-hover:scale-110 transition-transform duration-200`} />
-                        <div>
-                          <h3 className="font-bold text-gray-900 text-lg group-hover:text-blue-700 transition-colors">
-                            {ev.courseName || "Class"}
-                          </h3>
+                    {/* On mobile: compact 2-column grid; on desktop: flex */}
+                    <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:flex sm:items-center sm:justify-between sm:gap-0">
+                      {/* status dot */}
+                      <div className="col-span-1">
+                        <div className={`w-2.5 h-2.5 sm:w-4 sm:h-4 rounded-full ${colorDot} shadow-lg mt-0.5`} />
+                      </div>
 
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-                            {isCancelled && (
-                              <span className="px-3 py-1 rounded-full bg-gradient-to-r from-red-100 to-red-200 text-red-700 border border-red-300 font-semibold">
-                                ⛔ Cancelled
-                              </span>
-                            )}
-                            {ev.teacherName && (
-                              <span className="px-3 py-1 rounded-full bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 border border-gray-300 font-medium">
-                                👨‍🏫 {ev.teacherName}
-                              </span>
-                            )}
-                            {ev.facultyName && (
-                              <span className="px-3 py-1 rounded-full bg-gradient-to-r from-purple-100 to-purple-200 text-purple-700 border border-purple-300 font-medium">
-                                🏛️ {ev.facultyName}
-                              </span>
-                            )}
-                            {ev.semLabel && (
-                              <span className="px-3 py-1 rounded-full bg-gradient-to-r from-blue-100 to-blue-200 text-blue-700 border border-blue-300 font-medium">
-                                🎓 {ev.semLabel}
-                              </span>
-                            )}
-                            <span className="px-3 py-1 rounded-full bg-gradient-to-r from-indigo-100 to-indigo-200 text-indigo-700 border border-indigo-300 font-medium capitalize">
-                              📚 {ev.type || "lecture"}
+                      {/* left: course + tags */}
+                      <div className="min-w-0">
+                        <h3 className="font-semibold sm:font-bold text-gray-900 text-sm sm:text-lg group-hover:text-blue-700 transition-colors truncate">
+                          {ev.courseName || "Class"}
+                        </h3>
+
+                        <div className="mt-1.5 sm:mt-2 flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] sm:text-sm">
+                          {isCancelled && (
+                            <span className="px-2 py-0.5 sm:px-3 sm:py-1 rounded-full bg-gradient-to-r from-red-100 to-red-200 text-red-700 border border-red-300 font-semibold">
+                              ⛔ Cancelled
                             </span>
-                          </div>
+                          )}
+                          {ev.teacherName && (
+                            <span className="px-2 py-0.5 sm:px-3 sm:py-1 rounded-full bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 border border-gray-300 font-medium">
+                              👨‍🏫 {ev.teacherName}
+                            </span>
+                          )}
+                          {ev.facultyName && (
+                            <span className="px-2 py-0.5 sm:px-3 sm:py-1 rounded-full bg-gradient-to-r from-purple-100 to-purple-200 text-purple-700 border border-purple-300 font-medium">
+                              🏛️ {ev.facultyName}
+                            </span>
+                          )}
+                          {ev.semLabel && (
+                            <span className="px-2 py-0.5 sm:px-3 sm:py-1 rounded-full bg-gradient-to-r from-blue-100 to-blue-200 text-blue-700 border border-blue-300 font-medium">
+                              🎓 {ev.semLabel}
+                            </span>
+                          )}
+                          <span className="px-2 py-0.5 sm:px-3 sm:py-1 rounded-full bg-gradient-to-r from-indigo-100 to-indigo-200 text-indigo-700 border border-indigo-300 font-medium capitalize">
+                            📚 {ev.type || "lecture"}
+                          </span>
                         </div>
                       </div>
 
-                      <div className="text-right">
+                      {/* right: time + live */}
+                      <div className="text-right col-span-1">
                         <p
-                          className={`font-bold text-lg ${
+                          className={`font-semibold sm:font-bold text-sm sm:text-lg ${
                             isCancelled ? "text-gray-500 line-through" : "text-gray-900"
                           }`}
                         >
                           {ev.startTime} – {ev.endTime}
                         </p>
+
+                        {/* Live badge (only today & current) */}
                         {!isCancelled && isCurrent && (
-                          <span className="inline-flex items-center gap-2 text-sm text-green-700 bg-gradient-to-r from-green-100 to-emerald-100 px-3 py-1 rounded-full mt-2 border border-green-300 font-semibold shadow-lg">
-                            <Activity className="h-4 w-4" />
-                            🔴 Live Now
+                          <span className="inline-flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-sm text-green-700 bg-gradient-to-r from-green-100 to-emerald-100 px-2 py-0.5 sm:px-3 sm:py-1 rounded-full mt-1 sm:mt-2 border border-green-300 font-semibold shadow">
+                            <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
+                            Live
                           </span>
                         )}
                       </div>
@@ -569,35 +572,33 @@ export default function StudentDashboard() {
         {/* Toast */}
         {toast && (
           <div
-            className={`rounded-2xl p-4 border shadow-lg ${
+            className={`rounded-xl sm:rounded-2xl p-3 sm:p-4 border shadow-lg ${
               toast.ok
                 ? "bg-gradient-to-r from-emerald-50 to-green-100/80 text-emerald-800 border-emerald-300"
                 : "bg-gradient-to-r from-red-50 to-rose-100/80 text-red-700 border-red-300"
             }`}
           >
             <div className="flex items-center gap-2">
-              {toast.ok ? (
-                <span className="text-emerald-600">✅</span>
-              ) : (
-                <span className="text-red-600">❌</span>
-              )}
-              <span className="font-medium">{toast.msg}</span>
+              <span className={toast.ok ? "text-emerald-600" : "text-red-600"}>
+                {toast.ok ? "✅" : "❌"}
+              </span>
+              <span className="font-medium text-sm sm:text-base">{toast.msg}</span>
             </div>
           </div>
         )}
-        
+
         {/* CTA: Ask for Leave */}
-        <div className="bg-gradient-to-br from-white via-indigo-50/30 to-purple-50/20 rounded-2xl shadow-xl border border-gray-100/50 p-8">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <div className="p-4 bg-gradient-to-br from-orange-400 to-red-500 rounded-xl shadow-lg">
-                <Calendar className="h-7 w-7 text-white" />
+        <div className="bg-gradient-to-br from-white via-indigo-50/30 to-purple-50/20 rounded-xl sm:rounded-2xl shadow-xl border border-gray-100/50 p-4 sm:p-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="p-2.5 sm:p-4 bg-gradient-to-br from-orange-400 to-red-500 rounded-lg sm:rounded-xl shadow-lg">
+                <Calendar className="h-5 w-5 sm:h-7 sm:w-7 text-white" />
               </div>
               <div>
-                <h3 className="text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+                <h3 className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
                   🎯 Leave Center
                 </h3>
-                <p className="text-gray-600 mt-1">
+                <p className="text-gray-600 mt-1 text-sm sm:text-base">
                   {user?.username ? `Need time off, ${user.username}? Submit your leave request here.` : "Need time off? Submit your leave request here."}
                 </p>
               </div>
@@ -605,31 +606,32 @@ export default function StudentDashboard() {
 
             <button
               onClick={() => setShowLeaveModal(true)}
-              className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-6 py-3 rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl font-semibold"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 sm:gap-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2.5 sm:px-6 sm:py-3 rounded-lg sm:rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl font-semibold text-sm sm:text-base"
               title="Ask for leave"
             >
-              <PlusCircle className="h-6 w-6" />
+              <PlusCircle className="h-5 w-5 sm:h-6 sm:w-6" />
               Request Leave
             </button>
           </div>
         </div>
+
         {/* My leaves panel */}
-        <div className="bg-gradient-to-br from-white via-yellow-50/20 to-orange-50/20 rounded-2xl shadow-xl border border-gray-100/50 p-8">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-xl shadow-lg">
-                <Star className="h-6 w-6 text-white" />
+        <div className="bg-gradient-to-br from-white via-yellow-50/20 to-orange-50/20 rounded-xl sm:rounded-2xl shadow-xl border border-gray-100/50 p-4 sm:p-8">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="p-2.5 sm:p-3 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-lg sm:rounded-xl shadow-lg">
+                <Star className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
               </div>
-              <h2 className="text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+              <h2 className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
                 📝 My Leave Requests
               </h2>
             </div>
             <button
               onClick={fetchMyLeaves}
-              className="text-sm text-blue-600 hover:text-blue-700 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 font-medium transition-all duration-200"
+              className="text-xs sm:text-sm text-blue-600 hover:text-blue-700 inline-flex items-center gap-2 px-2 py-1.5 sm:px-3 sm:py-2 rounded-md sm:rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 font-medium transition-all duration-200"
               title="Refresh"
             >
-              <Clock className="h-4 w-4" />
+              <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
               Refresh
             </button>
           </div>
@@ -637,7 +639,7 @@ export default function StudentDashboard() {
           {loadingLeaves ? (
             <div className="space-y-2">
               {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-12 bg-gray-100 rounded animate-pulse" />
+                <div key={i} className="h-10 sm:h-12 bg-gray-100 rounded animate-pulse" />
               ))}
             </div>
           ) : myLeaves.length === 0 ? (
@@ -650,27 +652,27 @@ export default function StudentDashboard() {
               {myLeaves.map((lv) => (
                 <li
                   key={lv._id}
-                  className="p-3 rounded-lg border border-gray-200 flex items-center justify-between"
+                  className="p-3 sm:p-3.5 rounded-lg border border-gray-200 flex items-center justify-between"
                 >
                   <div>
-                    <div className="font-medium text-gray-900">
+                    <div className="font-medium text-gray-900 text-sm sm:text-base">
                       {lv.leaveDate} • {dayPartLabel(lv.dayPart)}
                     </div>
-                    <div className="text-sm text-gray-600 capitalize">
+                    <div className="text-xs sm:text-sm text-gray-600 capitalize">
                       {lv.type} {lv.reason ? `— ${lv.reason}` : ""}
                     </div>
                     {lv.status === "rejected" && lv.rejectionReason ? (
-                      <div className="text-xs text-rose-600 mt-1">Reason: {lv.rejectionReason}</div>
+                      <div className="text-[11px] text-rose-600 mt-1">Reason: {lv.rejectionReason}</div>
                     ) : null}
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`text-xs px-2 py-1 rounded-full ${badgeForStatus(lv.status)}`}>
+                    <span className={`text-[11px] sm:text-xs px-2 py-1 rounded-full ${badgeForStatus(lv.status)}`}>
                       {lv.status}
                     </span>
                     {lv.status === "pending" && (
                       <button
                         onClick={() => cancelLeave(lv._id)}
-                        className="text-xs px-2 py-1 rounded-md border border-gray-300 hover:bg-gray-50"
+                        className="text-[11px] sm:text-xs px-2 py-1 rounded-md border border-gray-300 hover:bg-gray-50"
                       >
                         Cancel
                       </button>
@@ -681,8 +683,6 @@ export default function StudentDashboard() {
             </ul>
           )}
         </div>
-
-       
       </div>
 
       {/* Leave Modal */}
