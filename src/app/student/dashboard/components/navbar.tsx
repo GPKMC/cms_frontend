@@ -161,7 +161,9 @@ export default function Navbarteacher() {
 
   // Load last seen & compute on mount
   useEffect(() => {
-    const seen = (typeof window !== "undefined" && localStorage.getItem(LAST_SEEN_KEY)) || "";
+    const seen =
+      (typeof window !== "undefined" && localStorage.getItem(LAST_SEEN_KEY)) ||
+      "";
     setLastSeen(seen || "");
     void refreshNewCount(seen || "");
   }, []);
@@ -202,8 +204,21 @@ export default function Navbarteacher() {
 
   return (
     <div className="fixed top-0 left-0 w-full z-50 flex items-center py-4 px-4 bg-[#2E3094] gap-4">
-      <Image src="/images/gpkoiralalogo.svg" width={60} height={60} alt="logo" />
-
+      <button
+        type="button"
+        onClick={() => router.push("/student/dashboard")}
+        aria-label="Go to home dashboard"
+        title="Go to home dashboard"
+      >
+        <Image
+          src="/images/gpkoiralalogo.svg"
+          width={60}
+          height={60}
+          alt="logo"
+          className="cursor-pointer"
+          priority
+        />
+      </button>
       {user && (
         <span className="text-white/90 font-medium whitespace-nowrap">
           Welcome, {user.username}!
@@ -307,7 +322,10 @@ export default function Navbarteacher() {
                   <div className="text-red-600">{error}</div>
                 ) : (
                   <>
-                    <Row label="Role" value={details?.role || user?.role || "student"} />
+                    <Row
+                      label="Role"
+                      value={details?.role || user?.role || "student"}
+                    />
                     {details?.department && (
                       <Row label="Department" value={details.department} />
                     )}
