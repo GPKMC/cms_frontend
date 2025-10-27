@@ -23,7 +23,7 @@ import GroupAssignmentForm from "./groupassignment/groupAssignmentform";
 
 const menuOptions = [
   { label: "Assignment", icon: <FileText size={18} />, value: "assignment" },
-  { label: "Group Assignment", icon: <ListChecks size={18} />, value: "group-assignment" },
+  // { label: "Group Assignment", icon: <ListChecks size={18} />, value: "group-assignment" },
   { label: "Quiz Assignment", icon: <ListChecks size={18} />, value: "quiz" },
   { label: "Question", icon: <HelpCircle size={18} />, value: "question" },
   { label: "Material", icon: <Book size={18} />, value: "material" },
