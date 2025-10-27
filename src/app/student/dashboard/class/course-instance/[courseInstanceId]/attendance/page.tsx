@@ -16,11 +16,24 @@ declare global {
 
 type ScanStatus = 'idle' | 'scanning' | 'submitting' | 'success' | 'error';
 
+type CourseMeta = {
+  courseName?: string;
+  courseCode?: string;
+  batchName?: string;
+  teacherName?: string;
+};
+
 export default function StudentAttendanceQR() {
   const params = useParams() as { courseInstanceId?: string };
   const courseInstanceId = params?.courseInstanceId || '';
+
   const { user } = useUser();
   const studentId = (user?._id || (user as any)?.id || '').toString();
+  const studentName =
+    (user as any)?.username ||
+    (user as any)?.name ||
+    [ (user as any)?.firstName, (user as any)?.lastName ].filter(Boolean).join(' ') ||
+    ((user as any)?.email ? String((user as any).email).split('@')[0] : '');
 
   const [status, setStatus] = useState<ScanStatus>('idle');
   const [msg, setMsg] = useState<string>('');
@@ -31,17 +44,82 @@ export default function StudentAttendanceQR() {
   const [torchOn, setTorchOn] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
 
+  const [meta, setMeta] = useState<CourseMeta>({});
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const tickRef = useRef<number | null>(null);
   const detectorRef = useRef<any | null>(null);
 
-  const backend = process.env.NEXT_PUBLIC_BACKEND_URL;
+  const backendBase = (process.env.NEXT_PUBLIC_BACKEND_URL || '').replace(/\/$/, '');
 
   const getAuthToken = () =>
     localStorage.getItem('token_student') ||
     sessionStorage.getItem('token_student') ||
     '';
+
+  /* ------------------------------------------------------------------ */
+  /*                  Fetch course meta (name/code/batch)                */
+  /*  Your router: GET /courseInstance/:id -> { instance: { course... } } */
+  /* ------------------------------------------------------------------ */
+  useEffect(() => {
+    const token = getAuthToken();
+    if (!backendBase || !courseInstanceId) return;
+
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+
+    const urls = [
+      `${backendBase}/course-api/courseInstance/${courseInstanceId}`,        // primary (matches your router)
+      `${backendBase}/course-api/courseInstance/${courseInstanceId}`,    // optional mount
+    ];
+
+    let cancelled = false;
+
+    (async () => {
+      for (const url of urls) {
+        try {
+          const res = await fetch(url, { headers, cache: 'no-store' });
+          if (!res.ok) continue;
+          const json: any = await res.json().catch(() => null);
+          if (!json) continue;
+
+          const inst = json.instance || json; // tolerate either shape
+          const course  = inst?.course  || {};
+          const batch   = inst?.batch   || {};
+          const teacher = inst?.teacher || {};
+
+          // Debug once in the console so you can verify the payload
+          if (process.env.NODE_ENV !== 'production') {
+            // eslint-disable-next-line no-console
+            console.log('Course meta response', { url, course, batch, teacher });
+          }
+
+          const nextMeta: CourseMeta = {
+            courseName: course.name,
+            courseCode: course.code,
+            batchName : batch.batchname || batch.name,
+            teacherName: teacher.username || teacher.name,
+          };
+
+          if (!cancelled && (nextMeta.courseName || nextMeta.courseCode)) {
+            setMeta(nextMeta);
+          }
+          break; // stop after a good response
+        } catch {
+          // try next url
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [backendBase, courseInstanceId]);
+
+  /* ------------------------------------------------------------------ */
+  /*                         Camera / scanning                          */
+  /* ------------------------------------------------------------------ */
 
   const stopStream = useCallback(() => {
     if (tickRef.current) {
@@ -73,10 +151,7 @@ export default function StudentAttendanceQR() {
   }, []);
 
   const pickBackCamera = (cams: MediaDeviceInfo[]) => {
-    // Prefer labels that hint back/rear/environment
-    const byLabel = cams.find(c =>
-      /back|rear|environment/i.test(c.label || '')
-    );
+    const byLabel = cams.find(c => /back|rear|environment/i.test(c.label || ''));
     return byLabel?.deviceId || cams[0]?.deviceId;
   };
 
@@ -99,19 +174,17 @@ export default function StudentAttendanceQR() {
 
   const startStream = useCallback(
     async (deviceId?: string) => {
-      // Stop any existing stream first
       stopStream();
 
-      // Base constraints (aim for back camera, decent resolution)
       let constraints: MediaStreamConstraints = {
         video: deviceId
           ? { deviceId: { exact: deviceId } }
           : {
               facingMode: { ideal: 'environment' as any },
               width: { ideal: 1280 },
-              height: { ideal: 720 }
+              height: { ideal: 720 },
             },
-        audio: false
+        audio: false,
       };
 
       try {
@@ -120,19 +193,13 @@ export default function StudentAttendanceQR() {
 
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          try {
-            await videoRef.current.play();
-          } catch {
-            /* some mobile browsers need user gesture; the scan button provides it */
-          }
+          try { await videoRef.current.play(); } catch {}
         }
 
-        // After permission, device labels are available → pick the best back cam
         const cams = await listVideoInputs();
         if (!deviceId) {
           const backId = pickBackCamera(cams);
           if (backId && stream.getVideoTracks()[0].getSettings().deviceId !== backId) {
-            // Restart explicitly with the back camera
             await startStream(backId);
             return;
           }
@@ -141,7 +208,6 @@ export default function StudentAttendanceQR() {
           setActiveDeviceId(deviceId);
         }
 
-        // Torch support?
         const track = stream.getVideoTracks()[0];
         const caps: any = track.getCapabilities?.() || {};
         setTorchSupported(!!caps.torch);
@@ -169,13 +235,13 @@ export default function StudentAttendanceQR() {
 
   const submitToken = useCallback(
     async (rawToken: string) => {
-      const auth = getAuthToken();
-      if (!auth) {
+      const token = getAuthToken();
+      if (!token) {
         setStatus('error');
         setMsg('Auth token missing. Please sign in again.');
         return;
       }
-      if (!backend) {
+      if (!backendBase) {
         setStatus('error');
         setMsg('Backend URL not configured (NEXT_PUBLIC_BACKEND_URL).');
         return;
@@ -185,13 +251,13 @@ export default function StudentAttendanceQR() {
       setMsg('Submitting attendance…');
 
       try {
-        const res = await fetch(`${backend}/attendance/scan`, {
+        const res = await fetch(`${backendBase}/attendance/scan`, {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${auth}`,
-            'Content-Type': 'application/json'
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ token: rawToken })
+          body: JSON.stringify({ token: rawToken }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -207,7 +273,7 @@ export default function StudentAttendanceQR() {
         setMsg(e?.message || 'Network error. Try again.');
       }
     },
-    [backend]
+    [backendBase]
   );
 
   const startScanning = useCallback(async () => {
@@ -216,8 +282,8 @@ export default function StudentAttendanceQR() {
       setMsg('QR scanning not supported in this browser. Use Chrome/Edge/Brave or iOS Safari 16.4+.');
       return;
     }
-    const auth = getAuthToken();
-    if (!auth) {
+    const token = getAuthToken();
+    if (!token) {
       setStatus('error');
       setMsg('Auth token missing. Please sign in again.');
       return;
@@ -244,12 +310,12 @@ export default function StudentAttendanceQR() {
         const codes = await detectorRef.current.detect(videoRef.current);
         if (codes && codes.length > 0) {
           const raw = (codes[0].rawValue || '').toString().trim();
-          stopStream();               // stop camera immediately
-          setStatus('submitting');    // avoid flashing back to scanning
-          await submitToken(raw);     // send token from QR
+          stopStream();
+          setStatus('submitting');
+          await submitToken(raw);
         }
       } catch {
-        // ignore transient detect errors, keep scanning
+        // ignore transient detect errors
       }
     }, 250);
   }, [startStream, stopScanning, submitToken]);
@@ -261,11 +327,24 @@ export default function StudentAttendanceQR() {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h1 className="text-lg sm:text-xl font-semibold">Take Attendance</h1>
+
+            {/* Course name (with code), fallback to instance id */}
             <p className="text-sm text-gray-600">
-              Course: <span className="font-medium break-all">{courseInstanceId || '—'}</span>
+              Course:{' '}
+              <span className="font-medium break-all">
+                {meta.courseName
+                  ? `${meta.courseName}${meta.courseCode ? ` (${meta.courseCode})` : ''}`
+                  : (courseInstanceId || '—')}
+              </span>
+              {meta.batchName ? <span className="text-gray-500"> · Batch: {meta.batchName}</span> : null}
             </p>
+
+            {/* Student name (fallbacks to email local-part, then ID) */}
             <p className="text-sm text-gray-600">
-              You: <span className="font-medium break-all">{studentId || '—'}</span>
+              Student:{' '}
+              <span className="font-medium break-all">
+                {studentName || studentId || '—'}
+              </span>
             </p>
           </div>
           <QrCode className="w-7 h-7 text-indigo-600 shrink-0" />
