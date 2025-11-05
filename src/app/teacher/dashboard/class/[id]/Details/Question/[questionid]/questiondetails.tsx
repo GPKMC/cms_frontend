@@ -15,7 +15,8 @@ import QuestionEditForm from "../../../workspace/question/editQuestionForm";
 function getFileUrl(url: string) {
   if (!url) return "";
   if (url.startsWith("http")) return url;
-  return `http://localhost:5000${url.startsWith("/") ? url : "/" + url}`;
+  const base = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+  return `${base}${url.startsWith("/") ? url : "/" + url}`;
 }
 const isOfficeDoc = (filename: string) => /\.(docx?|pptx?|xlsx?)$/i.test(filename);
 const isPDF = (filename: string) => /\.pdf$/i.test(filename);

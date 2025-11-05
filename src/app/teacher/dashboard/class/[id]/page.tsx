@@ -60,7 +60,7 @@ export default function CourseInstanceOverview() {
         if (!token) throw new Error("Authentication token not found");
 
         const res = await fetch(
-          `http://localhost:5000/course-api/courseInstance/${courseInstanceId}`,
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/course-api/courseInstance/${courseInstanceId}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,

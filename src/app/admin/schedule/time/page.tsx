@@ -379,7 +379,7 @@ export default function AdminTeacherAvailabilityPage() {
             <div className="grid gap-6 md:grid-cols-2">
               {/* Teacher Search */}
               <div>
-                <label className="block text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                <label className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
@@ -400,7 +400,7 @@ export default function AdminTeacherAvailabilityPage() {
                   </div>
                 </div>
 
-                <label className="block text-sm font-semibold text-white mt-4 mb-3 flex items-center gap-2">
+                <label className="text-sm font-semibold text-white mt-4 mb-3 flex items-center gap-2">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
@@ -469,7 +469,7 @@ export default function AdminTeacherAvailabilityPage() {
           <div className="p-6 bg-gray-50/50 border-b border-gray-100">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                <label className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                   <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a2 2 0 012-2h4a2 2 0 012 2v4m-6 4l6 6m0-6l-6 6" />
                   </svg>
@@ -483,7 +483,7 @@ export default function AdminTeacherAvailabilityPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                <label className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                   <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
