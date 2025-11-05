@@ -6,8 +6,12 @@ import { Faculty } from "@/app/admin/types/type.faculty";
 
 export default function FacultyEditPage() {
   const router = useRouter();
-  const { id } = useParams();
-  
+  const params = useParams() as Record<string, string | string[]> | null;
+
+  // handle possible null + array
+  const rawId = params?.id;
+  const id = Array.isArray(rawId) ? rawId[0] : rawId; // string | undefined
+
   const [faculty, setFaculty] = useState<Faculty | null>(null);
   const [form, setForm] = useState({
     name: "",
@@ -20,6 +24,12 @@ export default function FacultyEditPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!id) {
+      setError("Invalid faculty id.");
+      setLoading(false);
+      return;
+    }
+
     const fetchFaculty = async () => {
       try {
         const token = localStorage.getItem("token_admin") || "";
@@ -32,12 +42,15 @@ export default function FacultyEditPage() {
             },
           }
         );
+
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
           throw new Error(body.message || `Status ${res.status}`);
         }
+
         const data = await res.json();
         const fac = data.faculty as Faculty;
+
         setFaculty(fac);
         setForm({
           name: fac.name || "",
@@ -48,13 +61,13 @@ export default function FacultyEditPage() {
         });
       } catch (err: any) {
         console.error("Failed to load faculty:", err);
-        setError(err.message);
+        setError(err.message || "Failed to load faculty");
       } finally {
         setLoading(false);
       }
     };
 
-    if (id) fetchFaculty();
+    fetchFaculty();
   }, [id]);
 
   const handleChange = (
@@ -70,6 +83,11 @@ export default function FacultyEditPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!id) {
+      alert("Invalid faculty id.");
+      return;
+    }
+
     try {
       const token = localStorage.getItem("token_admin") || "";
       const res = await fetch(
@@ -91,7 +109,7 @@ export default function FacultyEditPage() {
       router.push("/admin/faculty");
     } catch (err: any) {
       console.error("Update failed:", err);
-      alert("Error updating faculty: " + err.message);
+      alert("Error updating faculty: " + (err.message || "Unknown error"));
     }
   };
 

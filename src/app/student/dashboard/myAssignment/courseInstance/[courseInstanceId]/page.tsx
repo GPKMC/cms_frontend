@@ -1,4 +1,5 @@
 "use client";
+
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -84,11 +85,13 @@ type DataResponse = {
    Helpers
 ======================= */
 
-const typeIcon: Record<Exclude<FeedType, "material">, JSX.Element> = {
+// Icon map for all feed types
+const typeIcon: Record<FeedType, React.ReactElement> = {
   assignment: <FileText className="w-5 h-5 text-blue-600" />,
   groupAssignment: <Users className="w-5 h-5 text-green-600" />,
   quiz: <Star className="w-5 h-5 text-yellow-500" />,
   question: <MessageCircle className="w-5 h-5 text-purple-600" />,
+  material: <BookOpenCheck className="w-5 h-5 text-blue-600" />,
 };
 
 const typeColors: Record<FeedType, string> = {
@@ -102,7 +105,7 @@ const typeColors: Record<FeedType, string> = {
 // Route + icon mapping (used for navigation on click)
 const typeMeta: Record<
   FeedType,
-  { icon: JSX.Element; route: string }
+  { icon: React.ReactElement; route: string }
 > = {
   assignment: {
     icon: <FileText className="h-5 w-5 text-pink-600" />,
@@ -259,10 +262,10 @@ export default function StudentProgressPage() {
   }, [upcoming, nowMs]);
 
   const handleNavigate = (item: FeedItem) => {
-    const meta = typeMeta[item.type];
-    if (!meta) return;
+    const metaRoute = typeMeta[item.type];
+    if (!metaRoute) return;
     router.push(
-      `/student/dashboard/class/course-instance/${courseInstanceId}/${meta.route}/${item._id}`
+      `/student/dashboard/class/course-instance/${courseInstanceId}/${metaRoute.route}/${item._id}`
     );
   };
 
@@ -295,7 +298,9 @@ export default function StudentProgressPage() {
   }
 
   const meta: Meta = data?.meta ?? {};
-  const completionRate = meta.total ? Math.round(((meta.submittedCount ?? 0) / meta.total) * 100) : 0;
+  const completionRate = meta.total
+    ? Math.round(((meta.submittedCount ?? 0) / meta.total) * 100)
+    : 0;
 
   return (
     <div className="min-h-screen bg-white">
@@ -315,11 +320,15 @@ export default function StudentProgressPage() {
             <h1 className="text-4xl font-bold text-gray-900">Academic Progress</h1>
             <Zap className="h-10 w-10 text-blue-500" />
           </div>
-          <p className="text-base text-gray-600 mb-1">Track your learning journey and achievements</p>
+          <p className="text-base text-gray-600 mb-1">
+            Track your learning journey and achievements
+          </p>
           <p className="text-sm text-gray-500">
             Course:{" "}
             <span className="font-semibold">
-              {meta.courseInstance?.name || meta.courseInstance?.code || courseInstanceId}
+              {meta.courseInstance?.name ||
+                meta.courseInstance?.code ||
+                courseInstanceId}
             </span>
           </p>
         </div>
@@ -330,7 +339,9 @@ export default function StudentProgressPage() {
             <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl mb-4">
               <BookOpen className="h-7 w-7 text-white" />
             </div>
-            <div className="text-3xl font-bold text-gray-900 mb-1">{meta.total ?? 0}</div>
+            <div className="text-3xl font-bold text-gray-900 mb-1">
+              {meta.total ?? 0}
+            </div>
             <div className="text-gray-600 text-sm font-medium">Total Tasks</div>
           </div>
 
@@ -338,7 +349,9 @@ export default function StudentProgressPage() {
             <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-r from-green-500 to-green-600 rounded-xl mb-4">
               <CheckCircle2 className="h-7 w-7 text-white" />
             </div>
-            <div className="text-3xl font-bold text-gray-900 mb-1">{meta.submittedCount ?? 0}</div>
+            <div className="text-3xl font-bold text-gray-900 mb-1">
+              {meta.submittedCount ?? 0}
+            </div>
             <div className="text-gray-600 text-sm font-medium">Completed</div>
           </div>
 
@@ -346,7 +359,9 @@ export default function StudentProgressPage() {
             <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl mb-4">
               <Clock className="h-7 w-7 text-white" />
             </div>
-            <div className="text-3xl font-bold text-gray-900 mb-1">{meta.pendingCount ?? 0}</div>
+            <div className="text-3xl font-bold text-gray-900 mb-1">
+              {meta.pendingCount ?? 0}
+            </div>
             <div className="text-gray-600 text-sm font-medium">Pending</div>
           </div>
 
@@ -354,7 +369,9 @@ export default function StudentProgressPage() {
             <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl mb-4">
               <TrendingUp className="h-7 w-7 text-white" />
             </div>
-            <div className="text-3xl font-bold text-gray-900 mb-1">{completionRate}%</div>
+            <div className="text-3xl font-bold text-gray-900 mb-1">
+              {completionRate}%
+            </div>
             <div className="text-gray-600 text-sm font-medium">Completion</div>
           </div>
         </div>
@@ -381,7 +398,9 @@ export default function StudentProgressPage() {
                   strokeWidth="8"
                   fill="none"
                   strokeDasharray={`${2 * Math.PI * 70}`}
-                  strokeDashoffset={`${2 * Math.PI * 70 * (1 - completionRate / 100)}`}
+                  strokeDashoffset={`${
+                    2 * Math.PI * 70 * (1 - completionRate / 100)
+                  }`}
                   className="transition-all duration-1000 ease-out"
                 />
                 <defs>
@@ -393,7 +412,9 @@ export default function StudentProgressPage() {
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-gray-900">{completionRate}%</div>
+                  <div className="text-3xl font-bold text-gray-900">
+                    {completionRate}%
+                  </div>
                   <div className="text-gray-500 text-sm">Complete</div>
                 </div>
               </div>
@@ -405,7 +426,9 @@ export default function StudentProgressPage() {
                   <Calendar className="h-6 w-6 text-white" />
                 </div>
                 <div className="text-gray-500 text-sm mb-1">Next Due</div>
-                <div className="text-gray-900 font-semibold">{fmtDate(nextDue)}</div>
+                <div className="text-gray-900 font-semibold">
+                  {fmtDate(nextDue)}
+                </div>
               </div>
 
               <div className="text-center">
@@ -413,7 +436,9 @@ export default function StudentProgressPage() {
                   <AlertTriangle className="h-6 w-6 text-white" />
                 </div>
                 <div className="text-gray-500 text-sm mb-1">Overdue</div>
-                <div className="text-gray-900 font-semibold">{overdue.length} tasks</div>
+                <div className="text-gray-900 font-semibold">
+                  {overdue.length} tasks
+                </div>
               </div>
 
               <div className="text-center">
@@ -421,7 +446,9 @@ export default function StudentProgressPage() {
                   <Zap className="h-6 w-6 text-white" />
                 </div>
                 <div className="text-gray-500 text-sm mb-1">Last Activity</div>
-                <div className="text-gray-900 font-semibold">{fmtDate(meta.lastSubmittedAt)}</div>
+                <div className="text-gray-900 font-semibold">
+                  {fmtDate(meta.lastSubmittedAt)}
+                </div>
               </div>
             </div>
           </div>
@@ -433,7 +460,9 @@ export default function StudentProgressPage() {
             <div className="p-2 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg">
               <Award className="w-6 h-6 text-white" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-900">Recent Achievements</h2>
+            <h2 className="text-2xl font-bold text-gray-900">
+              Recent Achievements
+            </h2>
           </div>
           {meta.recent?.length ? (
             <div className="grid md:grid-cols-2 gap-4">
@@ -444,16 +473,23 @@ export default function StudentProgressPage() {
                   className="cursor-pointer bg-white border border-gray-200 rounded-2xl p-6 hover:shadow transition-all duration-300"
                 >
                   <div className="flex items-start gap-4">
-                    <div className={`p-3 bg-gradient-to-r ${typeColors[i.type]} rounded-xl`}>
-                      {typeMeta[i.type]?.icon ?? typeIcon[i.type as Exclude<FeedType, "material">]}
+                    <div
+                      className={`p-3 bg-gradient-to-r ${typeColors[i.type]} rounded-xl`}
+                    >
+                      {typeMeta[i.type]?.icon ?? typeIcon[i.type]}
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-medium">
-                          {i.type === "groupAssignment" ? "Group Assignment" : i.type.charAt(0).toUpperCase() + i.type.slice(1)}
+                          {i.type === "groupAssignment"
+                            ? "Group Assignment"
+                            : i.type.charAt(0).toUpperCase() +
+                              i.type.slice(1)}
                         </span>
                       </div>
-                      <h3 className="font-bold text-gray-900 mb-2">{i.title}</h3>
+                      <h3 className="font-bold text-gray-900 mb-2">
+                        {i.title}
+                      </h3>
                       <div className="space-y-1 text-sm text-gray-600">
                         <div>Submitted: {fmtDateTime(i.submittedAt)}</div>
                         {typeof i.score === "number" && (
@@ -472,7 +508,9 @@ export default function StudentProgressPage() {
                             </span>
                           </div>
                         )}
-                        {i.topic?.title && <div>Topic: {i.topic.title}</div>}
+                        {i.topic?.title && (
+                          <div>Topic: {i.topic.title}</div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -482,7 +520,9 @@ export default function StudentProgressPage() {
           ) : (
             <div className="text-center py-8">
               <Trophy className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-              <p className="text-gray-500">No recent submissions to showcase yet.</p>
+              <p className="text-gray-500">
+                No recent submissions to showcase yet.
+              </p>
             </div>
           )}
         </div>
@@ -495,12 +535,16 @@ export default function StudentProgressPage() {
               <div className="p-2 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg">
                 <Calendar className="w-6 h-6 text-white" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900">Upcoming This Week</h3>
+              <h3 className="text-xl font-bold text-gray-900">
+                Upcoming This Week
+              </h3>
             </div>
             {!upcoming7.length ? (
               <div className="text-center py-8">
                 <CheckCircle2 className="w-10 h-10 text-green-500 mx-auto mb-4" />
-                <p className="text-gray-500">All caught up! Nothing due this week.</p>
+                <p className="text-gray-500">
+                  All caught up! Nothing due this week.
+                </p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -512,18 +556,27 @@ export default function StudentProgressPage() {
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <div className={`p-2 bg-gradient-to-r ${typeColors[i.type]} rounded-lg`}>
-                          {typeMeta[i.type]?.icon ?? typeIcon[i.type as Exclude<FeedType, "material">]}
+                        <div
+                          className={`p-2 bg-gradient-to-r ${typeColors[i.type]} rounded-lg`}
+                        >
+                          {typeMeta[i.type]?.icon ?? typeIcon[i.type]}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-medium">
-                              {i.type === "groupAssignment" ? "Group Assignment" : i.type.charAt(0).toUpperCase() + i.type.slice(1)}
+                              {i.type === "groupAssignment"
+                                ? "Group Assignment"
+                                : i.type.charAt(0).toUpperCase() +
+                                  i.type.slice(1)}
                             </span>
                           </div>
-                          <h4 className="font-semibold text-gray-900">{i.title}</h4>
+                          <h4 className="font-semibold text-gray-900">
+                            {i.title}
+                          </h4>
                           {i.topic?.title && (
-                            <div className="text-xs text-gray-600">{i.topic.title}</div>
+                            <div className="text-xs text-gray-600">
+                              {i.topic.title}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -545,12 +598,16 @@ export default function StudentProgressPage() {
               <div className="p-2 bg-gradient-to-r from-red-500 to-pink-500 rounded-lg">
                 <AlertTriangle className="w-6 h-6 text-white" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900">Needs Attention</h3>
+              <h3 className="text-xl font-bold text-gray-900">
+                Needs Attention
+              </h3>
             </div>
             {!overdue.length ? (
               <div className="text-center py-8">
                 <CheckCircle2 className="w-10 h-10 text-green-500 mx-auto mb-4" />
-                <p className="text-green-700">Excellent! No overdue tasks.</p>
+                <p className="text-green-700">
+                  Excellent! No overdue tasks.
+                </p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -562,18 +619,27 @@ export default function StudentProgressPage() {
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <div className={`p-2 bg-gradient-to-r ${typeColors[i.type]} rounded-lg`}>
-                          {typeMeta[i.type]?.icon ?? typeIcon[i.type as Exclude<FeedType, "material">]}
+                        <div
+                          className={`p-2 bg-gradient-to-r ${typeColors[i.type]} rounded-lg`}
+                        >
+                          {typeMeta[i.type]?.icon ?? typeIcon[i.type]}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-xs px-2 py-0.5 rounded bg-red-100 text-red-700 font-medium">
-                              {i.type === "groupAssignment" ? "Group Assignment" : i.type.charAt(0).toUpperCase() + i.type.slice(1)}
+                              {i.type === "groupAssignment"
+                                ? "Group Assignment"
+                                : i.type.charAt(0).toUpperCase() +
+                                  i.type.slice(1)}
                             </span>
                           </div>
-                          <h4 className="font-semibold text-gray-900">{i.title}</h4>
+                          <h4 className="font-semibold text-gray-900">
+                            {i.title}
+                          </h4>
                           {i.topic?.title && (
-                            <div className="text-xs text-gray-600">{i.topic.title}</div>
+                            <div className="text-xs text-gray-600">
+                              {i.topic.title}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -594,7 +660,9 @@ export default function StudentProgressPage() {
             <div className="p-2 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-lg">
               <Target className="w-6 h-6 text-white" />
             </div>
-            <h3 className="text-xl font-bold text-gray-900">All Tasks Overview</h3>
+            <h3 className="text-xl font-bold text-gray-900">
+              All Tasks Overview
+            </h3>
           </div>
 
           <div className="grid lg:grid-cols-2 gap-8">
@@ -612,16 +680,23 @@ export default function StudentProgressPage() {
                     className="cursor-pointer bg-green-50 border border-green-200 rounded-xl p-4 hover:shadow transition-all"
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`p-2 bg-gradient-to-r ${typeColors[i.type]} rounded-lg`}>
-                        {typeMeta[i.type]?.icon ?? typeIcon[i.type as Exclude<FeedType, "material">]}
+                      <div
+                        className={`p-2 bg-gradient-to-r ${typeColors[i.type]} rounded-lg`}
+                      >
+                        {typeMeta[i.type]?.icon ?? typeIcon[i.type]}
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-medium">
-                            {i.type === "groupAssignment" ? "Group Assignment" : i.type.charAt(0).toUpperCase() + i.type.slice(1)}
+                            {i.type === "groupAssignment"
+                              ? "Group Assignment"
+                              : i.type.charAt(0).toUpperCase() +
+                                i.type.slice(1)}
                           </span>
                         </div>
-                        <h5 className="font-semibold text-gray-900 text-sm">{i.title}</h5>
+                        <h5 className="font-semibold text-gray-900 text-sm">
+                          {i.title}
+                        </h5>
                         <div className="text-xs text-gray-600">
                           {i.topic?.title} • Submitted {fmtDate(i.submittedAt)}
                           {typeof i.score === "number" && (
@@ -645,31 +720,41 @@ export default function StudentProgressPage() {
               </h4>
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {pending.map((i) => {
-                  const isOverdue = i.dueDate && new Date(i.dueDate).getTime() < nowMs;
+                  const isOverdue =
+                    i.dueDate && new Date(i.dueDate).getTime() < nowMs;
                   return (
                     <div
                       key={i._id}
                       onClick={() => handleNavigate(i)}
                       className={`cursor-pointer border rounded-xl p-4 hover:shadow transition-all ${
-                        isOverdue ? "bg-red-50 border-red-200" : "bg-orange-50 border-orange-200"
+                        isOverdue
+                          ? "bg-red-50 border-red-200"
+                          : "bg-orange-50 border-orange-200"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
-                          <div className={`p-2 bg-gradient-to-r ${typeColors[i.type]} rounded-lg`}>
-                            {typeMeta[i.type]?.icon ?? typeIcon[i.type as Exclude<FeedType, "material">]}
+                          <div
+                            className={`p-2 bg-gradient-to-r ${typeColors[i.type]} rounded-lg`}
+                          >
+                            {typeMeta[i.type]?.icon ?? typeIcon[i.type]}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-medium">
                                 {i.type === "groupAssignment"
                                   ? "Group Assignment"
-                                  : i.type.charAt(0).toUpperCase() + i.type.slice(1)}
+                                  : i.type.charAt(0).toUpperCase() +
+                                    i.type.slice(1)}
                               </span>
                             </div>
-                            <h5 className="font-semibold text-gray-900 text-sm">{i.title}</h5>
+                            <h5 className="font-semibold text-gray-900 text-sm">
+                              {i.title}
+                            </h5>
                             {i.topic?.title && (
-                              <div className="text-xs text-gray-600">{i.topic.title}</div>
+                              <div className="text-xs text-gray-600">
+                                {i.topic.title}
+                              </div>
                             )}
                           </div>
                         </div>
@@ -677,10 +762,14 @@ export default function StudentProgressPage() {
                         {i.dueDate && (
                           <span
                             className={`px-2 py-1 rounded text-xs font-semibold ${
-                              isOverdue ? "bg-red-600 text-white" : "bg-orange-500 text-white"
+                              isOverdue
+                                ? "bg-red-600 text-white"
+                                : "bg-orange-500 text-white"
                             }`}
                           >
-                            {isOverdue ? "Overdue" : getTimeUntilDue(i.dueDate)}
+                            {isOverdue
+                              ? "Overdue"
+                              : getTimeUntilDue(i.dueDate)}
                           </span>
                         )}
                       </div>
@@ -694,8 +783,8 @@ export default function StudentProgressPage() {
 
         <div className="text-center mt-8 text-gray-500">
           <p>
-            Keep up the great work! Your progress is tracked across assignments, group assignments,
-            quizzes, and questions.
+            Keep up the great work! Your progress is tracked across assignments,
+            group assignments, quizzes, and questions.
           </p>
         </div>
       </div>

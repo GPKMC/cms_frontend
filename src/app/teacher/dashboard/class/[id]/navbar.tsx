@@ -10,7 +10,10 @@ import { useUser } from "../../teacherContext"; // <-- adjust path if needed
 const TABS = ["Class", "workspace", "People", "Grades", "Notifications", "Attendance"];
 
 export default function CourseNavbar() {
-  const pathname = usePathname();
+  const rawPathname = usePathname();
+  // ✅ Make pathname always a string to satisfy TS
+  const pathname = rawPathname ?? "";
+
   const parts = useMemo(() => pathname.split("/"), [pathname]);
 
   // /teacher/dashboard/class/[id]/[tab?]
@@ -34,7 +37,10 @@ export default function CourseNavbar() {
     try {
       setLoading(true);
       const token =
-        (typeof window !== "undefined" && (localStorage.getItem("token_teacher") || sessionStorage.getItem("token_teacher"))) || "";
+        (typeof window !== "undefined" &&
+          (localStorage.getItem("token_teacher") ||
+            sessionStorage.getItem("token_teacher"))) ||
+        "";
 
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/notification?courseInstance=${classId}`,
@@ -43,7 +49,9 @@ export default function CourseNavbar() {
       if (!res.ok) throw new Error("Failed to fetch notifications");
       const data = await res.json();
 
-      const list: any[] = Array.isArray(data?.notifications) ? data.notifications : [];
+      const list: any[] = Array.isArray(data?.notifications)
+        ? data.notifications
+        : [];
       const count = list.filter((n) => {
         const readBy = Array.isArray(n?.readBy) ? n.readBy : [];
         const archivedBy = Array.isArray(n?.archivedBy) ? n.archivedBy : [];
@@ -63,8 +71,14 @@ export default function CourseNavbar() {
   useEffect(() => {
     fetchUnread();
     const handler = () => fetchUnread();
-    window.addEventListener("notif:changed", handler);
-    return () => window.removeEventListener("notif:changed", handler);
+    if (typeof window !== "undefined") {
+      window.addEventListener("notif:changed", handler);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("notif:changed", handler);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classId, userId]);
 
@@ -78,11 +92,13 @@ export default function CourseNavbar() {
               ? `/teacher/dashboard/class/${classId}`
               : `/teacher/dashboard/class/${classId}/${tabSlug}`;
 
-          const isActive = currentTab === tabSlug || (!currentTab && tabSlug === "class");
+          const isActive =
+            currentTab === tabSlug || (!currentTab && tabSlug === "class");
 
           const isNotifications = tabSlug === "notifications";
           const showDot = unreadCount > 0;
-          const displayCount = unreadCount > 99 ? "99+" : unreadCount.toString();
+          const displayCount =
+            unreadCount > 99 ? "99+" : unreadCount.toString();
 
           return (
             <li key={tab} className="relative">
@@ -98,20 +114,12 @@ export default function CourseNavbar() {
               </Link>
 
               {isNotifications && showDot && (
-                <>
-                  {/* small red dot */}
-                  {/* <span
-                    className="absolute -top-1 -right-2 inline-block w-2.5 h-2.5 rounded-full bg-red-500"
-                    aria-hidden="true"
-                  /> */}
-                  {/* count bubble (remove if you only want the dot) */}
-                  <span
-                    className="absolute -top-3 -right-6 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-red-500 text-white shadow"
-                    title={`${unreadCount} unread`}
-                  >
-                    {displayCount}
-                  </span>
-                </>
+                <span
+                  className="absolute -top-3 -right-6 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-red-500 text-white shadow"
+                  title={`${unreadCount} unread`}
+                >
+                  {displayCount}
+                </span>
               )}
             </li>
           );

@@ -1,7 +1,12 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { ArrowLeft, User, BookOpen } from "lucide-react";
-import { useParams, useRouter, useSearchParams, usePathname } from "next/navigation";
+import {
+  useParams,
+  useRouter,
+  useSearchParams,
+  usePathname,
+} from "next/navigation";
 import dynamic from "next/dynamic";
 import TeacherAssignmentManager from "./studentSubmissiom";
 
@@ -24,21 +29,28 @@ const tabs = [
 
 export default function AssignmentDetailsPage() {
   const router = useRouter();
-  const pathname = usePathname();
+
+  // In your TS setup these can be nullable, so normalize them.
+  const rawPathname = usePathname();
+  const pathname = rawPathname ?? "";
+
   const searchParams = useSearchParams();
-  const urlParams = useParams<{ id: string; assignmentId: string }>();
+  const urlParams = useParams<{ id: string; assignmentId: string }>() ?? {
+    id: "",
+    assignmentId: "",
+  };
 
   // Ensure clean strings from params
   const classId = String(urlParams.id ?? "");
   const assignmentId = String(urlParams.assignmentId ?? "");
 
   // Initial tab from URL (?tab=answer) else "question"
-  const initialTab =
-    (searchParams?.get("tab") === "answer" || searchParams?.get("tab") === "question")
-      ? (searchParams!.get("tab") as (typeof tabs)[number]["key"])
-      : "question";
+  const tabParam = searchParams?.get("tab");
+  const initialTab: (typeof tabs)[number]["key"] =
+    tabParam === "answer" || tabParam === "question" ? tabParam : "question";
 
-  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]["key"]>(initialTab);
+  const [activeTab, setActiveTab] =
+    useState<(typeof tabs)[number]["key"]>(initialTab);
   const [showConfirm, setShowConfirm] = useState(false);
 
   // Sync state if URL changes (back/forward or external link)
@@ -64,10 +76,13 @@ export default function AssignmentDetailsPage() {
   // Select a tab AND reflect it in the URL (?tab=...)
   const selectTab = (key: (typeof tabs)[number]["key"]) => {
     setActiveTab(key);
-    const sp = new URLSearchParams(searchParams ? Array.from(searchParams.entries()) : []);
+    const sp = new URLSearchParams(
+      searchParams ? Array.from(searchParams.entries()) : []
+    );
     sp.set("tab", key);
-    // Replace so tab switching doesn’t spam history
-    router.replace(`${pathname}?${sp.toString()}`);
+    // Only call replace if we have a pathname (defensive, though we defaulted above)
+    const base = pathname || window.location.pathname;
+    router.replace(`${base}?${sp.toString()}`);
   };
 
   return (
@@ -94,7 +109,11 @@ export default function AssignmentDetailsPage() {
                     key={tab.key}
                     onClick={() => selectTab(tab.key)}
                     className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition
-                      ${active ? "bg-blue-600 text-white shadow" : "text-gray-600 hover:bg-gray-50"}`}
+                      ${
+                        active
+                          ? "bg-blue-600 text-white shadow"
+                          : "text-gray-600 hover:bg-gray-50"
+                      }`}
                   >
                     <Icon className="h-4 w-4" />
                     {tab.label}
@@ -115,7 +134,9 @@ export default function AssignmentDetailsPage() {
           </div>
         ) : (
           <div className="p-6 lg:p-8">
-            <h2 className="mb-4 text-xl font-semibold tracking-tight">Student Answer</h2>
+            <h2 className="mb-4 text-xl font-semibold tracking-tight">
+              Student Answer
+            </h2>
             <TeacherAssignmentManager assignmentId={assignmentId} />
           </div>
         )}
@@ -130,7 +151,9 @@ export default function AssignmentDetailsPage() {
           />
           <div className="relative w-full max-w-md rounded-2xl border bg-white p-6 shadow-2xl">
             <h3 className="text-lg font-semibold">Leave this page?</h3>
-            <p className="mt-1 text-sm text-gray-600">You’ll return to the workspace.</p>
+            <p className="mt-1 text-sm text-gray-600">
+              You’ll return to the workspace.
+            </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50"

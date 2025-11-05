@@ -64,7 +64,7 @@ function getAbsoluteUrl(url: string) {
 export default function MaterialDetail() {
     const params = useParams();
     const router = useRouter();
-    const materialId = params.materialId as string;
+    const materialId = params?.materialId as string;
 
     const [material, setMaterial] = useState<Material | null>(null);
     const [loading, setLoading] = useState(true);
@@ -85,7 +85,7 @@ export default function MaterialDetail() {
     const [editContent, setEditContent] = useState<string>("");
     const [editPosting, setEditPosting] = useState(false);
     const searchParams = useSearchParams();
-    const highlightCommentId = searchParams.get("commentId");
+    const highlightCommentId = searchParams?.get("commentId");
 useEffect(() => {
     if (highlightCommentId && comments.length > 0) {
         setTimeout(() => {

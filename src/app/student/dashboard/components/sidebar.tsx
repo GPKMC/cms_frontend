@@ -33,7 +33,7 @@ export default function SidebarStudent() {
   const isActive = (page: string) =>
     page === "/student/dashboard"
       ? pathname === "/student/dashboard"
-      : pathname.startsWith(page || "");
+      : pathname?.startsWith(page || "");
 
   return (
     <>

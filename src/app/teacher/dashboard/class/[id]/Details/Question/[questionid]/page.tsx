@@ -19,15 +19,22 @@ import QuestionEditForm from "../../../workspace/question/editQuestionForm";
 import QuestionDetail from "./questiondetails";
 import TeacherStudentWork from "./studentAnswer";
 
-// ⬇️ Adjust this import to your actual path
-
 /** ====== Config ====== */
 const API = process.env.NEXT_PUBLIC_BACKEND_URL;
 const QUESTION_URL = (id: string) => `${API}/question/${id}`;
-const CLASS_URL    = (id: string) => `${API}/course-api/courseInstance/${id}`;
+const CLASS_URL = (id: string) => `${API}/course-api/courseInstance/${id}`;
+
 /** ====== Types ====== */
-type User = { _id?: string; username?: string; name?: string; email?: string; role?: string };
+type User = {
+  _id?: string;
+  username?: string;
+  name?: string;
+  email?: string;
+  role?: string;
+};
+
 type FileObj = { url: string; originalname?: string };
+
 type Question = {
   _id: string;
   title: string;
@@ -46,6 +53,7 @@ type Question = {
   dueDate?: string;
   createdAt?: string;
 };
+
 type Answer = {
   _id: string;
   student?: User;
@@ -68,6 +76,7 @@ function getTeacherToken(): string {
   if (t.toLowerCase().startsWith("bearer ")) t = t.slice(7).trim();
   return t.trim();
 }
+
 function authHeaders(): HeadersInit {
   const token = getTeacherToken();
   return { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
@@ -76,7 +85,15 @@ function authHeaders(): HeadersInit {
 /** ====== Page ====== */
 export default function QuestionDetailsPage() {
   const router = useRouter();
-  const { id: classId, questionid } = useParams<{ id: string; questionid: string }>();
+
+  // ✅ Make params safe (avoid “possibly null”)
+  const params = useParams<{ id: string; questionid: string }>() ?? {
+    id: "",
+    questionid: "",
+  };
+
+  const classId = params.id ?? "";
+  const questionid = params.questionid ?? "";
 
   const [className, setClassName] = useState<string>("");
 
@@ -109,6 +126,12 @@ export default function QuestionDetailsPage() {
 
   // Fetch Question
   const loadQuestion = async () => {
+    if (!questionid) {
+      setErrQ("Missing question id");
+      setLoadingQ(false);
+      return;
+    }
+
     try {
       setLoadingQ(true);
       setErrQ(null);
@@ -134,53 +157,47 @@ export default function QuestionDetailsPage() {
     }
   };
 
+  const loadClassName = async () => {
+    try {
+      if (!classId) {
+        setClassName("Unknown Class");
+        return;
+      }
 
+      const res = await fetch(CLASS_URL(classId), {
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        cache: "no-store",
+      });
 
+      const text = await res.text();
+      if (!res.ok) {
+        let msg = text;
+        try {
+          const j = JSON.parse(text);
+          msg = j?.error || j?.message || msg;
+        } catch {}
+        throw new Error(msg);
+      }
 
-const loadClassName = async () => {
-  try {
-    if (!classId) {
-      setClassName("Unknown Class");
-      return;
+      const data = JSON.parse(text);
+
+      // Robustly pull the instance and name from various API shapes
+      const ci = data?.instance || data?.courseInstance || data?.data || data;
+
+      const name =
+        ci?.course?.name ??
+        ci?.course?.title ??
+        ci?.name ??
+        (ci?.batch && ci?.semester
+          ? `Batch ${ci.batch} • Sem ${ci.semester}`
+          : null) ??
+        "Unknown Class";
+
+      setClassName(name);
+    } catch (e) {
+      setClassName("Failed to load class name.");
     }
-
-    const res = await fetch(CLASS_URL(classId), {
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      cache: "no-store",
-    });
-
-    const text = await res.text();
-    if (!res.ok) {
-      let msg = text;
-      try {
-        const j = JSON.parse(text);
-        msg = j?.error || j?.message || msg;
-      } catch {}
-      throw new Error(msg);
-    }
-
-    const data = JSON.parse(text);
-
-    // Robustly pull the instance and name from various API shapes
-    const ci =
-      data?.instance ||
-      data?.courseInstance ||
-      data?.data ||
-      data;
-
-    const name =
-      ci?.course?.name ??
-      ci?.course?.title ?? // in case your course uses 'title'
-      ci?.name ??
-      (ci?.batch && ci?.semester ? `Batch ${ci.batch} • Sem ${ci.semester}` : null) ??
-      "Unknown Class";
-
-    setClassName(name);
-  } catch (e) {
-    setClassName("Failed to load class name.");
-  }
-};
-
+  };
 
   useEffect(() => {
     loadQuestion();
@@ -190,6 +207,7 @@ const loadClassName = async () => {
 
   // Delete
   const handleDelete = async () => {
+    if (!questionid) return;
     try {
       const res = await fetch(QUESTION_URL(questionid), {
         method: "DELETE",
@@ -205,7 +223,6 @@ const loadClassName = async () => {
         throw new Error(msg);
       }
       toast.success("Question deleted");
-      // Navigate back to questions list (adjust route to yours)
       router.push(`/teacher/dashboard/class/${classId}/Details/Question`);
     } catch (e: any) {
       toast.error(e?.message || "Failed to delete question");
@@ -258,27 +275,26 @@ const loadClassName = async () => {
       </div>
 
       {/* Body */}
-     <div className="">
-  {activeTab === "question" ? (
-    <div className="">
-      {/* Question tab content */}
-      <QuestionDetail questionId={questionid} classId={classId} />
-    </div>
-  ) : (
-    <div className="">
-      {/* Student answers tab content */}
-<TeacherStudentWork questionId={questionid} token={getTeacherToken()} />
-    </div>
-  )}
-</div>
+      <div className="">
+        {activeTab === "question" ? (
+          <div className="">
+            {/* Question tab content */}
+            <QuestionDetail questionId={questionid} classId={classId} />
+          </div>
+        ) : (
+          <div className="">
+            {/* Student answers tab content */}
+            <TeacherStudentWork questionId={questionid} token={getTeacherToken()} />
+          </div>
+        )}
+      </div>
 
-
-      {/* ===== Edit Modal (uses YOUR QuestionEditForm) ===== */}
+      {/* Edit Modal */}
       {showEdit && q && (
         <QuestionEditForm
           QuestionId={q._id}
           courseInstanceId={q.courseInstance as string}
-          courseName={`Class ${classId}`} // set to actual course name if you have it
+          courseName={`Class ${classId}`}
           onSuccess={async () => {
             setShowEdit(false);
             await loadQuestion();
@@ -288,7 +304,7 @@ const loadClassName = async () => {
         />
       )}
 
-      {/* ===== Delete Confirm Modal ===== */}
+      {/* Delete Confirm Modal */}
       {confirmOpen && (
         <ConfirmModal
           title="Delete question?"
@@ -357,8 +373,16 @@ function ConfirmModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
       <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl border">
         <div className="flex items-start gap-3">
-          <div className={`p-2 rounded-full ${confirmTone === "danger" ? "bg-red-100" : "bg-blue-100"}`}>
-            <AlertCircle className={confirmTone === "danger" ? "text-red-600" : "text-blue-600"} />
+          <div
+            className={`p-2 rounded-full ${
+              confirmTone === "danger" ? "bg-red-100" : "bg-blue-100"
+            }`}
+          >
+            <AlertCircle
+              className={
+                confirmTone === "danger" ? "text-red-600" : "text-blue-600"
+              }
+            />
           </div>
           <div className="flex-1">
             <h3 className="font-semibold">{title}</h3>
@@ -377,7 +401,9 @@ function ConfirmModal({
             onClick={onConfirm}
             className={[
               "px-4 py-2 rounded text-white",
-              confirmTone === "danger" ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700",
+              confirmTone === "danger"
+                ? "bg-red-600 hover:bg-red-700"
+                : "bg-blue-600 hover:bg-blue-700",
             ].join(" ")}
           >
             {confirmText}
