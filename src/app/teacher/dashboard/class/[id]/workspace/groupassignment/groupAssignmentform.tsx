@@ -10,7 +10,6 @@ import {
 import dynamic from "next/dynamic";
 import toast from "react-hot-toast";
 
-// const TiptapEditor = dynamic(() => import("./groupAssignment_rtecomponent"), { ssr: false });
 const TiptapEditor = dynamic(() => import("./groupAssignment_rtecomponent").then(mod => mod.default), { ssr: false });
 // Mock data for demonstration
 interface User { _id: string; username: string; }
