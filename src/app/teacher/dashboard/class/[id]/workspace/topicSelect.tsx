@@ -34,7 +34,7 @@ import AssignmentEditForm from "./editAssignmentForm";
 import TopicModal from "./editTopicForm";
 import QuestionEditForm from "./question/editQuestionForm";
 import FeedItemFooter from "./footerbutton";
-import EditGroupAssignmentForm from "./groupassignment/editGroupAssignmentForm";
+import EditGroupAssignmentForm from "./groupAssignment/editGroupAssignmentForm";
 import QuizEditForm from "./quiz/editQuiz";
 
 // --- Type Definitions ---
@@ -101,9 +101,10 @@ function getYoutubeEmbed(url: string): string {
   return id ? `https://www.youtube.com/embed/${id}` : url;
 }
 function getFileUrl(file: string) {
+  const base = process.env.NEXT_PUBLIC_BACKEND_URL || "";
   if (file.startsWith("http")) return file;
-  if (file.startsWith("/uploads/")) return `http://localhost:5000${file}`;
-  return `http://localhost:5000/uploads/${file.replace(/^uploads\//, "")}`;
+  if (file.startsWith("/uploads/")) return `${base}${file}`;
+  return `${base}/uploads/${file.replace(/^uploads\//, "")}`;
 }
 function getFileIcon(filename: string) {
   const ext = filename.split(".").pop()?.toLowerCase() || "";

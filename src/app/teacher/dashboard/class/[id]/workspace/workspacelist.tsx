@@ -40,8 +40,8 @@ function getYoutubeEmbed(url: string): string {
 
 function getFileUrl(file: string) {
   if (file.startsWith("http")) return file;
-  if (file.startsWith("/uploads/")) return `http://localhost:5000${file}`;
-  return `http://localhost:5000/uploads/${file.replace(/^uploads\//, "")}`;
+  if (file.startsWith("/uploads/")) return `http://NEXT_PUBLIC_BACKEND_URL${file}`;
+  return `http://NEXT_PUBLIC_BACKEND_URL/uploads/${file.replace(/^uploads\//, "")}`;
 }
 
 // Get appropriate icon for file type
@@ -165,7 +165,7 @@ export default function MaterialList({ courseInstanceId }: { courseInstanceId: s
           "";
 
         const res = await fetch(
-          `http://localhost:5000/course-materials/course/${courseInstanceId}`,
+          `{NEXT_PUBLIC_BACKEND_URL}/course-materials/course/${courseInstanceId}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,

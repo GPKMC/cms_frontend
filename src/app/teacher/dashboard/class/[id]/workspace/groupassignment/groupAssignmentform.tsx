@@ -4,13 +4,14 @@ import React, { useState, useEffect } from "react";
 import {
   X, Users, Calendar, Award, FileText, ImageIcon, Youtube,
   Link as LinkIcon, Upload, Plus, Trash2, Settings, Clock,
-  UserPlus, Eye, Play, ExternalLink, BookOpen, Save,
+  UserPlus, Eye, Play, ExternalLink, BookOpen, Save, 
   AlertCircle, Check, ChevronDown, ChevronUp, Globe
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import toast from "react-hot-toast";
 
-const TiptapEditor = dynamic(() => import("./groupAssignment_rtecomponent"), { ssr: false });
+// const TiptapEditor = dynamic(() => import("./groupAssignment_rtecomponent"), { ssr: false });
+const TiptapEditor = dynamic(() => import("./groupAssignment_rtecomponent").then(mod => mod.default), { ssr: false });
 // Mock data for demonstration
 interface User { _id: string; username: string; }
 interface Topic { _id: string; title: string; }
