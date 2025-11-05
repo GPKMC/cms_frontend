@@ -11,11 +11,18 @@ import QuestionSubmissionPanel from "./submission";
 import PlagiarismModal from "./plagresult";
 
 // --- Helpers ---
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+
 function getFileUrl(url: string) {
   if (!url) return "";
   if (url.startsWith("http")) return url;
-  return `http://localhost:5000${url.startsWith("/") ? url : "/" + url}`;
+
+  const base = BACKEND_URL.endsWith("/") ? BACKEND_URL.slice(0, -1) : BACKEND_URL;
+  const path = url.startsWith("/") ? url : `/${url}`;
+
+  return `${base}${path}`;
 }
+
 const isOfficeDoc = (filename: string) => /\.(docx?|pptx?|xlsx?)$/i.test(filename);
 const isPDF = (filename: string) => /\.pdf$/i.test(filename);
 const isImage = (filename: string) => /\.(jpe?g|png|gif|webp|bmp)$/i.test(filename);

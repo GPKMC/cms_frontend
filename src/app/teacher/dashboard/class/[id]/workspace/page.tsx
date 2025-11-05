@@ -15,6 +15,7 @@ import toast, { Toaster } from "react-hot-toast";
 import TopicModal from "./topicform";
 import TopicSelector from "./topicSelect";
 import CourseMaterialForm from "./materialform";
+import MaterialList from "./workspacelist";
 import AssignmentForm from "./assignmentform";
 import QuestionForm from "./question/question";
 import QuizForm from "./quiz/quizform";

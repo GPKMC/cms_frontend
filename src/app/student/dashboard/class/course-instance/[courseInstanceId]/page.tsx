@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import AnnouncementForm from "./components/announcement";
 import CourseFeed from "./components/courseFeed";
+  const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:5000").replace(/\/+$/, "");
 
 interface CourseInstanceOverview {
   _id: string;
@@ -46,6 +47,7 @@ export default function CourseInstanceOverview() {
   const [error, setError] = useState<string | null>(null);
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [openAnncouncement ,setOpenAnnouncement]= useState(false);
+
   useEffect(() => {
     if (!courseInstanceId) return;
 
@@ -59,8 +61,8 @@ export default function CourseInstanceOverview() {
           sessionStorage.getItem("token_student");
         if (!token) throw new Error("Authentication token not found");
 
-        const res = await fetch(
-          `http://localhost:5000/course-api/courseInstance/${courseInstanceId}`,
+      const res = await fetch(
+          `${BACKEND_URL}/course-api/courseInstance/${courseInstanceId}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
