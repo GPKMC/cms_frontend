@@ -9,8 +9,15 @@ import { BatchPeriod } from "@/app/admin/types/type.batchPeriod";
 import { Eye, Pencil, Trash2 } from "lucide-react";
 
 export default function BatchPeriodsPage() {
-  const params = useParams();
-  const slug = params.slug;
+  // Strongly type params; treat slug as optional
+  const params = useParams() as { slug?: string | string[] };
+  const slugValue = params?.slug;
+  const slug =
+    typeof slugValue === "string"
+      ? slugValue
+      : Array.isArray(slugValue)
+      ? slugValue[0]
+      : "";
 
   const [batchId, setBatchId] = useState<string>("");
   const [facultyId, setFacultyId] = useState<string>("");
@@ -38,8 +45,10 @@ export default function BatchPeriodsPage() {
   const [editError, setEditError] = useState<string | null>(null);
 
   const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
-  const token = typeof window !== "undefined" ? localStorage.getItem("token_admin") : "";
- const router = useRouter();
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token_admin") : "";
+  const router = useRouter();
+
   // Fetch batch info by slug
   useEffect(() => {
     if (!slug) return;
@@ -191,14 +200,16 @@ export default function BatchPeriodsPage() {
 
   return (
     <div className="relative p-4">
-         <button
-          onClick={() => router.push("/admin/batch")}
-          className="mb-4 text-blue-600 hover:underline"
-        >
-          &larr; Back to Batches
-        </button>
+      <button
+        onClick={() => router.push("/admin/batch")}
+        className="mb-4 text-blue-600 hover:underline"
+      >
+        &larr; Back to Batches
+      </button>
       <h1 className="text-2xl font-bold mb-4">
-        Batch: <span className="text-indigo-600">{slug || "Loading..."}</span> - Periods List
+        Batch:{" "}
+        <span className="text-indigo-600">{slug || "Loading..."}</span> -
+        Periods List
       </h1>
 
       <div className="flex justify-end mb-3">
@@ -299,12 +310,18 @@ export default function BatchPeriodsPage() {
                     </td>
                     <td className="border px-4 py-2">{p.slug}</td>
                     <td className="border px-4 py-2">
-                      {p.startDate ? new Date(p.startDate).toLocaleDateString() : "-"}
+                      {p.startDate
+                        ? new Date(p.startDate).toLocaleDateString()
+                        : "-"}
                     </td>
                     <td className="border px-4 py-2">
-                      {p.endDate ? new Date(p.endDate).toLocaleDateString() : "-"}
+                      {p.endDate
+                        ? new Date(p.endDate).toLocaleDateString()
+                        : "-"}
                     </td>
-                    <td className="border px-4 py-2 capitalize">{p.status.replace("_", " ")}</td>
+                    <td className="border px-4 py-2 capitalize">
+                      {p.status.replace("_", " ")}
+                    </td>
                     <td className="border px-4 py-2">
                       <ul>
                         {(semYear?.courses || []).map((c) => (
@@ -314,12 +331,18 @@ export default function BatchPeriodsPage() {
                         ))}
                       </ul>
                     </td>
-                    <td className="border px-4 py-2">{p.description || "-"}</td>
                     <td className="border px-4 py-2">
-                      {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : "-"}
+                      {p.description || "-"}
                     </td>
                     <td className="border px-4 py-2">
-                      {p.updatedAt ? new Date(p.updatedAt).toLocaleDateString() : "-"}
+                      {p.createdAt
+                        ? new Date(p.createdAt).toLocaleDateString()
+                        : "-"}
+                    </td>
+                    <td className="border px-4 py-2">
+                      {p.updatedAt
+                        ? new Date(p.updatedAt).toLocaleDateString()
+                        : "-"}
                     </td>
                     <td className="flex border px-4 py-2 text-center space-x-3 justify-center">
                       <Eye
@@ -365,9 +388,14 @@ function DeleteConfirmModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur">
       <div className="bg-white p-6 rounded shadow-lg max-w-sm w-full">
         <h3 className="text-lg font-semibold mb-4">Confirm Delete</h3>
-        <p className="mb-6">Are you sure you want to delete this period?</p>
+        <p className="mb-6">
+          Are you sure you want to delete this period?
+        </p>
         <div className="flex justify-end space-x-4">
-          <button onClick={onCancel} className="px-4 py-2 border rounded hover:bg-gray-100">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 border rounded hover:bg-gray-100"
+          >
             Cancel
           </button>
           <button

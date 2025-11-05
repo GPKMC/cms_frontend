@@ -29,8 +29,8 @@ export default function GroupAssignmentDetailsPage() {
   const params = useParams<{ id: string; groupAssignmentId: string }>();
 
   // Coerce params to strings
-  const classId = String(params.id ?? "");
-  const groupAssignmentId = String(params.groupAssignmentId ?? "");
+  const classId = String(params?.id ?? "");
+  const groupAssignmentId = String(params?.groupAssignmentId ?? "");
 
   // Initial tab from URL (?tab=answer) else "question"
   const initialTab =

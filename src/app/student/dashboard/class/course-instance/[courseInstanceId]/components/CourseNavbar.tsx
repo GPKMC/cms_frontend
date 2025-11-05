@@ -7,33 +7,42 @@ import { Menu, X } from "lucide-react";
 
 const tabs = [
   { label: "Overview", slug: "overview" },
-  {label : "Study Material", slug: "materials"},
+  { label: "Study Material", slug: "materials" },
   { label: "Assignment", slug: "assignment" },
   { label: "People", slug: "people" },
   { label: "Grades", slug: "grades" },
   { label: "Notifications", slug: "notifications" },
-  { label: "Attendance", slug: "attendance" }
+  { label: "Attendance", slug: "attendance" },
 ];
 
 // Mobile priority tabs (shown directly on mobile)
-const mobilePriorityTabs = ["overview", "materials", "assignment","people","grades"];
+const mobilePriorityTabs = ["overview", "materials", "assignment", "people", "grades"];
 
 export default function CourseNavbar() {
-  const params = useParams();
-  const pathname = usePathname();
+  // params might be typed as possibly null in your setup
+  const params = useParams() as { courseInstanceId?: string | string[] } | null;
+
+  // pathname can be string | null -> normalize it
+  const rawPathname = usePathname();
+  const pathname = rawPathname ?? "";
+
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Assumes your folder is .../course-instance/[id]/...
- const courseInstanceId = params.courseInstanceId as string;
+  // Safely extract courseInstanceId (handles string | string[] | undefined)
+  const courseInstanceIdParam = params?.courseInstanceId;
+  const courseInstanceId = Array.isArray(courseInstanceIdParam)
+    ? courseInstanceIdParam[0]
+    : courseInstanceIdParam || "";
 
-
-  // Get the current tab from URL: e.g. /student/dashboard/class/course-instance/123/workspace
-  // parts[0]: "", [1]: "student", [2]: "dashboard", [3]: "class", [4]: "course-instance", [5]: "123", [6]: "workspace"
+  // Get the current tab from URL:
+  // e.g. /student/dashboard/class/course-instance/123/workspace
+  // parts[0]: "", [1]: "student", [2]: "dashboard", [3]: "class",
+  // [4]: "course-instance", [5]: "123", [6]: "workspace"
   const parts = pathname.split("/");
-  const currentTab = parts[6] ? parts[6].toLowerCase() : "overview"; // fallback to "class"
+  const currentTab = parts[6]?.toLowerCase?.() || "overview";
 
-  const priorityTabs = tabs.filter(tab => mobilePriorityTabs.includes(tab.slug));
-  const remainingTabs = tabs.filter(tab => !mobilePriorityTabs.includes(tab.slug));
+  const priorityTabs = tabs.filter((tab) => mobilePriorityTabs.includes(tab.slug));
+  const remainingTabs = tabs.filter((tab) => !mobilePriorityTabs.includes(tab.slug));
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
@@ -42,15 +51,14 @@ export default function CourseNavbar() {
       {/* Desktop Navigation */}
       <div className="hidden md:block px-6 py-3">
         <ul className="flex space-x-8">
-          {tabs.map(tab => {
-            // If "Class", omit extra path
+          {tabs.map((tab) => {
             const path =
               tab.slug === "overview"
                 ? `/student/dashboard/class/course-instance/${courseInstanceId}`
                 : `/student/dashboard/class/course-instance/${courseInstanceId}/${tab.slug}`;
 
             const isActive =
-              currentTab === tab.slug || (!currentTab && tab.slug === "class");
+              currentTab === tab.slug || (!currentTab && tab.slug === "overview");
 
             return (
               <li key={tab.slug}>
@@ -75,7 +83,7 @@ export default function CourseNavbar() {
         <div className="flex items-center justify-between">
           {/* Priority tabs shown directly */}
           <div className="flex space-x-4 overflow-x-auto flex-1">
-            {priorityTabs.map(tab => {
+            {priorityTabs.map((tab) => {
               const path =
                 tab.slug === "overview"
                   ? `/student/dashboard/class/course-instance/${courseInstanceId}`
@@ -119,7 +127,7 @@ export default function CourseNavbar() {
         {isMobileMenuOpen && (
           <div className="absolute top-full left-0 right-0 bg-white border-b border-gray-200 shadow-lg z-50 animate-in slide-in-from-top duration-200">
             <div className="px-4 py-3 space-y-1">
-              {remainingTabs.map(tab => {
+              {remainingTabs.map((tab) => {
                 const path = `/student/dashboard/class/course-instance/${courseInstanceId}/${tab.slug}`;
                 const isActive = currentTab === tab.slug;
 

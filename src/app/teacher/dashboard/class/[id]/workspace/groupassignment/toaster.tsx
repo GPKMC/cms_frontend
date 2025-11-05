@@ -1,10 +1,7 @@
-import { Toaster } from 'react-hot-toast';
+"use client";
 
-export default function toast({ Component, pageProps }) {
-  return (
-    <>
-      <Toaster position="top-right" />
-      <Component {...pageProps} />
-    </>
-  );
+import { Toaster } from "react-hot-toast";
+
+export default function ToastProvider() {
+  return <Toaster position="top-right" />;
 }

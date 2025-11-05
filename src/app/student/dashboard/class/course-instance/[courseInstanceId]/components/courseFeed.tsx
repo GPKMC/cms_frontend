@@ -212,8 +212,8 @@ export default function CourseFeed({ courseInstanceId }: Props) {
   useEffect(() => {
     if (loading || didAutoScrollRef.current) return;
 
-    const type = (searchParams.get("type") || "").toLowerCase();
-    const targetId = searchParams.get("highlight") || "";
+    const type = (searchParams?.get("type") || "").toLowerCase();
+    const targetId = searchParams?.get("highlight") || "";
 
     if (type === "announcement" && targetId) {
       const el = document.getElementById(`announcement-${targetId}`);
@@ -226,7 +226,7 @@ export default function CourseFeed({ courseInstanceId }: Props) {
         const t = setTimeout(() => setHighlightedId(null), 4500);
 
         // Clean the URL to avoid future auto-scrolls (keeps the same route)
-        router.replace(pathname);
+        router.replace(pathname || "/");
 
         return () => clearTimeout(t);
       }

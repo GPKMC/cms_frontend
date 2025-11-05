@@ -97,8 +97,8 @@ const courseInstanceId = params?.courseInstanceId as string;
 
               {/* Icons */}
               <div className="flex items-center space-x-4 text-black">
-                <Mail className="w-5 h-5 hover:text-blue-600 cursor-pointer" title="Message" />
-                <MoreVertical className="w-5 h-5 cursor-pointer" title="Options" />
+                <Mail className="w-5 h-5 hover:text-blue-600 cursor-pointer" />
+                <MoreVertical className="w-5 h-5 cursor-pointer"  />
               </div>
             </li>
           ))}

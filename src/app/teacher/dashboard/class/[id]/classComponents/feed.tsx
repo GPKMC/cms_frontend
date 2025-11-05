@@ -2,10 +2,26 @@
 import { useEffect, useState, useRef, JSX } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
-  AlertCircle, Loader2, Megaphone, FileText, BookOpenCheck, HelpCircle, ListChecks, User,
-  Users2Icon, Download, Eye, FileText as FileTextIcon, FileImage as FileImageIcon,
-  FileSpreadsheet as FileSpreadsheetIcon, FileJson as FileJsonIcon, FileArchive as FileArchiveIcon,
-  FileAudio as FileAudioIcon, FileVideo as FileVideoIcon, FileCode as FileCodeIcon, FileIcon,
+  AlertCircle,
+  Loader2,
+  Megaphone,
+  FileText,
+  BookOpenCheck,
+  HelpCircle,
+  ListChecks,
+  User,
+  Users2Icon,
+  Download,
+  Eye,
+  FileText as FileTextIcon,
+  FileImage as FileImageIcon,
+  FileSpreadsheet as FileSpreadsheetIcon,
+  FileJson as FileJsonIcon,
+  FileArchive as FileArchiveIcon,
+  FileAudio as FileAudioIcon,
+  FileVideo as FileVideoIcon,
+  FileCode as FileCodeIcon,
+  FileIcon,
 } from "lucide-react";
 import { FaFilePowerpoint } from "react-icons/fa";
 import Image from "next/image";
@@ -30,7 +46,13 @@ function timeAgo(dateString: string) {
   return `${years} year${years !== 1 ? "s" : ""} ago`;
 }
 
-type FeedItemType = "announcement" | "assignment" | "groupAssignment" | "material" | "quiz" | "question";
+type FeedItemType =
+  | "announcement"
+  | "assignment"
+  | "groupAssignment"
+  | "material"
+  | "quiz"
+  | "question";
 
 interface FeedItemBase {
   _id: string;
@@ -89,34 +111,52 @@ const fileTypeFromUrl = (url: string) => {
 
 const getFileIcon = (type: string) => {
   switch (type) {
-    case "pdf": return <FileTextIcon className="text-red-500" />;
-    case "word": return <Image src={"/wordicon.svg"} alt="word icon" height={22} width={22} />;
-    case "excel": return <FileSpreadsheetIcon className="text-green-600" />;
-    case "ppt": return <FaFilePowerpoint className="text-orange-500" />;
-    case "image": return <FileImageIcon className="text-yellow-400" />;
-    case "txt": return <FileTextIcon className="text-gray-600" />;
-    case "json": return <FileJsonIcon className="text-green-700" />;
-    case "zip": return <FileArchiveIcon className="text-orange-700" />;
-    case "audio": return <FileAudioIcon className="text-purple-700" />;
-    case "video": return <FileVideoIcon className="text-indigo-700" />;
-    case "code": return <FileCodeIcon className="text-violet-700" />;
-    default: return <FileIcon className="text-gray-400" />;
+    case "pdf":
+      return <FileTextIcon className="text-red-500" />;
+    case "word":
+      return (
+        <Image src={"/wordicon.svg"} alt="word icon" height={22} width={22} />
+      );
+    case "excel":
+      return <FileSpreadsheetIcon className="text-green-600" />;
+    case "ppt":
+      return <FaFilePowerpoint className="text-orange-500" />;
+    case "image":
+      return <FileImageIcon className="text-yellow-400" />;
+    case "txt":
+      return <FileTextIcon className="text-gray-600" />;
+    case "json":
+      return <FileJsonIcon className="text-green-700" />;
+    case "zip":
+      return <FileArchiveIcon className="text-orange-700" />;
+    case "audio":
+      return <FileAudioIcon className="text-purple-700" />;
+    case "video":
+      return <FileVideoIcon className="text-indigo-700" />;
+    case "code":
+      return <FileCodeIcon className="text-violet-700" />;
+    default:
+      return <FileIcon className="text-gray-400" />;
   }
 };
 
 function getOfficePreviewUrl(url: string) {
-  return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`;
+  return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
+    url
+  )}`;
 }
 
 function TxtPreview({ url }: { url: string }) {
   const [text, setText] = useState("Loading...");
   useEffect(() => {
     fetch(url)
-      .then(r => r.text())
+      .then((r) => r.text())
       .then(setText)
       .catch(() => setText("Could not load file."));
   }, [url]);
-  return <pre className="overflow-x-auto max-h-[350px] bg-gray-50 p-3">{text}</pre>;
+  return (
+    <pre className="overflow-x-auto max-h-[350px] bg-gray-50 p-3">{text}</pre>
+  );
 }
 
 function openFullscreen(elem: HTMLImageElement | HTMLIFrameElement | null) {
@@ -128,12 +168,30 @@ function openFullscreen(elem: HTMLImageElement | HTMLIFrameElement | null) {
 
 // Route segments for teacher details pages (no leading slash)
 const typeMeta: Record<FeedItemType, { icon: JSX.Element; route: string }> = {
-  announcement:  { icon: <Megaphone className="h-5 w-5 text-indigo-600" />, route: "announcement" },
-  assignment:    { icon: <FileText className="h-5 w-5 text-pink-600" />,   route: "Assignment" },
-  groupAssignment:{ icon: <Users2Icon className="h-5 w-5 text-yellow-300" />, route: "groupAssignment" },
-  material:      { icon: <BookOpenCheck className="h-5 w-5 text-blue-600" />, route: "materials" },
-  quiz:          { icon: <ListChecks className="h-5 w-5 text-yellow-600" />,  route: "quizzes" },
-  question:      { icon: <HelpCircle className="h-5 w-5 text-emerald-600" />, route: "Question" },
+  announcement: {
+    icon: <Megaphone className="h-5 w-5 text-indigo-600" />,
+    route: "announcement",
+  },
+  assignment: {
+    icon: <FileText className="h-5 w-5 text-pink-600" />,
+    route: "Assignment",
+  },
+  groupAssignment: {
+    icon: <Users2Icon className="h-5 w-5 text-yellow-300" />,
+    route: "groupAssignment",
+  },
+  material: {
+    icon: <BookOpenCheck className="h-5 w-5 text-blue-600" />,
+    route: "materials",
+  },
+  quiz: {
+    icon: <ListChecks className="h-5 w-5 text-yellow-600" />,
+    route: "quizzes",
+  },
+  question: {
+    icon: <HelpCircle className="h-5 w-5 text-emerald-600" />,
+    route: "Question",
+  },
 };
 
 export default function CourseFeed({ courseInstanceId }: Props) {
@@ -147,17 +205,21 @@ export default function CourseFeed({ courseInstanceId }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const router = useRouter();
-  const pathname = usePathname();
-  const sp = useSearchParams(); // read once into a ref (avoid new object each render)
+  const rawPathname = usePathname();
+  const pathname = rawPathname ?? ""; // ✅ normalize so it's never null
+
+  const sp = useSearchParams(); // may be URLSearchParams | null in your typings
   const { user } = useUser();
   const role = user?.role;
 
-  // ✅ Read highlight params once
+  // ✅ Read highlight params once, guarding for possibly-null sp
   const initialHighlightRef = useRef<{ id: string | null; type: FeedItemType | null } | null>(null);
   if (initialHighlightRef.current === null) {
+    const id = sp?.get("highlight") ?? null;
+    const typeParam = (sp?.get("type") as FeedItemType | null) ?? null;
     initialHighlightRef.current = {
-      id: sp.get("highlight"),
-      type: (sp.get("type") as FeedItemType) || "announcement",
+      id,
+      type: typeParam || "announcement",
     };
   }
 
@@ -172,11 +234,21 @@ export default function CourseFeed({ courseInstanceId }: Props) {
     if (Array.isArray(payload)) {
       const items: FeedItem[] = [];
       payload.forEach((bucket: any) => {
-        (bucket.materials || []).forEach((m: any) => items.push({ ...m, type: "material" }));
-        (bucket.assignments || []).forEach((a: any) => items.push({ ...a, type: "assignment" }));
-        (bucket.questions || []).forEach((q: any) => items.push({ ...q, type: "question" }));
-        (bucket.groupAssignments || []).forEach((ga: any) => items.push({ ...ga, type: "groupAssignment" }));
-        (bucket.quizzes || []).forEach((qz: any) => items.push({ ...qz, type: "quiz" }));
+        (bucket.materials || []).forEach((m: any) =>
+          items.push({ ...m, type: "material" })
+        );
+        (bucket.assignments || []).forEach((a: any) =>
+          items.push({ ...a, type: "assignment" })
+        );
+        (bucket.questions || []).forEach((q: any) =>
+          items.push({ ...q, type: "question" })
+        );
+        (bucket.groupAssignments || []).forEach((ga: any) =>
+          items.push({ ...ga, type: "groupAssignment" })
+        );
+        (bucket.quizzes || []).forEach((qz: any) =>
+          items.push({ ...qz, type: "quiz" })
+        );
       });
       items.sort(
         (a, b) =>
@@ -197,14 +269,24 @@ export default function CourseFeed({ courseInstanceId }: Props) {
         const base = process.env.NEXT_PUBLIC_BACKEND_URL;
         if (!base) throw new Error("NEXT_PUBLIC_BACKEND_URL is not set");
 
-        const teacherTok = localStorage.getItem("token_teacher") || sessionStorage.getItem("token_teacher");
-        const studentTok = localStorage.getItem("token_student") || sessionStorage.getItem("token_student");
-        const token = (role === "teacher" ? teacherTok : studentTok) || teacherTok || studentTok;
+        const teacherTok =
+          localStorage.getItem("token_teacher") ||
+          sessionStorage.getItem("token_teacher");
+        const studentTok =
+          localStorage.getItem("token_student") ||
+          sessionStorage.getItem("token_student");
+        const token =
+          (role === "teacher" ? teacherTok : studentTok) ||
+          teacherTok ||
+          studentTok;
         if (!token) throw new Error("Auth token missing");
 
         const url = `${base}/student/course-instance/${courseInstanceId}/feed`;
         const res = await fetch(url, {
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
         });
         if (!res.ok) throw new Error(`Failed to fetch feed: ${res.status}`);
         const raw = await res.json();
@@ -238,7 +320,9 @@ export default function CourseFeed({ courseInstanceId }: Props) {
     if (loading || didAutoScrollRef.current) return;
 
     const targetId = initialHighlightRef.current?.id;
-    const targetType = (initialHighlightRef.current?.type || "announcement").toLowerCase();
+    const targetType = (
+      initialHighlightRef.current?.type || "announcement"
+    ).toLowerCase() as string;
 
     if (!targetId) return;
 
@@ -252,8 +336,10 @@ export default function CourseFeed({ courseInstanceId }: Props) {
 
     const t = setTimeout(() => setHighlightedId(null), 4500);
 
-    // remove ?type&highlight so it won't re-trigger on future renders
-    router.replace(pathname);
+    // Only call replace if we actually have a pathname (keeps TS happy)
+    if (pathname) {
+      router.replace(pathname);
+    }
 
     return () => clearTimeout(t);
   }, [loading, filteredFeed, router, pathname]);
@@ -277,7 +363,11 @@ export default function CourseFeed({ courseInstanceId }: Props) {
   }
 
   if (filteredFeed.length === 0) {
-    return <div className="text-center py-10 text-gray-500">No recent updates available for this course.</div>;
+    return (
+      <div className="text-center py-10 text-gray-500">
+        No recent updates available for this course.
+      </div>
+    );
   }
 
   return (
@@ -297,7 +387,9 @@ export default function CourseFeed({ courseInstanceId }: Props) {
                 id={cardDomId}
                 key={item._id}
                 className={`border rounded-lg p-4 bg-white shadow-sm ${
-                  isHighlighted ? "ring-2 ring-blue-500 bg-yellow-50" : "border-indigo-100"
+                  isHighlighted
+                    ? "ring-2 ring-blue-500 bg-yellow-50"
+                    : "border-indigo-100"
                 }`}
                 title="Announcement"
               >
@@ -311,10 +403,14 @@ export default function CourseFeed({ courseInstanceId }: Props) {
                       </span>
                     )}
                   </div>
-                  <span className="text-xs text-gray-500">{timeAgo(item.updatedAt || item.createdAt)}</span>
+                  <span className="text-xs text-gray-500">
+                    {timeAgo(item.updatedAt || item.createdAt)}
+                  </span>
                 </div>
 
-                <h3 className="text-gray-900 font-semibold mb-1 text-base">{item.title}</h3>
+                <h3 className="text-gray-900 font-semibold mb-1 text-base">
+                  {item.title}
+                </h3>
 
                 {item.content && (
                   <div
@@ -326,14 +422,18 @@ export default function CourseFeed({ courseInstanceId }: Props) {
                 {(item as any).images?.length > 0 && (
                   <div className="flex gap-4 flex-wrap mt-2">
                     {(item as any).images.map((url: string, idx: number) => {
-                      const src = url.startsWith("http") ? url : `${process.env.NEXT_PUBLIC_BACKEND_URL}${url}`;
+                      const src = url.startsWith("http")
+                        ? url
+                        : `${process.env.NEXT_PUBLIC_BACKEND_URL}${url}`;
                       return (
                         <div key={idx} className="relative group">
                           <img
                             src={src}
                             alt=""
                             className="w-24 h-16 object-cover rounded border cursor-pointer hover:opacity-80"
-                            onClick={() => setPreviewDoc({ url: src, type: "image" })}
+                            onClick={() =>
+                              setPreviewDoc({ url: src, type: "image" })
+                            }
                             title="Click to view full image"
                           />
                           <a
@@ -353,21 +453,38 @@ export default function CourseFeed({ courseInstanceId }: Props) {
                 {(item as any).documents?.length > 0 && (
                   <div className="flex gap-4 flex-wrap mt-4">
                     {(item as any).documents.map((url: string, idx: number) => {
-                      const fileUrl = url.startsWith("http") ? url : `${process.env.NEXT_PUBLIC_BACKEND_URL}${url}`;
+                      const fileUrl = url.startsWith("http")
+                        ? url
+                        : `${process.env.NEXT_PUBLIC_BACKEND_URL}${url}`;
                       const originalName = getOriginalFileName(url);
                       const fileType = fileTypeFromUrl(fileUrl);
-                      const previewable = ["pdf", "ppt", "word", "excel", "txt"].includes(fileType);
+                      const previewable = ["pdf", "ppt", "word", "excel", "txt"].includes(
+                        fileType
+                      );
 
                       return (
-                        <div key={idx} className="flex items-center gap-2 bg-gray-50 rounded-lg px-2 py-1 border">
+                        <div
+                          key={idx}
+                          className="flex items-center gap-2 bg-gray-50 rounded-lg px-2 py-1 border"
+                        >
                           <button
                             type="button"
                             className="flex items-center gap-2 font-medium text-blue-700 hover:underline"
-                            onClick={() => (previewable ? setPreviewDoc({ url: fileUrl, type: fileType }) : window.open(fileUrl, "_blank"))}
+                            onClick={() =>
+                              previewable
+                                ? setPreviewDoc({
+                                    url: fileUrl,
+                                    type: fileType,
+                                  })
+                                : window.open(fileUrl, "_blank")
+                            }
                             title={`Preview ${originalName}`}
                           >
                             {getFileIcon(fileType)}
-                            <span className="text-xs truncate max-w-[110px]" title={originalName}>
+                            <span
+                              className="text-xs truncate max-w-[110px]"
+                              title={originalName}
+                            >
                               {originalName}
                               {previewable ? " (Preview)" : ""}
                             </span>
@@ -390,7 +507,13 @@ export default function CourseFeed({ courseInstanceId }: Props) {
                 {(item as any).links?.length > 0 && (
                   <div className="mt-2 space-x-2">
                     {(item as any).links.map((link: string, idx: number) => (
-                      <a key={idx} href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline break-all">
+                      <a
+                        key={idx}
+                        href={link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 underline break-all"
+                      >
                         {link}
                       </a>
                     ))}
@@ -400,9 +523,23 @@ export default function CourseFeed({ courseInstanceId }: Props) {
                 {(item as any).youtubeLinks?.length > 0 && (
                   <div className="mt-2 flex gap-3">
                     {(item as any).youtubeLinks.map((url: string, idx: number) => {
-                      const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([\w-]+)/);
-                      const embedUrl = match ? `https://www.youtube.com/embed/${match[1]}` : url;
-                      return <iframe key={idx} width="300" height="170" src={embedUrl} title="YouTube video" allowFullScreen className="rounded" />;
+                      const match = url.match(
+                        /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([\w-]+)/
+                      );
+                      const embedUrl = match
+                        ? `https://www.youtube.com/embed/${match[1]}`
+                        : url;
+                      return (
+                        <iframe
+                          key={idx}
+                          width="300"
+                          height="170"
+                          src={embedUrl}
+                          title="YouTube video"
+                          allowFullScreen
+                          className="rounded"
+                        />
+                      );
                     })}
                   </div>
                 )}
@@ -414,7 +551,9 @@ export default function CourseFeed({ courseInstanceId }: Props) {
                       {item.postedBy.username} ({item.postedBy.role})
                     </>
                   ) : (
-                    <span className="italic text-gray-400">Unknown poster</span>
+                    <span className="italic text-gray-400">
+                      Unknown poster
+                    </span>
                   )}
                 </div>
               </div>
@@ -430,8 +569,9 @@ export default function CourseFeed({ courseInstanceId }: Props) {
                 isHighlighted ? "ring-2 ring-blue-500 bg-yellow-50" : ""
               }`}
               onClick={() => {
-                // teacher details route (as before)
-                router.push(`/teacher/dashboard/class/${courseInstanceId}/Details/${typeMeta[item.type].route}/${item._id}`);
+                router.push(
+                  `/teacher/dashboard/class/${courseInstanceId}/Details/${typeMeta[item.type].route}/${item._id}`
+                );
               }}
               title={`View details of this ${item.type}`}
             >
@@ -440,14 +580,23 @@ export default function CourseFeed({ courseInstanceId }: Props) {
                   {icon}
                   <span className="capitalize">{item.type}</span>
                   {item.updatedAt && item.updatedAt !== item.createdAt && (
-                    <span className="ml-2 px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 text-xs font-semibold">Updated</span>
+                    <span className="ml-2 px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 text-xs font-semibold">
+                      Updated
+                    </span>
                   )}
                 </div>
-                <span className="text-xs text-gray-500">{timeAgo(item.updatedAt || item.createdAt)}</span>
+                <span className="text-xs text-gray-500">
+                  {timeAgo(item.updatedAt || item.createdAt)}
+                </span>
               </div>
-              <h3 className="text-gray-900 font-semibold mb-1 text-base">{item.title}</h3>
+              <h3 className="text-gray-900 font-semibold mb-1 text-base">
+                {item.title}
+              </h3>
               {item.content && (
-                <div className="mb-3 text-gray-800 prose prose-sm max-w-none announcement-content" dangerouslySetInnerHTML={{ __html: item.content }} />
+                <div
+                  className="mb-3 text-gray-800 prose prose-sm max-w-none announcement-content"
+                  dangerouslySetInnerHTML={{ __html: item.content }}
+                />
               )}
               <div className="text-sm text-gray-600 flex items-center gap-2">
                 <User className="h-4 w-4 text-gray-400" />
@@ -468,7 +617,11 @@ export default function CourseFeed({ courseInstanceId }: Props) {
       {previewDoc && (
         <div className="fixed inset-0 bg-black/70 z-[9999] backdrop-blur-sm flex items-center justify-center transition-all duration-200">
           <div className="bg-white rounded-xl p-6 max-w-4xl w-full shadow-2xl relative flex flex-col">
-            <button className="absolute top-2 right-2 bg-gray-200 p-1 rounded-full" onClick={() => setPreviewDoc(null)} title="Close">
+            <button
+              className="absolute top-2 right-2 bg-gray-200 p-1 rounded-full"
+              onClick={() => setPreviewDoc(null)}
+              title="Close"
+            >
               ✕
             </button>
 
@@ -476,7 +629,13 @@ export default function CourseFeed({ courseInstanceId }: Props) {
               <button
                 className="absolute top-2 left-2 bg-gray-200 p-1 rounded-full"
                 title="Full screen"
-                onClick={() => openFullscreen(previewDoc.type === "image" ? imageRef.current : iframeRef.current)}
+                onClick={() =>
+                  openFullscreen(
+                    previewDoc.type === "image"
+                      ? imageRef.current
+                      : iframeRef.current
+                  )
+                }
               >
                 ⛶
               </button>
@@ -494,17 +653,40 @@ export default function CourseFeed({ courseInstanceId }: Props) {
             </a>
 
             {previewDoc.type === "image" ? (
-              <img ref={imageRef} src={previewDoc.url} alt="" className="max-w-full max-h-[80vh] rounded mx-auto" />
+              <img
+                ref={imageRef}
+                src={previewDoc.url}
+                alt=""
+                className="max-w-full max-h-[80vh] rounded mx-auto"
+              />
             ) : previewDoc.type === "pdf" ? (
-              <iframe ref={iframeRef} src={previewDoc.url} width="100%" height="600px" className="rounded" allowFullScreen />
+              <iframe
+                ref={iframeRef}
+                src={previewDoc.url}
+                width="100%"
+                height="600px"
+                className="rounded"
+                allowFullScreen
+              />
             ) : ["ppt", "word", "excel"].includes(previewDoc.type) ? (
-              <iframe ref={iframeRef} src={getOfficePreviewUrl(previewDoc.url)} width="100%" height="500px" className="rounded" allowFullScreen />
+              <iframe
+                ref={iframeRef}
+                src={getOfficePreviewUrl(previewDoc.url)}
+                width="100%"
+                height="500px"
+                className="rounded"
+                allowFullScreen
+              />
             ) : previewDoc.type === "txt" ? (
               <TxtPreview url={previewDoc.url} />
             ) : (
               <div className="text-center text-gray-500">
                 Preview not supported for this file type. <br />
-                <a href={previewDoc.url} download className="text-blue-600 underline">
+                <a
+                  href={previewDoc.url}
+                  download
+                  className="text-blue-600 underline"
+                >
                   Download
                 </a>
               </div>

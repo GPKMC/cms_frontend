@@ -30,7 +30,7 @@ export default function QuestionCommentSection({ questionId }: Props) {
   const [editPosting, setEditPosting] = useState(false);
 
   const searchParams = useSearchParams();
-  const highlightCommentId = searchParams.get("commentId");
+  const highlightCommentId = searchParams?.get("commentId");
 
   // Fetch comments on mount/questionId change
   useEffect(() => {

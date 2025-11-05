@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { MessageCircle, MoreVertical, Edit2, Trash2, Send, X } from "lucide-react";
+import { MessageCircle, MoreVertical, Edit2, Trash2, Send } from "lucide-react";
 import TiptapEditor from "@/app/student/dashboard/class/course-instance/[courseInstanceId]/components/rtecomponet";
 import { formatDistanceToNow } from "date-fns";
 import { useUser } from "@/app/student/dashboard/studentContext";
@@ -12,9 +12,11 @@ type CommentObj = {
   postedBy: { _id: string; username: string };
   createdAt?: string;
 };
+
 interface Props {
   assignmentId: string;
 }
+
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
 export default function AssignmentCommentSection({ assignmentId }: Props) {
@@ -30,7 +32,8 @@ export default function AssignmentCommentSection({ assignmentId }: Props) {
   const [editPosting, setEditPosting] = useState(false);
 
   const searchParams = useSearchParams();
-  const highlightCommentId = searchParams.get("commentId");
+  // ✅ Use optional chaining so TS is happy
+  const highlightCommentId = searchParams?.get("commentId") ?? null;
 
   // Fetch comments on mount/assignmentId change
   useEffect(() => {
@@ -147,6 +150,7 @@ export default function AssignmentCommentSection({ assignmentId }: Props) {
       setEditPosting(false);
     }
   }
+
   function getUserId(user: any): string | undefined {
     return user?._id || user?.id;
   }
@@ -161,6 +165,7 @@ export default function AssignmentCommentSection({ assignmentId }: Props) {
         </div>
         <h3 className="text-xl font-semibold text-gray-900">Class Discussion</h3>
       </div>
+
       {/* List of comments */}
       <div className="space-y-6 mb-8">
         {loading ? (
@@ -187,6 +192,7 @@ export default function AssignmentCommentSection({ assignmentId }: Props) {
                       : ""}
                   </span>
                 </div>
+
                 {/* Three-dot menu */}
                 {myUserId && commentUserId === myUserId && !isEditing && (
                   <div className="absolute top-2 right-2 z-10">
@@ -260,6 +266,7 @@ export default function AssignmentCommentSection({ assignmentId }: Props) {
           })
         )}
       </div>
+
       {/* Comment box */}
       <div className="flex gap-4">
         <div className="flex-1">
@@ -283,6 +290,7 @@ export default function AssignmentCommentSection({ assignmentId }: Props) {
           </div>
         </div>
       </div>
+
       {/* Delete confirm modal */}
       {deleteConfirmId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">

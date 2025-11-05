@@ -593,7 +593,7 @@ export default function AnnouncementAdminMailbox() {
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-1 mb-1">
                                   <span className="text-xs text-gray-500 bg-gray-100 rounded px-1">#{number}</span>
-                                  {r.pinned && <Star className="h-3 w-3 text-amber-500" title="Pinned" />}
+                                  {r.pinned && <Star className="h-3 w-3 text-amber-500" />}
                                   {r.priority && r.priority !== "normal" && (
                                     <span className="text-[10px] bg-red-500 text-white px-1 rounded">{r.priority.toUpperCase()}</span>
                                   )}

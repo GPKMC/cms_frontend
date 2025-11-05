@@ -46,7 +46,7 @@ type MonthPayload = {
 
 export default function TeacherAttendanceMonthPage() {
   const params = useParams();
-  const courseInstanceId = String(params.id);
+  const courseInstanceId = String(params?.id);
 
   const now = new Date();
   const [year, setYear] = useState<number>(now.getFullYear());
