@@ -32,7 +32,6 @@ import {
 import CourseMaterialEditForm from "./editMaterialForm";
 import AssignmentEditForm from "./editAssignmentForm";
 import TopicModal from "./editTopicForm";
-import QuestionEditForm from "./question/editQuestionForm";
 import FeedItemFooter from "./footerbutton";
 import QuizEditForm from "./quiz/editQuiz";
 import EditGroupAssignmentForm from "./groupAssignment/editGroupAssignmentForm";
