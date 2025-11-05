@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation";
 import AnnouncementReplies from "./new/reply";
 
 /* ========= API CONFIG ========= */
-const BACKEND = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 const EP = {
   list: `${BACKEND}/announcement`,
   read: (id: string) => `${BACKEND}/announcement/${id}/notification-details?adminView=true`,

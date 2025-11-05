@@ -74,12 +74,21 @@ closeAt?: string | null;          // NEW
 
 
 // ----------- Helper functions -----------
-function getFileUrl(url: string) {
-    if (!url) return "";
-    if (url.startsWith("http")) return url;
-    // Use your backend API port, update for production!
-    return `http://localhost:5000${url.startsWith("/") ? url : "/" + url}`;
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+
+export function getFileUrl(url: string) {
+  if (!url) return "";
+
+  // If it's already a full URL, just return it
+  if (url.startsWith("http")) return url;
+
+  // Normalize slashes so we don't get // or miss /
+  const base = BACKEND_URL.endsWith("/") ? BACKEND_URL.slice(0, -1) : BACKEND_URL;
+  const path = url.startsWith("/") ? url : `/${url}`;
+
+  return `${base}${path}`;
 }
+
 const isOfficeDoc = (filename: string) => /\.(docx?|pptx?|xlsx?)$/i.test(filename);
 const getYouTubeId = (url: string) => {
     const m = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
