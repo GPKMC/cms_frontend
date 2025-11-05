@@ -1,10 +1,21 @@
 "use client";
+
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
-  BookOpen, Calendar, Clock, ChevronLeft, AlertCircle,
-  CheckCircle, Play, Pause, FileText, Award, Users,
-  TrendingUp, MapPin
+  BookOpen,
+  Calendar,
+  Clock,
+  ChevronLeft,
+  AlertCircle,
+  CheckCircle,
+  Play,
+  Pause,
+  FileText,
+  Award,
+  Users,
+  TrendingUp,
+  MapPin,
 } from "lucide-react";
 import axios from "axios";
 
@@ -14,12 +25,14 @@ type Course = {
   name: string;
   credits?: number;
   type?: string;
-  assignedTeacher?: {
-    _id: string;
-    fullName?: string;
-    username?: string;
-    email?: string;
-  } | null;
+  assignedTeacher?:
+    | {
+        _id: string;
+        fullName?: string;
+        username?: string;
+        email?: string;
+      }
+    | null;
   courseInstanceId?: string;
 };
 
@@ -36,11 +49,18 @@ type BatchPeriod = {
 };
 
 export default function MyClassSemesterDetail() {
-  const params = useParams();
+  const rawParams = useParams() || ({} as Record<string, string | string[]>);
   const router = useRouter();
-  const slug = params.slug as string[];
-  const type = slug?.[0]; // "semester" or "year"
-  const semesterOrYearId = slug?.[1];
+
+  const slugParam = (rawParams as { slug?: string | string[] }).slug;
+  const slug: string[] = Array.isArray(slugParam)
+    ? slugParam
+    : slugParam
+    ? [slugParam]
+    : [];
+
+  const type = slug[0]; // "semester" or "year"
+  const semesterOrYearId = slug[1];
 
   const [batchPeriod, setBatchPeriod] = useState<BatchPeriod | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,9 +78,12 @@ export default function MyClassSemesterDetail() {
     const baseurl = process.env.NEXT_PUBLIC_BACKEND_URL;
 
     axios
-      .get(`${baseurl}/student/batch-period/by-semester-or-year/${semesterOrYearId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      .get(
+        `${baseurl}/student/batch-period/by-semester-or-year/${semesterOrYearId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      )
       .then((res) => {
         setBatchPeriod(res.data.batchPeriod);
         setLoading(false);
@@ -74,19 +97,6 @@ export default function MyClassSemesterDetail() {
         setLoading(false);
       });
   }, [semesterOrYearId]);
-// useEffect(() => {
-//   if (batchPeriod) {
-//     console.log("[COURSES IN BATCH PERIOD]", batchPeriod.semesterOrYear.courses);
-//     batchPeriod.semesterOrYear.courses.forEach((course) => {
-//       console.log(
-//         `[Course: ${course.name}] assignedTeacher:`,
-//         course.assignedTeacher,
-//         "courseInstanceId:",
-//         course.courseInstanceId
-//       );
-//     });
-//   }
-// }, [batchPeriod]);
 
   const getStatusConfig = (status: string) => {
     switch (status?.toLowerCase()) {
@@ -131,7 +141,9 @@ export default function MyClassSemesterDetail() {
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-            <p className="text-gray-600 text-lg">Loading batch period details...</p>
+            <p className="text-gray-600 text-lg">
+              Loading batch period details...
+            </p>
           </div>
         </div>
       </div>
@@ -144,7 +156,9 @@ export default function MyClassSemesterDetail() {
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-800 mb-2">Error Loading Data</h3>
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">
+              Error Loading Data
+            </h3>
             <p className="text-red-600 text-lg">{error}</p>
             <button
               onClick={() => window.location.reload()}
@@ -164,15 +178,19 @@ export default function MyClassSemesterDetail() {
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <div className="text-6xl mb-4">📚</div>
-            <h3 className="text-xl font-semibold text-gray-600 mb-2">No Data Found</h3>
-            <p className="text-gray-500">No data found for this {type}.</p>
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">
+              No Data Found
+            </h3>
+            <p className="text-gray-500">
+              No data found for this {type || "period"}.
+            </p>
           </div>
         </div>
       </div>
     );
   }
 
-  // Get unique assigned teacher IDs (not null), so instructor count is real:
+  // Unique instructors
   const uniqueTeacherIds = [
     ...new Set(
       batchPeriod.semesterOrYear.courses
@@ -187,20 +205,25 @@ export default function MyClassSemesterDetail() {
     (sum, course) => sum + (course.credits || 0),
     0
   );
+
   const courseTypes = [
-  ...new Set(
-    batchPeriod.semesterOrYear.courses
-      .map((course) =>
-        course.type === "compulsory" || course.type === "elective"
-          ? course.type
-          : undefined
-      )
-      .filter(Boolean)
-  ),
-];
+    ...new Set(
+      batchPeriod.semesterOrYear.courses
+        .map((course) =>
+          course.type === "compulsory" || course.type === "elective"
+            ? course.type
+            : undefined
+        )
+        .filter(Boolean)
+    ),
+  ] as Array<"compulsory" | "elective">;
 
+  const prettyType: Record<"compulsory" | "elective", string> = {
+    compulsory: "Compulsory",
+    elective: "Elective",
+  };
 
-  // Calculate duration
+  // Duration + progress
   const startDate = new Date(batchPeriod.startDate);
   const endDate = new Date(batchPeriod.endDate);
   const currentDate = new Date();
@@ -209,16 +232,16 @@ export default function MyClassSemesterDetail() {
   );
   const daysCompleted = Math.max(
     0,
-    Math.ceil((currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+    Math.ceil(
+      (currentDate.getTime() - startDate.getTime()) /
+        (1000 * 60 * 60 * 24)
+    )
   );
   const progressPercentage = Math.min(
     100,
     Math.max(0, (daysCompleted / totalDuration) * 100)
   );
-const prettyType = {
-  compulsory: "Compulsory",
-  elective: "Elective"
-};
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -240,13 +263,20 @@ const prettyType = {
               </div>
               <div>
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                  {type === "semester" ? "Semester" : "Year"}: {batchPeriod.semesterOrYear.name}
+                  {type === "semester" ? "Semester" : "Year"}:{" "}
+                  {batchPeriod.semesterOrYear.name}
                 </h1>
-                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r ${statusConfig.bgColor} ${statusConfig.borderColor} border`}>
-                  <div className={`text-white bg-gradient-to-r ${statusConfig.color} p-1 rounded-full`}>
+                <div
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r ${statusConfig.bgColor} ${statusConfig.borderColor} border`}
+                >
+                  <div
+                    className={`text-white bg-gradient-to-r ${statusConfig.color} p-1 rounded-full`}
+                  >
                     {statusConfig.icon}
                   </div>
-                  <span className={`font-semibold capitalize ${statusConfig.textColor}`}>
+                  <span
+                    className={`font-semibold capitalize ${statusConfig.textColor}`}
+                  >
                     {batchPeriod.status}
                   </span>
                 </div>
@@ -257,14 +287,18 @@ const prettyType = {
           {/* Progress Bar */}
           <div className="mb-6">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-700">Period Progress</span>
-              <span className="text-sm font-medium text-indigo-600">{Math.round(progressPercentage)}%</span>
+              <span className="text-sm font-medium text-gray-700">
+                Period Progress
+              </span>
+              <span className="text-sm font-medium text-indigo-600">
+                {Math.round(progressPercentage)}%
+              </span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-3">
               <div
                 className="bg-gradient-to-r from-indigo-500 to-purple-600 h-3 rounded-full transition-all duration-1000 ease-out"
                 style={{ width: `${progressPercentage}%` }}
-              ></div>
+              />
             </div>
             <div className="flex justify-between text-xs text-gray-500 mt-1">
               <span>{startDate.toLocaleDateString()}</span>
@@ -278,8 +312,12 @@ const prettyType = {
               <div className="flex items-center gap-3">
                 <BookOpen className="h-5 w-5 text-blue-600" />
                 <div>
-                  <p className="text-sm text-blue-600 font-medium">Total Courses</p>
-                  <p className="text-2xl font-bold text-blue-800">{batchPeriod.semesterOrYear.courses.length}</p>
+                  <p className="text-sm text-blue-600 font-medium">
+                    Total Courses
+                  </p>
+                  <p className="text-2xl font-bold text-blue-800">
+                    {batchPeriod.semesterOrYear.courses.length}
+                  </p>
                 </div>
               </div>
             </div>
@@ -288,8 +326,12 @@ const prettyType = {
               <div className="flex items-center gap-3">
                 <Award className="h-5 w-5 text-green-600" />
                 <div>
-                  <p className="text-sm text-green-600 font-medium">Total Credits</p>
-                  <p className="text-2xl font-bold text-green-800">{totalCredits}</p>
+                  <p className="text-sm text-green-600 font-medium">
+                    Total Credits
+                  </p>
+                  <p className="text-2xl font-bold text-green-800">
+                    {totalCredits}
+                  </p>
                 </div>
               </div>
             </div>
@@ -298,8 +340,12 @@ const prettyType = {
               <div className="flex items-center gap-3">
                 <Users className="h-5 w-5 text-purple-600" />
                 <div>
-                  <p className="text-sm text-purple-600 font-medium">Instructors</p>
-                  <p className="text-2xl font-bold text-purple-800">{instructorCount}</p>
+                  <p className="text-sm text-purple-600 font-medium">
+                    Instructors
+                  </p>
+                  <p className="text-2xl font-bold text-purple-800">
+                    {instructorCount}
+                  </p>
                 </div>
               </div>
             </div>
@@ -308,8 +354,12 @@ const prettyType = {
               <div className="flex items-center gap-3">
                 <TrendingUp className="h-5 w-5 text-orange-600" />
                 <div>
-                  <p className="text-sm text-orange-600 font-medium">Duration</p>
-                  <p className="text-2xl font-bold text-orange-800">{totalDuration}d</p>
+                  <p className="text-sm text-orange-600 font-medium">
+                    Duration
+                  </p>
+                  <p className="text-2xl font-bold text-orange-800">
+                    {totalDuration}d
+                  </p>
                 </div>
               </div>
             </div>
@@ -320,7 +370,9 @@ const prettyType = {
         <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 border border-gray-100">
           <div className="flex items-center gap-3 mb-6">
             <MapPin className="h-6 w-6 text-indigo-600" />
-            <h2 className="text-2xl font-bold text-gray-900">Period Timeline</h2>
+            <h2 className="text-2xl font-bold text-gray-900">
+              Period Timeline
+            </h2>
           </div>
 
           <div className="grid md:grid-cols-2 gap-6">
@@ -332,11 +384,11 @@ const prettyType = {
                 <h3 className="font-semibold text-green-800">Start Date</h3>
               </div>
               <p className="text-2xl font-bold text-green-900">
-                {startDate.toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
+                {startDate.toLocaleDateString("en-US", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
                 })}
               </p>
             </div>
@@ -349,11 +401,11 @@ const prettyType = {
                 <h3 className="font-semibold text-blue-800">End Date</h3>
               </div>
               <p className="text-2xl font-bold text-blue-900">
-                {endDate.toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
+                {endDate.toLocaleDateString("en-US", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
                 })}
               </p>
             </div>
@@ -370,20 +422,25 @@ const prettyType = {
           {batchPeriod.semesterOrYear.courses.length === 0 ? (
             <div className="text-center py-12">
               <div className="text-6xl mb-4">📚</div>
-              <h3 className="text-xl font-semibold text-gray-600 mb-2">No Courses Available</h3>
-              <p className="text-gray-500">No courses are assigned to this {type}.</p>
+              <h3 className="text-xl font-semibold text-gray-600 mb-2">
+                No Courses Available
+              </h3>
+              <p className="text-gray-500">
+                No courses are assigned to this {type || "period"}.
+              </p>
             </div>
           ) : (
             <div className="grid gap-6">
               {batchPeriod.semesterOrYear.courses.map((course) => {
-                const typeColors = {
-                  'Core': 'from-blue-500 to-blue-600',
-                  'Mathematics': 'from-green-500 to-green-600',
-                  'General': 'from-purple-500 to-purple-600',
-                  'Elective': 'from-orange-500 to-orange-600'
+                const typeColorsMap: Record<string, string> = {
+                  Core: "from-blue-500 to-blue-600",
+                  Mathematics: "from-green-500 to-green-600",
+                  General: "from-purple-500 to-purple-600",
+                  Elective: "from-orange-500 to-orange-600",
                 };
-                const defaultColor = 'from-gray-500 to-gray-600';
-                const gradientColor = typeColors[course.type as keyof typeof typeColors] || defaultColor;
+                const defaultColor = "from-gray-500 to-gray-600";
+                const gradientColor =
+                  typeColorsMap[course.type || ""] || defaultColor;
 
                 return (
                   <div
@@ -392,11 +449,17 @@ const prettyType = {
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-4 flex-1">
-                        <div className={`bg-gradient-to-r ${gradientColor} text-white rounded-lg p-3 min-w-0`}>
-                          <span className="font-bold text-sm whitespace-nowrap">{course.code}</span>
+                        <div
+                          className={`bg-gradient-to-r ${gradientColor} text-white rounded-lg p-3 min-w-0`}
+                        >
+                          <span className="font-bold text-sm whitespace-nowrap">
+                            {course.code}
+                          </span>
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h3 className="text-xl font-bold text-gray-900 mb-2">{course.name}</h3>
+                          <h3 className="text-xl font-bold text-gray-900 mb-2">
+                            {course.name}
+                          </h3>
                           <div className="flex flex-wrap gap-4 text-sm text-gray-600">
                             {course.assignedTeacher && (
                               <div className="flex items-center gap-1">
@@ -409,10 +472,13 @@ const prettyType = {
                                 </span>
                               </div>
                             )}
-                            {course.credits && (
+                            {course.credits != null && (
                               <div className="flex items-center gap-1">
                                 <Award className="h-4 w-4" />
-                                <span>{course.credits} Credit{course.credits !== 1 ? 's' : ''}</span>
+                                <span>
+                                  {course.credits} Credit
+                                  {course.credits !== 1 ? "s" : ""}
+                                </span>
                               </div>
                             )}
                             {course.type && (
@@ -427,7 +493,9 @@ const prettyType = {
                       <button
                         onClick={() => {
                           if (course.courseInstanceId) {
-                            router.push(`/student/dashboard/class/course-instance/${course.courseInstanceId}`);
+                            router.push(
+                              `/student/dashboard/class/course-instance/${course.courseInstanceId}`
+                            );
                           } else {
                             alert("Course instance not found for this course.");
                           }
@@ -448,19 +516,25 @@ const prettyType = {
         <div className="mt-8 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl shadow-xl p-8 text-white">
           <div className="text-center">
             <Calendar className="h-12 w-12 mx-auto mb-4 text-yellow-300" />
-            <h3 className="text-2xl font-bold mb-2">{batchPeriod.semesterOrYear.name} Overview</h3>
+            <h3 className="text-2xl font-bold mb-2">
+              {batchPeriod.semesterOrYear.name} Overview
+            </h3>
             <p className="text-indigo-100 text-lg mb-4">
-              {batchPeriod.semesterOrYear.courses.length} courses • {totalCredits} credits • {instructorCount} instructors
+              {batchPeriod.semesterOrYear.courses.length} courses •{" "}
+              {totalCredits} credits • {instructorCount} instructors
             </p>
-   <div className="flex justify-center gap-4 flex-wrap">
-  {courseTypes.map((type) => (
-    <div key={type ?? "unknown"} className="bg-white bg-opacity-20 rounded-full px-4 py-2">
-      <span className="font-medium">
-        {type ? prettyType[type] : "Unknown"}
-      </span>
-    </div>
-  ))}
-</div>
+            <div className="flex justify-center gap-4 flex-wrap">
+              {courseTypes.map((t) => (
+                <div
+                  key={t}
+                  className="bg-white bg-opacity-20 rounded-full px-4 py-2"
+                >
+                  <span className="font-medium">
+                    {prettyType[t] ?? t ?? "Unknown"}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

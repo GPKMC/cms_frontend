@@ -13,7 +13,7 @@ type Props = {
 export default function FeedItemFooter({ type, id, isExpanded }: Props) {
   const router = useRouter();
  const params = useParams();
-  const classid = params.id as string;
+  const classid = params?.id as string;
   const baseBtn =
     "inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-semibold";
   const ghost =

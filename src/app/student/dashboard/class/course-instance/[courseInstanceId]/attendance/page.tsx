@@ -51,6 +51,10 @@ export default function StudentAttendanceQR() {
   const tickRef = useRef<number | null>(null);
   const detectorRef = useRef<any | null>(null);
 
+  // Fallback: jsQR + canvas
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const jsqrRef = useRef<any | null>(null);
+
   const backendBase = (process.env.NEXT_PUBLIC_BACKEND_URL || '').replace(/\/$/, '');
 
   const getAuthToken = () =>
@@ -60,7 +64,6 @@ export default function StudentAttendanceQR() {
 
   /* ------------------------------------------------------------------ */
   /*                  Fetch course meta (name/code/batch)                */
-  /*  Your router: GET /courseInstance/:id -> { instance: { course... } } */
   /* ------------------------------------------------------------------ */
   useEffect(() => {
     const token = getAuthToken();
@@ -72,8 +75,8 @@ export default function StudentAttendanceQR() {
     };
 
     const urls = [
-      `${backendBase}/course-api/courseInstance/${courseInstanceId}`,        // primary (matches your router)
-      `${backendBase}/course-api/courseInstance/${courseInstanceId}`,    // optional mount
+      `${backendBase}/course-api/courseInstance/${courseInstanceId}`, // primary
+      `${backendBase}/course-api/courseInstance/${courseInstanceId}`, // optional mount (same here)
     ];
 
     let cancelled = false;
@@ -91,9 +94,7 @@ export default function StudentAttendanceQR() {
           const batch   = inst?.batch   || {};
           const teacher = inst?.teacher || {};
 
-          // Debug once in the console so you can verify the payload
           if (process.env.NODE_ENV !== 'production') {
-            // eslint-disable-next-line no-console
             console.log('Course meta response', { url, course, batch, teacher });
           }
 
@@ -107,7 +108,7 @@ export default function StudentAttendanceQR() {
           if (!cancelled && (nextMeta.courseName || nextMeta.courseCode)) {
             setMeta(nextMeta);
           }
-          break; // stop after a good response
+          break;
         } catch {
           // try next url
         }
@@ -277,47 +278,116 @@ export default function StudentAttendanceQR() {
   );
 
   const startScanning = useCallback(async () => {
-    if (!('BarcodeDetector' in window)) {
-      setStatus('error');
-      setMsg('QR scanning not supported in this browser. Use Chrome/Edge/Brave or iOS Safari 16.4+.');
-      return;
-    }
-    const token = getAuthToken();
-    if (!token) {
-      setStatus('error');
-      setMsg('Auth token missing. Please sign in again.');
-      return;
-    }
-    setStatus('scanning');
-    setMsg('Point your camera at the QR code…');
-
-    await startStream(); // prefer back camera
-
     try {
-      detectorRef.current =
-        detectorRef.current || new window.BarcodeDetector({ formats: ['qr_code'] });
-    } catch {
-      setStatus('error');
-      setMsg('Could not initialize QR detector on this device.');
-      stopScanning();
-      return;
-    }
-
-    // Scan loop (~4x/sec)
-    tickRef.current = window.setInterval(async () => {
-      if (!videoRef.current || !detectorRef.current) return;
-      try {
-        const codes = await detectorRef.current.detect(videoRef.current);
-        if (codes && codes.length > 0) {
-          const raw = (codes[0].rawValue || '').toString().trim();
-          stopStream();
-          setStatus('submitting');
-          await submitToken(raw);
-        }
-      } catch {
-        // ignore transient detect errors
+      // 1) Basic camera support
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setStatus('error');
+        setMsg('Camera access is not available in this browser/device.');
+        return;
       }
-    }, 250);
+
+      const token = getAuthToken();
+      if (!token) {
+        setStatus('error');
+        setMsg('Auth token missing. Please sign in again.');
+        return;
+      }
+
+      setStatus('scanning');
+      setMsg('Point your camera at the QR code…');
+
+      await startStream(); // prefer back camera
+
+      // 2) Prefer native BarcodeDetector if available
+      if ('BarcodeDetector' in window) {
+        try {
+          detectorRef.current =
+            detectorRef.current || new window.BarcodeDetector({ formats: ['qr_code'] });
+        } catch (e) {
+          console.warn('BarcodeDetector init failed, will try jsQR fallback.', e);
+          detectorRef.current = null;
+        }
+      }
+
+      // 3) Fallback: jsQR if no BarcodeDetector
+      if (!detectorRef.current) {
+        try {
+          if (!jsqrRef.current) {
+            const mod = await import('jsqr');
+            jsqrRef.current = (mod as any).default || mod;
+          }
+        } catch (e) {
+          console.error('jsQR dynamic import failed', e);
+          setStatus('error');
+          setMsg('Could not initialize QR scanner on this device.');
+          stopScanning();
+          return;
+        }
+      }
+
+      if (!detectorRef.current && !jsqrRef.current) {
+        setStatus('error');
+        setMsg('QR scanning is not supported on this browser/device.');
+        stopScanning();
+        return;
+      }
+
+      // 4) Scan loop (~3–4x/sec)
+      tickRef.current = window.setInterval(async () => {
+        const video = videoRef.current;
+        if (!video || (!detectorRef.current && !jsqrRef.current)) return;
+
+        try {
+          // Path A: native BarcodeDetector
+          if (detectorRef.current) {
+            const codes = await detectorRef.current.detect(video);
+            if (codes && codes.length > 0) {
+              const raw = (codes[0].rawValue || '').toString().trim();
+              stopScanning();
+              setStatus('submitting');
+              await submitToken(raw);
+            }
+          }
+          // Path B: jsQR fallback
+          else if (jsqrRef.current && canvasRef.current) {
+            if (video.readyState < 2) return; // not enough data
+
+            const canvas = canvasRef.current;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            const w = video.videoWidth || 640;
+            const h = video.videoHeight || 480;
+            if (!w || !h) return;
+
+            canvas.width = w;
+            canvas.height = h;
+            ctx.drawImage(video, 0, 0, w, h);
+
+            const imageData = ctx.getImageData(0, 0, w, h);
+            const result = jsqrRef.current(
+              imageData.data,
+              imageData.width,
+              imageData.height
+            );
+
+            if (result && result.data) {
+              const raw = String(result.data).trim();
+              stopScanning();
+              setStatus('submitting');
+              await submitToken(raw);
+            }
+          }
+        } catch {
+          // ignore transient errors in loop
+        }
+      }, 300);
+    } catch (err) {
+      console.error('startScanning error', err);
+      setStatus('error');
+      setMsg('Failed to start scanner. Check camera permissions and try again.');
+      stopScanning();
+    }
   }, [startStream, stopScanning, submitToken]);
 
   return (
@@ -406,6 +476,9 @@ export default function StudentAttendanceQR() {
             muted
             playsInline
           />
+          {/* Hidden canvas for jsQR fallback */}
+          <canvas ref={canvasRef} className="hidden" />
+
           {/* Overlay frame */}
           {status === 'scanning' && (
             <>

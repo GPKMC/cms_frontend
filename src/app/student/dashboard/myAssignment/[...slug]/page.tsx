@@ -10,7 +10,7 @@ import {
 export default function MyClassSemesterDetail() {
   const params = useParams();
   const router = useRouter();
-  const slug = params.slug as string[];
+  const slug = params?.slug as string[];
   const semesterOrYearId = slug?.[1];
 
   const [batchPeriod, setBatchPeriod] = useState<any>(null);

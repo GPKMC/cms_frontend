@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { SidebarItems } from "../types/type.sidebar";
@@ -16,22 +16,22 @@ import {
   FaSignOutAlt,
 } from "react-icons/fa";
 import { BsFillPeopleFill } from "react-icons/bs";
-import { MdAssignment } from "react-icons/md";
-import { Home, CalendarRange } from "lucide-react"; // ✅ use CalendarRange (not Calendar1)
+import { Home, CalendarRange } from "lucide-react";
 
-/* ------------------------------------------------------------------ */
-/* LeavePendingIcon: calendar icon with red badge (pending leave count) */
-/* ------------------------------------------------------------------ */
+/* ------------------ helpers for leave icon ------------------ */
 function getBackendBase(): string {
   const envBase =
     typeof process !== "undefined" && (process as any).env
       ? (process as any).env.NEXT_PUBLIC_BACKEND_URL
       : undefined;
   // ts-expect-error optional window injection
-  const winBase: string | undefined = typeof window !== "undefined" ? (window as any).__BACKEND_URL__ : undefined;
+  const winBase: string | undefined =
+    typeof window !== "undefined" ? (window as any).__BACKEND_URL__ : undefined;
   const metaBase: string | null =
     typeof document !== "undefined"
-      ? document.querySelector('meta[name="backend-url"]')?.getAttribute("content") || null
+      ? document
+          .querySelector('meta[name="backend-url"]')
+          ?.getAttribute("content") || null
       : null;
   const chosen = (envBase || winBase || metaBase || "").toString().trim();
   return chosen.replace(/\/$/, "");
@@ -40,7 +40,15 @@ function getApiBase(base: string) {
   return base ? `${base}/leave` : "/leave";
 }
 function getAuthToken(): string | null {
-  const keys = ["token", "authToken", "admin_token", "teacher_token", "token_admin", "CMS_token", "token_student"];
+  const keys = [
+    "token",
+    "authToken",
+    "admin_token",
+    "teacher_token",
+    "token_admin",
+    "CMS_token",
+    "token_student",
+  ];
   for (const k of keys) {
     const v = typeof window !== "undefined" ? localStorage.getItem(k) : null;
     if (v) return v;
@@ -56,7 +64,7 @@ function authHeaders(): Headers {
 
 function LeavePendingIcon({
   className = "h-5 w-5",
-  role = "all", // "all" | "teacher" | "student"
+  role = "all",
   pollMs = 60000,
   max = 99,
 }: {
@@ -65,18 +73,25 @@ function LeavePendingIcon({
   pollMs?: number;
   max?: number;
 }) {
-  const API_BASE = useMemo(() => getApiBase(getBackendBase()), []);
-  const headers = useMemo(() => authHeaders(), []);
-  const [count, setCount] = useState<number>(0);
+  const API_BASE = React.useMemo(
+    () => getApiBase(getBackendBase()),
+    []
+  );
+  const headers = React.useMemo(() => authHeaders(), []);
+  const [count, setCount] = React.useState<number>(0);
 
   async function fetchCount() {
     try {
       const qs = role === "all" ? "" : `?role=${role}`;
-      // Preferred lightweight endpoint:
-      let res = await fetch(`${API_BASE}/admin/pending/count${qs}`, { headers, cache: "no-store" });
+      let res = await fetch(`${API_BASE}/admin/pending/count${qs}`, {
+        headers,
+        cache: "no-store",
+      });
       if (!res.ok && res.status === 404) {
-        // Fallback to list length if /count not implemented yet
-        res = await fetch(`${API_BASE}/admin/pending${qs}`, { headers, cache: "no-store" });
+        res = await fetch(`${API_BASE}/admin/pending${qs}`, {
+          headers,
+          cache: "no-store",
+        });
         if (res.ok) {
           const json = await res.json();
           setCount(Array.isArray(json?.items) ? json.items.length : 0);
@@ -88,15 +103,14 @@ function LeavePendingIcon({
         setCount(Number(json?.count) || 0);
       }
     } catch {
-      // keep last value
+      // ignore
     }
   }
 
-  useEffect(() => {
+  React.useEffect(() => {
     fetchCount();
     const id = setInterval(fetchCount, pollMs);
 
-    // live refresh when approve/reject happens in admin page
     const onChanged = () => fetchCount();
     if (typeof window !== "undefined") {
       window.addEventListener("leave:pending-changed", onChanged);
@@ -117,12 +131,12 @@ function LeavePendingIcon({
       <CalendarRange className={className} />
       {count > 0 && (
         <span
-          className="
-            absolute -top-1.5 -right-1.5 min-w-[18px] px-1.5 py-[2px]
-            rounded-full bg-rose-600 text-white text-[10px] leading-none
-            font-semibold text-center shadow-sm
-          "
-          aria-label={`${count} pending leave request${count === 1 ? "" : "s"}`}
+          className="absolute -top-1.5 -right-1.5 min-w-[18px] px-1.5 py-[2px]
+                     rounded-full bg-rose-600 text-white text-[10px] leading-none
+                     font-semibold text-center shadow-sm"
+          aria-label={`${count} pending leave request${
+            count === 1 ? "" : "s"
+          }`}
         >
           {label}
         </span>
@@ -131,9 +145,7 @@ function LeavePendingIcon({
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Sidebar config — swap Leave Request icon to <LeavePendingIcon />    */
-/* ------------------------------------------------------------------ */
+/* ------------------ sidebar config ------------------ */
 const sidebarItems: SidebarItems = [
   { id: 1, label: "Home", icon: <Home />, page: "/admin" },
   { id: 2, label: "Program Management", icon: <FaGraduationCap />, page: "/admin/faculty" },
@@ -143,25 +155,22 @@ const sidebarItems: SidebarItems = [
   { id: 6, label: "Subject Management", icon: <FaClipboardList />, page: "/admin/subjects" },
   { id: 7, label: "Semester Management", icon: <FaChalkboardTeacher />, page: "/admin/semOryear" },
   { id: 8, label: "Schedule Management", icon: <FaCalendarAlt />, page: "/admin/schedule" },
-
-  // 🔔 shows pending count on the icon
   { id: 9, label: "Leave Request", icon: <LeavePendingIcon className="h-5 w-5" />, page: "/admin/leave" },
-
-  { id: 10, label: "Assignment Monitoring", icon: <MdAssignment />, page: "/admin/assignments" },
   { id: 11, label: "Announcements", icon: <FaBullhorn />, page: "/admin/announcement" },
   { id: 12, label: "Exams & Reports", icon: <FaFileAlt />, page: "/admin/result" },
-  { id: 13, label: "Reference", icon: <FaFileAlt />, page: "/admin/reference" },
 ];
 
-/* ------------------------------------------------------------------ */
-/* Sidebar                                                             */
-/* ------------------------------------------------------------------ */
+/* ------------------ Sidebar component ------------------ */
 export default function Sidebar() {
-  const pathname = usePathname();
+  const rawPathname = usePathname();
+  // ✅ ensure we always have a string, so TS stops complaining
+  const pathname = rawPathname ?? "";
   const router = useRouter();
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("token");
+    }
     router.push("/admin_login");
   };
 
@@ -170,16 +179,19 @@ export default function Sidebar() {
       <div className="h-full overflow-y-auto">
         <ul className="space-y-3 px-2 py-4">
           {sidebarItems.map((item) => {
-            const isActive = item.page === "/admin"
-              ? pathname === "/admin"
-              : pathname.startsWith(item.page || "");
+            const isActive =
+              item.page === "/admin"
+                ? pathname === "/admin"
+                : pathname.startsWith(item.page || "");
 
             return (
               <li key={item.id}>
                 <Link
                   href={item.page || ""}
                   className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${
-                    isActive ? "bg-[#2E3094] text-[#F5F5F5]" : "hover:bg-[#e0ec83]"
+                    isActive
+                      ? "bg-[#2E3094] text-[#F5F5F5]"
+                      : "hover:bg-[#e0ec83]"
                   }`}
                 >
                   <div className="text-xl">{item.icon}</div>

@@ -38,7 +38,7 @@ export default function SidebarTeacher() {
         {sidebarTeacherItems.map((item) => {
           const isActive = item.page === "/teacher/dashboard"
             ? pathname === "/teacher/dashboard"
-            : pathname.startsWith(item.page || "");
+            : pathname?.startsWith(item.page || "");
 
           return (
             <li key={item.id}>

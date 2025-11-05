@@ -582,7 +582,7 @@ function getDaysUntilDue(dueDate?: string) {
 
 export default function CourseTaskFeed() {
   const params = useParams();
-  const courseInstanceId = params.courseInstanceId as string;
+  const courseInstanceId = params?.courseInstanceId as string;
 
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [topics, setTopics] = useState<TopicMini[]>([]);
