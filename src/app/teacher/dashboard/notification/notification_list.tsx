@@ -139,7 +139,7 @@ const getShareUrl = (id: string) => {
   const base =
     (typeof window !== "undefined" ? window.location.origin : "") ||
     process.env.NEXT_PUBLIC_SHARE_BASE ||
-    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
     "";
   return `${base}/announcement/${id}`;
 };
