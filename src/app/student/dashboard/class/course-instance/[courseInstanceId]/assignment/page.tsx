@@ -503,24 +503,44 @@
 //         </div>
 //     );
 // }
-
 "use client";
 import React, { JSX, useEffect, useMemo, useState } from "react";
 import {
-  FileText, Users, Star, MessageCircle, Calendar, User,
-  ChevronDown, Filter, Search, Clock, Target, Bookmark,
-  ArrowRight, TrendingUp, BookOpen, Award, CheckCircle2,
-  AlertCircle, Play, Download
+  FileText,
+  Users,
+  Star,
+  MessageCircle,
+  Calendar,
+  User,
+  ChevronDown,
+  Filter,
+  Search,
+  Clock,
+  Target,
+  Bookmark,
+  ArrowRight,
+  TrendingUp,
+  BookOpen,
+  Award,
+  CheckCircle2,
+  AlertCircle,
+  Play,
+  Download,
 } from "lucide-react";
-import { useParams } from "next/navigation";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useUser } from "@/app/student/dashboard/studentContext";
 
-// Types
-type FeedType = "assignment" | "groupAssignment" | "quiz" | "question"; // (kept for typing)
+type FeedType = "assignment" | "groupAssignment" | "quiz" | "question";
 
-interface UserMini { _id: string; username: string; role?: string; }
-interface TopicMini { _id: string; title: string; }
+interface UserMini {
+  _id: string;
+  username: string;
+  role?: string;
+}
+interface TopicMini {
+  _id: string;
+  title: string;
+}
 interface FeedItem {
   _id: string;
   type: FeedType;
@@ -543,24 +563,56 @@ interface FeedItem {
 }
 
 const iconMap: Record<FeedType, { icon: JSX.Element; color: string; bg: string }> = {
-  assignment: { icon: <FileText className="w-5 h-5" />, color: "text-blue-600", bg: "bg-blue-100" },
-  groupAssignment: { icon: <Users className="w-5 h-5" />, color: "text-violet-600", bg: "bg-violet-100" }, // kept (not used)
-  quiz: { icon: <Star className="w-5 h-5" />, color: "text-yellow-600", bg: "bg-yellow-100" },
-  question: { icon: <MessageCircle className="w-5 h-5" />, color: "text-green-600", bg: "bg-green-100" }
+  assignment: {
+    icon: <FileText className="w-5 h-5" />,
+    color: "text-blue-600",
+    bg: "bg-blue-100",
+  },
+  groupAssignment: {
+    icon: <Users className="w-5 h-5" />,
+    color: "text-violet-600",
+    bg: "bg-violet-100",
+  },
+  quiz: {
+    icon: <Star className="w-5 h-5" />,
+    color: "text-yellow-600",
+    bg: "bg-yellow-100",
+  },
+  question: {
+    icon: <MessageCircle className="w-5 h-5" />,
+    color: "text-green-600",
+    bg: "bg-green-100",
+  },
 };
 
 const typeLabel: Record<FeedType, string> = {
   assignment: "Assignment",
-  groupAssignment: "Group Project", // kept (not used)
+  groupAssignment: "Group Project",
   quiz: "Quiz",
-  question: "Discussion"
+  question: "Discussion",
 };
 
 const statusConfig = {
-  upcoming: { color: "text-orange-600", bg: "bg-orange-100", icon: <Clock className="w-3 h-3" /> },
-  active: { color: "text-blue-600", bg: "bg-blue-100", icon: <Play className="w-3 h-3" /> },
-  completed: { color: "text-green-600", bg: "bg-green-100", icon: <CheckCircle2 className="w-3 h-3" /> },
-  overdue: { color: "text-red-600", bg: "bg-red-100", icon: <AlertCircle className="w-3 h-3" /> }
+  upcoming: {
+    color: "text-orange-600",
+    bg: "bg-orange-100",
+    icon: <Clock className="w-3 h-3" />,
+  },
+  active: {
+    color: "text-blue-600",
+    bg: "bg-blue-100",
+    icon: <Play className="w-3 h-3" />,
+  },
+  completed: {
+    color: "text-green-600",
+    bg: "bg-green-100",
+    icon: <CheckCircle2 className="w-3 h-3" />,
+  },
+  overdue: {
+    color: "text-red-600",
+    bg: "bg-red-100",
+    icon: <AlertCircle className="w-3 h-3" />,
+  },
 };
 
 function formatDate(date: string) {
@@ -568,7 +620,7 @@ function formatDate(date: string) {
     month: "short",
     day: "numeric",
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
   });
 }
 
@@ -591,24 +643,22 @@ export default function CourseTaskFeed() {
   const [showAll, setShowAll] = useState<Record<string, boolean>>({});
   const [typeFilter, setTypeFilter] = useState<Record<FeedType, boolean>>({
     assignment: true,
-    groupAssignment: false, // ⛔ GA disabled
+    groupAssignment: false, // hidden from UI but kept
     quiz: true,
-    question: true
+    question: true,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const { user } = useUser();
 
-  // 🔒 Hide GA toggle in UI but keep state/code
+  // show only non-groupAssignment in filter chips
   const visibleTypes = useMemo(
-    () => (Object.keys(typeFilter) as FeedType[]).filter(t => t !== "groupAssignment"),
+    () => (Object.keys(typeFilter) as FeedType[]).filter((t) => t !== "groupAssignment"),
     [typeFilter]
   );
-// Show all types again
-// const visibleTypes = Object.keys(typeFilter) as FeedType[];
 
-  // Fetch topics for filter
+  // topics
   useEffect(() => {
     if (!courseInstanceId) return;
     fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/topic-api/course/${courseInstanceId}`, {
@@ -617,15 +667,15 @@ export default function CourseTaskFeed() {
           "Bearer " +
           (localStorage.getItem("token_student") ||
             sessionStorage.getItem("token_student") ||
-            "")
-      }
+            ""),
+      },
     })
       .then((r) => (r.ok ? r.json() : Promise.reject("Failed to fetch topics")))
       .then((data) => setTopics(data.topics || data))
       .catch(() => setTopics([]));
   }, [courseInstanceId]);
 
-  // Fetch feed
+  // feed
   useEffect(() => {
     if (!courseInstanceId) return;
     setLoading(true);
@@ -641,42 +691,30 @@ export default function CourseTaskFeed() {
           (localStorage.getItem("token_student") ||
             sessionStorage.getItem("token_student") ||
             ""),
-      }
+      },
     })
       .then((r) => (r.ok ? r.json() : Promise.reject("Could not fetch feed")))
-      .then((data) => {
-        /* 🔕 Commented: GA debug logging
-        if (Array.isArray(data)) {
-          const groupAssignment = data.find((x: FeedItem) => x.type === "groupAssignment");
-          if (groupAssignment) {
-            console.log("Sample groupAssignment:", groupAssignment);
-            if (Array.isArray(groupAssignment.groups) && groupAssignment.groups.length > 0) {
-              console.log("Sample group in groupAssignment:", groupAssignment.groups[0]);
-            }
-          }
-        }
-        */
-        setFeed(data);
-      })
-      .catch((err) => setError(err.message || err))
+      .then((data) => setFeed(data))
+      .catch((err) => setError(err.message || String(err)))
       .finally(() => setLoading(false));
   }, [courseInstanceId, selectedTopic]);
 
-  // -------------------- FILTERING --------------------
-  // ⛔ Completely exclude group assignments for now
+  // FILTERING (group assignments completely hidden)
   let filteredFeed = feed.filter((item) => {
-    if (item.type === "groupAssignment") return false; // GA turned off
+    if (item.type === "groupAssignment") return false;
     return typeFilter[item.type];
   });
 
-  if (searchTerm) {
-    filteredFeed = filteredFeed.filter(item =>
-      item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.content?.toLowerCase().includes(searchTerm.toLowerCase())
+  if (searchTerm.trim()) {
+    const q = searchTerm.toLowerCase();
+    filteredFeed = filteredFeed.filter(
+      (item) =>
+        item.title.toLowerCase().includes(q) ||
+        item.content?.toLowerCase().includes(q)
     );
   }
 
-  // Group by topic
+  // group by topic
   const grouped: Record<string, FeedItem[]> = {};
   filteredFeed.forEach((item) => {
     const topicTitle = item.topic?.title || "Uncategorized";
@@ -684,21 +722,19 @@ export default function CourseTaskFeed() {
     grouped[topicTitle].push(item);
   });
 
-  // Stats (from all fetched feed, not just filtered)
+  // stats
   const stats = {
     total: feed.length,
-    assignments: feed.filter(f => f.type === 'assignment').length,
-    quizzes: feed.filter(f => f.type === 'quiz').length,
-    discussions: feed.filter(f => f.type === 'question').length,
-    active: feed.filter(f => f.status === 'active').length
+    assignments: feed.filter((f) => f.type === "assignment").length,
+    quizzes: feed.filter((f) => f.type === "quiz").length,
+    discussions: feed.filter((f) => f.type === "question").length,
+    active: feed.filter((f) => f.status === "active").length,
   };
 
   function getDetailUrl(item: FeedItem, courseInstanceId: string) {
     switch (item.type) {
       case "assignment":
         return `/student/dashboard/class/course-instance/${courseInstanceId}/assignment/${item._id}`;
-      // case "groupAssignment":
-      //   return `/student/dashboard/class/course-instance/${courseInstanceId}/group-assignments/${item._id}`; // 🔕 kept commented
       case "quiz":
         return `/student/dashboard/class/course-instance/${courseInstanceId}/quizzes/${item._id}`;
       case "question":
@@ -709,84 +745,99 @@ export default function CourseTaskFeed() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
-      <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="min-h-screen w-full overflow-x-hidden bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
+      <div className="w-full max-w-5xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 md:py-8">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-6 sm:mb-8">
           <div className="flex items-center gap-3 mb-2">
-            <div className="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl shadow-lg">
-              <TrendingUp className="w-6 h-6 text-white" />
+            <div className="p-2.5 sm:p-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+              <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Course Feed</h1>
-              <p className="text-gray-600">Stay updated with assignments, quizzes, and discussions</p>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">
+                Course Feed
+              </h1>
+              <p className="text-xs sm:text-sm text-gray-600">
+                Stay updated with assignments, quizzes, and discussions
+              </p>
             </div>
           </div>
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6">
-            <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+
+          {/* Stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 mt-4 sm:mt-6">
+            <div className="bg-white rounded-xl p-3 sm:p-4 border border-gray-100 shadow-sm">
               <div className="flex items-center gap-2">
                 <BookOpen className="w-4 h-4 text-gray-600" />
-                <span className="text-sm text-gray-600">Total</span>
+                <span className="text-xs sm:text-sm text-gray-600">Total</span>
               </div>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
+              <p className="text-lg sm:text-2xl font-bold text-gray-900 mt-1">
+                {stats.total}
+              </p>
             </div>
-            <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+            <div className="bg-white rounded-xl p-3 sm:p-4 border border-gray-100 shadow-sm">
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-blue-600" />
-                <span className="text-sm text-gray-600">Assignments</span>
+                <span className="text-xs sm:text-sm text-gray-600">Assignments</span>
               </div>
-              <p className="text-2xl font-bold text-blue-600 mt-1">{stats.assignments}</p>
+              <p className="text-lg sm:text-2xl font-bold text-blue-600 mt-1">
+                {stats.assignments}
+              </p>
             </div>
-            <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+            <div className="bg-white rounded-xl p-3 sm:p-4 border border-gray-100 shadow-sm">
               <div className="flex items-center gap-2">
                 <Star className="w-4 h-4 text-yellow-600" />
-                <span className="text-sm text-gray-600">Quizzes</span>
+                <span className="text-xs sm:text-sm text-gray-600">Quizzes</span>
               </div>
-              <p className="text-2xl font-bold text-yellow-600 mt-1">{stats.quizzes}</p>
+              <p className="text-lg sm:text-2xl font-bold text-yellow-600 mt-1">
+                {stats.quizzes}
+              </p>
             </div>
-            <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+            <div className="bg-white rounded-xl p-3 sm:p-4 border border-gray-100 shadow-sm">
               <div className="flex items-center gap-2">
                 <MessageCircle className="w-4 h-4 text-green-600" />
-                <span className="text-sm text-gray-600">Discussions</span>
+                <span className="text-xs sm:text-sm text-gray-600">Discussions</span>
               </div>
-              <p className="text-2xl font-bold text-green-600 mt-1">{stats.discussions}</p>
+              <p className="text-lg sm:text-2xl font-bold text-green-600 mt-1">
+                {stats.discussions}
+              </p>
             </div>
-            <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+            <div className="bg-white rounded-xl p-3 sm:p-4 border border-gray-100 shadow-sm">
               <div className="flex items-center gap-2">
                 <Target className="w-4 h-4 text-orange-600" />
-                <span className="text-sm text-gray-600">Active</span>
+                <span className="text-xs sm:text-sm text-gray-600">Active</span>
               </div>
-              <p className="text-2xl font-bold text-orange-600 mt-1">{stats.active}</p>
+              <p className="text-lg sm:text-2xl font-bold text-orange-600 mt-1">
+                {stats.active}
+              </p>
             </div>
           </div>
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-8">
-          <div className="flex flex-col lg:flex-row gap-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6 mb-6 sm:mb-8">
+          <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
             {/* Search */}
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <div className="relative flex-1 w-full max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 type="text"
                 placeholder="Search assignments, quizzes, discussions..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm sm:text-base focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
               />
             </div>
 
             {/* Topic Filter */}
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <div className="relative w-full lg:w-auto">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
               <select
                 value={selectedTopic}
                 onChange={(e) => setSelectedTopic(e.target.value)}
-                className="pl-10 pr-8 py-2.5 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none cursor-pointer min-w-[200px] transition-all duration-200"
+                className="w-full lg:w-56 pl-9 pr-8 py-2.5 border border-gray-200 rounded-xl bg-white text-sm sm:text-base focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none cursor-pointer transition-all duration-200"
               >
                 <option value="">All Topics</option>
-                {topics.map(topic => (
+                {topics.map((topic) => (
                   <option value={topic._id} key={topic._id}>
                     {topic.title}
                   </option>
@@ -796,31 +847,33 @@ export default function CourseTaskFeed() {
           </div>
 
           {/* Type Filters */}
-          <div className="mt-6 pt-6 border-t border-gray-100">
-            <div className="flex flex-wrap items-center gap-4">
-              <span className="text-sm font-medium text-gray-700">Content Type:</span>
-
-              {/* OLD (kept for easy restore)
-              {(Object.keys(typeFilter) as FeedType[]).map((type) => (...))}
-              */}
-
+          <div className="mt-5 pt-5 border-t border-gray-100">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+              <span className="text-xs sm:text-sm font-medium text-gray-700">
+                Content Type:
+              </span>
               {visibleTypes.map((type) => (
-                <label key={type} className="flex items-center gap-2 cursor-pointer select-none group">
+                <label
+                  key={type}
+                  className="flex items-center gap-2 cursor-pointer select-none group"
+                >
                   <input
                     type="checkbox"
                     checked={typeFilter[type]}
                     onChange={() =>
                       setTypeFilter((prev) => ({
                         ...prev,
-                        [type]: !prev[type]
+                        [type]: !prev[type],
                       }))
                     }
                     className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                   />
-                  <div className={`p-1.5 rounded-lg ${iconMap[type].bg} ${iconMap[type].color} group-hover:scale-105 transition-transform`}>
+                  <div
+                    className={`p-1.5 rounded-lg ${iconMap[type].bg} ${iconMap[type].color} group-hover:scale-105 transition-transform`}
+                  >
                     {iconMap[type].icon}
                   </div>
-                  <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors">
+                  <span className="text-xs sm:text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors">
                     {typeLabel[type]}
                   </span>
                 </label>
@@ -831,43 +884,50 @@ export default function CourseTaskFeed() {
 
         {/* Feed Content */}
         {loading ? (
-          <div className="text-center py-16 text-gray-500">Loading feed…</div>
+          <div className="text-center py-12 sm:py-16 text-gray-500 text-sm sm:text-base">
+            Loading feed…
+          </div>
         ) : error ? (
-          <div className="text-center py-16 text-red-500">{error}</div>
+          <div className="text-center py-12 sm:py-16 text-red-500 text-sm sm:text-base">
+            {error}
+          </div>
         ) : Object.keys(grouped).length === 0 ? (
-          <div className="text-center py-16">
-            <div className="max-w-md mx-auto">
-              <BookOpen className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">No content found</h3>
-              <p className="text-gray-500">
+          <div className="text-center py-12 sm:py-16">
+            <div className="max-w-md mx-auto px-4">
+              <BookOpen className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-4 text-gray-300" />
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">
+                No content found
+              </h3>
+              <p className="text-sm sm:text-base text-gray-500">
                 {searchTerm
                   ? `No results match your search for "${searchTerm}"`
-                  : "No content available with the selected filters"
-                }
+                  : "No content available with the selected filters"}
               </p>
             </div>
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-6 sm:space-y-8">
             {Object.entries(grouped).map(([topicTitle, items]) => (
               <div key={topicTitle} className="group">
                 {/* Topic Header */}
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-1 h-8 bg-gradient-to-b from-blue-500 to-indigo-600 rounded-full"></div>
+                <div className="flex items-center gap-3 mb-4 sm:mb-6">
+                  <div className="w-1 h-7 sm:h-8 bg-gradient-to-b from-blue-500 to-indigo-600 rounded-full" />
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-900">
-                      {topicTitle !== "Uncategorized" ? topicTitle : (
+                    <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
+                      {topicTitle !== "Uncategorized" ? (
+                        topicTitle
+                      ) : (
                         <span className="text-gray-500">Uncategorized</span>
                       )}
                     </h2>
-                    <p className="text-sm text-gray-500">
-                      {items.length} item{items.length !== 1 ? 's' : ''}
+                    <p className="text-xs sm:text-sm text-gray-500">
+                      {items.length} item{items.length !== 1 ? "s" : ""}
                     </p>
                   </div>
                 </div>
 
                 {/* Items */}
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {(showAll[topicTitle] ? items : items.slice(0, 4)).map((item) => {
                     const daysLeft = getDaysUntilDue(item.dueDate);
                     const typeConfig = iconMap[item.type];
@@ -877,36 +937,45 @@ export default function CourseTaskFeed() {
                         key={item._id}
                         className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group/card"
                       >
-                        <div className="p-6">
+                        <div className="p-4 sm:p-6">
                           {/* Header */}
-                          <div className="flex items-start justify-between mb-4">
-                            <div className="flex items-center gap-4 flex-1">
-                              <div className={`p-3 rounded-xl ${typeConfig.bg} ${typeConfig.color} group-hover/card:scale-105 transition-transform duration-200`}>
+                          <div className="flex items-start justify-between gap-3 mb-3 sm:mb-4">
+                            <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                              <div
+                                className={`p-2.5 sm:p-3 rounded-xl ${typeConfig.bg} ${typeConfig.color} group-hover/card:scale-105 transition-transform duration-200 flex-shrink-0`}
+                              >
                                 {typeConfig.icon}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-3 mb-2">
-                                  <h3 className="text-lg font-semibold text-gray-900 truncate">
+                                <div className="flex flex-wrap items-center gap-2 mb-1.5 sm:mb-2">
+                                  <h3 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900 truncate max-w-full">
                                     {item.title}
                                   </h3>
-                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${typeConfig.bg} ${typeConfig.color}`}>
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${typeConfig.bg} ${typeConfig.color}`}
+                                  >
                                     {typeLabel[item.type]}
                                   </span>
                                   {item.status && (
-                                    <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${statusConfig[item.status].bg} ${statusConfig[item.status].color}`}>
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium flex items-center gap-1 ${statusConfig[item.status].bg} ${statusConfig[item.status].color}`}
+                                    >
                                       {statusConfig[item.status].icon}
-                                      {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                                      {item.status.charAt(0).toUpperCase() +
+                                        item.status.slice(1)}
                                     </span>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-4 text-sm text-gray-500">
+                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] sm:text-xs text-gray-500">
                                   <div className="flex items-center gap-1">
                                     <Calendar className="w-3 h-3" />
                                     {formatDate(item.updatedAt || item.createdAt)}
                                   </div>
                                   <div className="flex items-center gap-1">
                                     <User className="w-3 h-3" />
-                                    {item.postedBy?.username}
+                                    <span className="truncate max-w-[120px] sm:max-w-none">
+                                      {item.postedBy?.username}
+                                    </span>
                                   </div>
                                   {item.points && (
                                     <div className="flex items-center gap-1">
@@ -917,23 +986,27 @@ export default function CourseTaskFeed() {
                                 </div>
                               </div>
                             </div>
-                            {daysLeft !== null && (
-                              <div className={`text-right ${daysLeft < 0 ? 'text-red-600' :
-                                daysLeft <= 3 ? 'text-orange-600' :
-                                  'text-gray-600'
-                                }`}>
-                                <div className="text-xs font-medium">
-                                  {daysLeft < 0
-                                    ? 'Overdue'
-                                    : daysLeft === 0
-                                      ? 'Due Today'
-                                      : daysLeft === 1
-                                        ? 'Due Tomorrow'
-                                        : `${daysLeft} days left`
-                                  }
-                                </div>
 
-                                <div className="text-xs text-gray-500">
+                            {daysLeft !== null && (
+                              <div
+                                className={`text-right text-[10px] sm:text-xs ${
+                                  daysLeft < 0
+                                    ? "text-red-600"
+                                    : daysLeft <= 3
+                                    ? "text-orange-600"
+                                    : "text-gray-600"
+                                }`}
+                              >
+                                <div className="font-medium">
+                                  {daysLeft < 0
+                                    ? "Overdue"
+                                    : daysLeft === 0
+                                    ? "Due Today"
+                                    : daysLeft === 1
+                                    ? "Due Tomorrow"
+                                    : `${daysLeft} days left`}
+                                </div>
+                                <div className="text-gray-500">
                                   Due {formatDate(item.dueDate!)}
                                 </div>
                               </div>
@@ -943,36 +1016,35 @@ export default function CourseTaskFeed() {
                           {/* Content */}
                           {item.content && (
                             <div
-                              className=" announcement-content text-gray-600 line-clamp-2 mb-4"
+                              className="announcement-content text-xs sm:text-sm text-gray-600 break-words line-clamp-2 mb-3 sm:mb-4"
                               dangerouslySetInnerHTML={{ __html: item.content }}
                             />
                           )}
 
-                          {/* Progress Bar */}
+                          {/* Progress */}
                           {item.progress !== undefined && (
-                            <div className="mb-4">
-                              <div className="flex items-center justify-between text-sm mb-1">
+                            <div className="mb-3 sm:mb-4">
+                              <div className="flex items-center justify-between text-xs sm:text-sm mb-1">
                                 <span className="text-gray-600">Progress</span>
-                                <span className="font-medium text-gray-900">{item.progress}%</span>
+                                <span className="font-medium text-gray-900">
+                                  {item.progress}%
+                                </span>
                               </div>
                               <div className="w-full bg-gray-200 rounded-full h-2">
                                 <div
                                   className="bg-gradient-to-r from-blue-500 to-indigo-600 h-2 rounded-full transition-all duration-300"
                                   style={{ width: `${item.progress}%` }}
-                                ></div>
+                                />
                               </div>
                             </div>
                           )}
 
                           {/* Footer */}
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4 text-sm text-gray-500">
-                              {item.type === 'quiz' && item.questions && (
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-gray-500">
+                              {item.type === "quiz" && item.questions && (
                                 <span>{item.questions.length} questions</span>
                               )}
-                              {/* {item.type === 'groupAssignment' && item.groups && (
-                                  <span>{item.groups.length} groups</span>
-                                )} */} {/* 🔕 GA count hidden */}
                               {item.documents && item.documents.length > 0 && (
                                 <span className="flex items-center gap-1">
                                   <Download className="w-3 h-3" />
@@ -985,8 +1057,10 @@ export default function CourseTaskFeed() {
                                 <Bookmark className="w-4 h-4 text-gray-400 group-hover/btn:text-gray-600" />
                               </button>
                               <button
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors group/btn"
-                                onClick={() => router.push(getDetailUrl(item, courseInstanceId))}
+                                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white text-xs sm:text-sm rounded-lg hover:bg-blue-700 transition-colors group/btn"
+                                onClick={() =>
+                                  router.push(getDetailUrl(item, courseInstanceId))
+                                }
                               >
                                 <span>View</span>
                                 <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
@@ -998,14 +1072,24 @@ export default function CourseTaskFeed() {
                     );
                   })}
 
-                  {/* Show More/Less Button */}
                   {items.length > 4 && (
                     <button
-                      onClick={() => setShowAll(prev => ({ ...prev, [topicTitle]: !prev[topicTitle] }))}
-                      className="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium transition-colors mx-auto mt-4"
+                      onClick={() =>
+                        setShowAll((prev) => ({
+                          ...prev,
+                          [topicTitle]: !prev[topicTitle],
+                        }))
+                      }
+                      className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors mx-auto mt-3 sm:mt-4"
                     >
-                      <ChevronDown className={`w-4 h-4 transition-transform ${showAll[topicTitle] ? "rotate-180" : ""}`} />
-                      {showAll[topicTitle] ? "Show Less" : `Show ${items.length - 4} More`}
+                      <ChevronDown
+                        className={`w-4 h-4 transition-transform ${
+                          showAll[topicTitle] ? "rotate-180" : ""
+                        }`}
+                      />
+                      {showAll[topicTitle]
+                        ? "Show Less"
+                        : `Show ${items.length - 4} More`}
                     </button>
                   )}
                 </div>

@@ -138,10 +138,10 @@ export default function MyClassSemesterDetail() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
-        <div className="flex items-center justify-center min-h-screen">
+        <div className="flex items-center justify-center min-h-screen px-4">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-            <p className="text-gray-600 text-lg">
+            <div className="animate-spin rounded-full h-12 w-12 sm:h-16 sm:w-16 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+            <p className="text-gray-600 text-base sm:text-lg">
               Loading batch period details...
             </p>
           </div>
@@ -153,16 +153,16 @@ export default function MyClassSemesterDetail() {
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center">
-            <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-800 mb-2">
+        <div className="flex items-center justify-center min-h-screen px-4">
+          <div className="text-center max-w-xs sm:max-w-md">
+            <AlertCircle className="h-12 w-12 sm:h-16 sm:w-16 text-red-500 mx-auto mb-4" />
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-2">
               Error Loading Data
             </h3>
-            <p className="text-red-600 text-lg">{error}</p>
+            <p className="text-red-600 text-sm sm:text-base">{error}</p>
             <button
               onClick={() => window.location.reload()}
-              className="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200"
+              className="mt-4 px-4 sm:px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 text-sm sm:text-base"
             >
               Try Again
             </button>
@@ -175,13 +175,13 @@ export default function MyClassSemesterDetail() {
   if (!batchPeriod) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
-        <div className="flex items-center justify-center min-h-screen">
+        <div className="flex items-center justify-center min-h-screen px-4">
           <div className="text-center">
-            <div className="text-6xl mb-4">📚</div>
-            <h3 className="text-xl font-semibold text-gray-600 mb-2">
+            <div className="text-5xl sm:text-6xl mb-4">📚</div>
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-600 mb-2">
               No Data Found
             </h3>
-            <p className="text-gray-500">
+            <p className="text-gray-500 text-sm sm:text-base">
               No data found for this {type || "period"}.
             </p>
           </div>
@@ -244,30 +244,30 @@ export default function MyClassSemesterDetail() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
+      <div className="mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8 max-w-6xl">
         {/* Back Navigation */}
         <button
           onClick={() => window.history.back()}
-          className="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-800 mb-6 transition-colors duration-200"
+          className="inline-flex items-center gap-1 sm:gap-2 text-indigo-600 hover:text-indigo-800 mb-4 sm:mb-6 text-sm sm:text-base transition-colors duration-200"
         >
           <ChevronLeft className="h-4 w-4" />
           <span className="font-medium">Back to Semesters</span>
         </button>
 
         {/* Header Section */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 border border-gray-100">
-          <div className="flex items-start justify-between mb-6">
-            <div className="flex items-center gap-4">
-              <div className="bg-indigo-100 p-3 rounded-xl">
-                <Calendar className="h-8 w-8 text-indigo-600" />
+        <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 mb-6 sm:mb-8 border border-gray-100">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4 sm:mb-6">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="bg-indigo-100 p-2.5 sm:p-3 rounded-xl">
+                <Calendar className="h-6 w-6 sm:h-8 sm:w-8 text-indigo-600" />
               </div>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-1 sm:mb-2 break-words">
                   {type === "semester" ? "Semester" : "Year"}:{" "}
                   {batchPeriod.semesterOrYear.name}
                 </h1>
                 <div
-                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r ${statusConfig.bgColor} ${statusConfig.borderColor} border`}
+                  className={`inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-gradient-to-r ${statusConfig.bgColor} ${statusConfig.borderColor} border`}
                 >
                   <div
                     className={`text-white bg-gradient-to-r ${statusConfig.color} p-1 rounded-full`}
@@ -275,7 +275,7 @@ export default function MyClassSemesterDetail() {
                     {statusConfig.icon}
                   </div>
                   <span
-                    className={`font-semibold capitalize ${statusConfig.textColor}`}
+                    className={`font-semibold capitalize text-xs sm:text-sm ${statusConfig.textColor}`}
                   >
                     {batchPeriod.status}
                   </span>
@@ -285,79 +285,79 @@ export default function MyClassSemesterDetail() {
           </div>
 
           {/* Progress Bar */}
-          <div className="mb-6">
+          <div className="mb-4 sm:mb-6">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-700">
+              <span className="text-xs sm:text-sm font-medium text-gray-700">
                 Period Progress
               </span>
-              <span className="text-sm font-medium text-indigo-600">
+              <span className="text-xs sm:text-sm font-medium text-indigo-600">
                 {Math.round(progressPercentage)}%
               </span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-3">
+            <div className="w-full bg-gray-200 rounded-full h-2.5 sm:h-3">
               <div
-                className="bg-gradient-to-r from-indigo-500 to-purple-600 h-3 rounded-full transition-all duration-1000 ease-out"
+                className="bg-gradient-to-r from-indigo-500 to-purple-600 h-2.5 sm:h-3 rounded-full transition-all duration-1000 ease-out"
                 style={{ width: `${progressPercentage}%` }}
               />
             </div>
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
+            <div className="flex justify-between text-[10px] sm:text-xs text-gray-500 mt-1">
               <span>{startDate.toLocaleDateString()}</span>
               <span>{endDate.toLocaleDateString()}</span>
             </div>
           </div>
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl border border-blue-200">
-              <div className="flex items-center gap-3">
-                <BookOpen className="h-5 w-5 text-blue-600" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-3 sm:p-4 rounded-xl border border-blue-200">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <BookOpen className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                 <div>
-                  <p className="text-sm text-blue-600 font-medium">
+                  <p className="text-xs sm:text-sm text-blue-600 font-medium">
                     Total Courses
                   </p>
-                  <p className="text-2xl font-bold text-blue-800">
+                  <p className="text-xl sm:text-2xl font-bold text-blue-800">
                     {batchPeriod.semesterOrYear.courses.length}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-xl border border-green-200">
-              <div className="flex items-center gap-3">
-                <Award className="h-5 w-5 text-green-600" />
+            <div className="bg-gradient-to-br from-green-50 to-green-100 p-3 sm:p-4 rounded-xl border border-green-200">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <Award className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
                 <div>
-                  <p className="text-sm text-green-600 font-medium">
+                  <p className="text-xs sm:text-sm text-green-600 font-medium">
                     Total Credits
                   </p>
-                  <p className="text-2xl font-bold text-green-800">
+                  <p className="text-xl sm:text-2xl font-bold text-green-800">
                     {totalCredits}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-xl border border-purple-200">
-              <div className="flex items-center gap-3">
-                <Users className="h-5 w-5 text-purple-600" />
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-3 sm:p-4 rounded-xl border border-purple-200">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <Users className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600" />
                 <div>
-                  <p className="text-sm text-purple-600 font-medium">
+                  <p className="text-xs sm:text-sm text-purple-600 font-medium">
                     Instructors
                   </p>
-                  <p className="text-2xl font-bold text-purple-800">
+                  <p className="text-xl sm:text-2xl font-bold text-purple-800">
                     {instructorCount}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-xl border border-orange-200">
-              <div className="flex items-center gap-3">
-                <TrendingUp className="h-5 w-5 text-orange-600" />
+            <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-3 sm:p-4 rounded-xl border border-orange-200">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-orange-600" />
                 <div>
-                  <p className="text-sm text-orange-600 font-medium">
+                  <p className="text-xs sm:text-sm text-orange-600 font-medium">
                     Duration
                   </p>
-                  <p className="text-2xl font-bold text-orange-800">
+                  <p className="text-xl sm:text-2xl font-bold text-orange-800">
                     {totalDuration}d
                   </p>
                 </div>
@@ -367,23 +367,25 @@ export default function MyClassSemesterDetail() {
         </div>
 
         {/* Period Details */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 border border-gray-100">
-          <div className="flex items-center gap-3 mb-6">
-            <MapPin className="h-6 w-6 text-indigo-600" />
-            <h2 className="text-2xl font-bold text-gray-900">
+        <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 mb-6 sm:mb-8 border border-gray-100">
+          <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+            <MapPin className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600" />
+            <h2 className="text-lg sm:text-2xl font-bold text-gray-900">
               Period Timeline
             </h2>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-xl border border-green-200">
-              <div className="flex items-center gap-3 mb-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+            <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 sm:p-6 rounded-xl border border-green-200">
+              <div className="flex items-center gap-2 sm:gap-3 mb-2">
                 <div className="bg-green-500 text-white p-2 rounded-lg">
-                  <Calendar className="h-5 w-5" />
+                  <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />
                 </div>
-                <h3 className="font-semibold text-green-800">Start Date</h3>
+                <h3 className="font-semibold text-green-800 text-sm sm:text-base">
+                  Start Date
+                </h3>
               </div>
-              <p className="text-2xl font-bold text-green-900">
+              <p className="text-lg sm:text-2xl font-bold text-green-900">
                 {startDate.toLocaleDateString("en-US", {
                   weekday: "long",
                   year: "numeric",
@@ -393,14 +395,16 @@ export default function MyClassSemesterDetail() {
               </p>
             </div>
 
-            <div className="bg-gradient-to-br from-blue-50 to-blue-50 p-6 rounded-xl border border-blue-200">
-              <div className="flex items-center gap-3 mb-2">
+            <div className="bg-gradient-to-br from-blue-50 to-blue-50 p-4 sm:p-6 rounded-xl border border-blue-200">
+              <div className="flex items-center gap-2 sm:gap-3 mb-2">
                 <div className="bg-blue-500 text-white p-2 rounded-lg">
-                  <Calendar className="h-5 w-5" />
+                  <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />
                 </div>
-                <h3 className="font-semibold text-blue-800">End Date</h3>
+                <h3 className="font-semibold text-blue-800 text-sm sm:text-base">
+                  End Date
+                </h3>
               </div>
-              <p className="text-2xl font-bold text-blue-900">
+              <p className="text-lg sm:text-2xl font-bold text-blue-900">
                 {endDate.toLocaleDateString("en-US", {
                   weekday: "long",
                   year: "numeric",
@@ -413,24 +417,26 @@ export default function MyClassSemesterDetail() {
         </div>
 
         {/* Courses Section */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-          <div className="flex items-center gap-3 mb-6">
-            <FileText className="h-6 w-6 text-indigo-600" />
-            <h2 className="text-2xl font-bold text-gray-900">Course Catalog</h2>
+        <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 border border-gray-100">
+          <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+            <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600" />
+            <h2 className="text-lg sm:text-2xl font-bold text-gray-900">
+              Course Catalog
+            </h2>
           </div>
 
           {batchPeriod.semesterOrYear.courses.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-6xl mb-4">📚</div>
-              <h3 className="text-xl font-semibold text-gray-600 mb-2">
+            <div className="text-center py-8 sm:py-12">
+              <div className="text-5xl sm:text-6xl mb-4">📚</div>
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-600 mb-2">
                 No Courses Available
               </h3>
-              <p className="text-gray-500">
+              <p className="text-gray-500 text-sm sm:text-base">
                 No courses are assigned to this {type || "period"}.
               </p>
             </div>
           ) : (
-            <div className="grid gap-6">
+            <div className="grid gap-4 sm:gap-6">
               {batchPeriod.semesterOrYear.courses.map((course) => {
                 const typeColorsMap: Record<string, string> = {
                   Core: "from-blue-500 to-blue-600",
@@ -445,26 +451,26 @@ export default function MyClassSemesterDetail() {
                 return (
                   <div
                     key={course._id}
-                    className="bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
+                    className="bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-200 p-4 sm:p-6 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-4 flex-1">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                      <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
                         <div
-                          className={`bg-gradient-to-r ${gradientColor} text-white rounded-lg p-3 min-w-0`}
+                          className={`bg-gradient-to-r ${gradientColor} text-white rounded-lg p-2.5 sm:p-3 flex items-center justify-center`}
                         >
-                          <span className="font-bold text-sm whitespace-nowrap">
+                          <span className="font-bold text-xs sm:text-sm whitespace-nowrap">
                             {course.code}
                           </span>
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h3 className="text-xl font-bold text-gray-900 mb-2">
+                          <h3 className="text-base sm:text-xl font-bold text-gray-900 mb-1 sm:mb-2 break-words">
                             {course.name}
                           </h3>
-                          <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                          <div className="flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
                             {course.assignedTeacher && (
-                              <div className="flex items-center gap-1">
-                                <Users className="h-4 w-4" />
-                                <span>
+                              <div className="flex items-center gap-1 min-w-0">
+                                <Users className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                                <span className="truncate max-w-[200px] sm:max-w-xs">
                                   {course.assignedTeacher.fullName ||
                                     course.assignedTeacher.username ||
                                     course.assignedTeacher.email ||
@@ -474,7 +480,7 @@ export default function MyClassSemesterDetail() {
                             )}
                             {course.credits != null && (
                               <div className="flex items-center gap-1">
-                                <Award className="h-4 w-4" />
+                                <Award className="h-3 w-3 sm:h-4 sm:w-4" />
                                 <span>
                                   {course.credits} Credit
                                   {course.credits !== 1 ? "s" : ""}
@@ -483,7 +489,7 @@ export default function MyClassSemesterDetail() {
                             )}
                             {course.type && (
                               <div className="flex items-center gap-1">
-                                <Clock className="h-4 w-4" />
+                                <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
                                 <span>{course.type}</span>
                               </div>
                             )}
@@ -500,7 +506,7 @@ export default function MyClassSemesterDetail() {
                             alert("Course instance not found for this course.");
                           }
                         }}
-                        className="ml-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors duration-200 text-sm font-medium whitespace-nowrap"
+                        className="w-full sm:w-auto px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors duration-200 text-sm font-medium whitespace-nowrap"
                       >
                         View Details
                       </button>
@@ -513,21 +519,21 @@ export default function MyClassSemesterDetail() {
         </div>
 
         {/* Summary Section */}
-        <div className="mt-8 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl shadow-xl p-8 text-white">
+        <div className="mt-6 sm:mt-8 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl shadow-xl p-5 sm:p-8 text-white">
           <div className="text-center">
-            <Calendar className="h-12 w-12 mx-auto mb-4 text-yellow-300" />
-            <h3 className="text-2xl font-bold mb-2">
+            <Calendar className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3 sm:mb-4 text-yellow-300" />
+            <h3 className="text-xl sm:text-2xl font-bold mb-2">
               {batchPeriod.semesterOrYear.name} Overview
             </h3>
-            <p className="text-indigo-100 text-lg mb-4">
+            <p className="text-sm sm:text-lg text-indigo-100 mb-3 sm:mb-4">
               {batchPeriod.semesterOrYear.courses.length} courses •{" "}
               {totalCredits} credits • {instructorCount} instructors
             </p>
-            <div className="flex justify-center gap-4 flex-wrap">
+            <div className="flex justify-center gap-2 sm:gap-4 flex-wrap">
               {courseTypes.map((t) => (
                 <div
                   key={t}
-                  className="bg-white bg-opacity-20 rounded-full px-4 py-2"
+                  className="bg-white bg-opacity-20 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm"
                 >
                   <span className="font-medium">
                     {prettyType[t] ?? t ?? "Unknown"}
