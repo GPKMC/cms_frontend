@@ -50,9 +50,27 @@ interface Submission {
   youtubeLinks?: string[];
 }
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-const getFileUrl = (url: string) =>
-  url?.startsWith("http") ? url : `${BACKEND_URL}${url || ""}`;
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+
+// 🔍 Build final URL for /uploads/... and log it so you can see it
+const getFileUrl = (url: string) => {
+  if (!url) return "";
+
+  // Already absolute? (e.g. http://something.com/...) → return as is
+  if (/^https?:\/\//i.test(url)) {
+    console.log("[getFileUrl] absolute URL:", url);
+    return url;
+  }
+
+  // Ensure a single slash between base and path
+  const normalizedPath = url.startsWith("/") ? url : `/${url}`;
+  const full = `${BACKEND_URL}${normalizedPath}`;
+
+  console.log("[getFileUrl] raw:", url, "→", full);
+  return full;
+};
+
 
 export default function AssignmentDetail() {
   const params = useParams();
