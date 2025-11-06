@@ -7,7 +7,7 @@ import { Bell, Loader2, Mail, Shield, User2 } from "lucide-react";
 import { useUser } from "../teacherContext";
 
 /** ======== Config & helpers ======== */
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 const EP = {
   announcementList: `${API_BASE}/announcement`,
 };
