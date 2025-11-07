@@ -83,6 +83,14 @@ type MyState = { readAt: string | null; archived: boolean; archivedAt: string | 
 
 type FileObj = { url: string; originalname?: string; filetype?: string; mimetype?: string; size?: number; caption?: string };
 
+// NEW: link type
+type LinkObj = {
+  url: string;
+  label?: string;
+  title?: string;
+  description?: string;
+};
+
 type AnnLite = {
   _id: string;
   type: string;
@@ -96,6 +104,7 @@ type AnnLite = {
   updatedAt?: string;
   images?: FileObj[];
   files?: FileObj[];
+  links?: LinkObj[]; // 👈 added
   myState?: MyState;
   replyCount?: number;
   newReplyCount?: number;
@@ -161,6 +170,14 @@ const normalizeAnn = (x: any): AnnFull => ({
     filetype: f?.filetype || f?.mimetype || "",
     size: f?.size,
     caption: f?.caption,
+  })),
+
+  // 👇 NEW: normalize links
+  links: ensureArr(x?.links).map((l: any) => ({
+    url: withBackendOrigin(l?.url || l?.href || ""), // if it's relative, prefix backend; if full http, withBackendOrigin returns as-is
+    label: l?.label || l?.title || l?.text || l?.name || "",
+    title: l?.title || "",
+    description: l?.description || l?.desc || "",
   })),
 
   myState: x?.myState || { readAt: null, archived: !!x?.archived, archivedAt: x?.archivedAt || null },
@@ -947,6 +964,13 @@ function BeautifulPreview({
 
   const st = status(item);
 
+  // Fix image src inside RTE content: /uploads/... -> full backend URL
+  const fixedContentHtml = (item.contentHtml || "")
+    .replace(/src="(\/uploads\/[^"]+)"/g, (_m, p1) => `src="${withBackendOrigin(p1)}"`)
+    .replace(/src='(\/uploads\/[^']+)'/g, (_m, p1) => `src='${withBackendOrigin(p1)}'`);
+
+  const validLinks = (item.links || []).filter(l => l.url);
+
   return (
     <div className="space-y-6">
       {/* Header Section */}
@@ -996,7 +1020,7 @@ function BeautifulPreview({
         </div>
         <div className="p-4 sm:p-6">
           {item.contentHtml ? (
-            <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: item.contentHtml }} />
+            <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: fixedContentHtml }} />
           ) : (
             <p className="text-gray-600">No content provided.</p>
           )}
@@ -1059,6 +1083,41 @@ function BeautifulPreview({
           </div>
         </div>
       ) : null}
+
+      {/* Links */}
+      {validLinks.length > 0 && (
+        <div className="bg-white rounded-xl border-2 border-gray-200 shadow-lg overflow-hidden">
+          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 px-4 sm:px-6 py-4 border-b border-gray-200">
+            <h3 className="font-bold text-xl text-gray-800 flex items-center gap-3">
+              <ExternalLink className="h-6 w-6" />
+              Links ({validLinks.length})
+            </h3>
+          </div>
+          <div className="p-4 sm:p-6 space-y-3">
+            {validLinks.map((lnk, i) => (
+              <a
+                key={i}
+                href={lnk.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="flex items-center justify-between px-4 py-3 rounded-lg border border-gray-200 bg-gray-50 hover:bg-white hover:border-blue-400 transition-colors"
+              >
+                <div className="min-w-0 mr-3">
+                  <div className="font-medium text-blue-700 truncate">
+                    {lnk.label || lnk.title || lnk.url}
+                  </div>
+                  {lnk.description && (
+                    <div className="text-xs text-gray-600 mt-1 line-clamp-2">
+                      {lnk.description}
+                    </div>
+                  )}
+                </div>
+                <ExternalLink className="h-4 w-4 text-blue-500 flex-shrink-0" />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Share row */}
       <div className="flex items-center gap-4 pt-2 flex-wrap">
