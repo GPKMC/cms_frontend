@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import { useUser } from '../studentContext';
 
-
 /* ========= API CONFIG (teacher) ========= */
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000').replace(/\/$/, '');
 const EP = {
@@ -165,7 +164,16 @@ export default function TeacherAnnouncementReplies({
         headers: { ...authHeaders(false) },
         cache: 'no-store',
       });
+
+      // 👇 Handle announcement-not-found as "no replies" instead of hard error
+      if (res.status === 404) {
+        setRoot([]);
+        setTotal(0);
+        return;
+      }
+
       if (!res.ok) throw new Error(`Failed to load replies (${res.status})`);
+
       const json: RepliesResponse = await res.json();
       setRoot(json.data || []);
       setTotal(json.total || 0);
@@ -361,7 +369,17 @@ function ReplyItem({
         headers: { ...authHeaders(false) },
         cache: 'no-store',
       });
+
+      // 👇 Same idea: if parent/announcement disappeared -> empty thread, no error toast
+      if (res.status === 404) {
+        setChildren([]);
+        setCTotal(0);
+        setCPage(1);
+        return;
+      }
+
       if (!res.ok) throw new Error('Failed to load child replies');
+
       const json: RepliesResponse = await res.json();
       setChildren(json.data || []);
       setCTotal(json.total || 0);

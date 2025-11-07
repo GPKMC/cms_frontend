@@ -21,7 +21,22 @@ const EP = {
   archive: (id: string) => `${BACKEND}/announcement/${id}/archive`,
   unarchive: (id: string) => `${BACKEND}/announcement/${id}/unarchive`,
   folderCounts: `${BACKEND}/announcement/folder-counts`,
-  replyCounts: (id: string) => `${BACKEND}/announcement/${id}/reply-counts`, // NEW
+  replyCounts: (id: string) => `${BACKEND}/announcement/${id}/reply-counts`,
+};
+
+/**
+ * Make sure any `/uploads/...` or `uploads/...` path becomes a full backend URL.
+ */
+const withBackendOrigin = (url: string): string => {
+  if (!url) return "";
+
+  // already absolute
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+
+  const clean = url.startsWith("/") ? url : `/${url}`;
+  return `${BACKEND}${clean}`;
 };
 
 const getToken = (): string =>
@@ -50,7 +65,14 @@ type Audience =
 
 type MyState = { readAt: string | null; archived: boolean; archivedAt: string | null };
 
-type FileObj = { url: string; originalname?: string; filetype?: string; mimetype?: string; size?: number; caption?: string };
+type FileObj = {
+  url: string;
+  originalname?: string;
+  filetype?: string;
+  mimetype?: string;
+  size?: number;
+  caption?: string;
+};
 
 type AnnLite = {
   _id: string;
@@ -66,8 +88,8 @@ type AnnLite = {
   images?: FileObj[];
   files?: FileObj[];
   myState?: MyState;
-  replyCount?: number;      // NEW
-  newReplyCount?: number;   // NEW
+  replyCount?: number;
+  newReplyCount?: number;
 };
 
 type AnnFull = AnnLite & { contentHtml?: string };
@@ -89,17 +111,26 @@ const formatBytes = (n?: number) => {
   if (n == null) return "";
   if (n < 1024) return `${n} B`;
   const u = ["KB", "MB", "GB", "TB"];
-  let i = -1, size = n;
-  do { size /= 1024; i++; } while (size >= 1024 && i < u.length - 1);
+  let i = -1,
+    size = n;
+  do {
+    size /= 1024;
+    i++;
+  } while (size >= 1024 && i < u.length - 1);
   return `${size.toFixed(size < 10 ? 1 : 0)} ${u[i]}`;
 };
 
-// SIMPLIFIED: only draft vs live (no scheduled/expired)
 function status(a: AnnLite) {
   return a?.published ? "live" : "draft";
 }
 
-const ensureArr = <T,>(v: T | T[] | null | undefined): T[] => (Array.isArray(v) ? v : v ? [v] : []);
+const ensureArr = <T,>(v: T | T[] | null | undefined): T[] =>
+  Array.isArray(v) ? v : v ? [v] : [];
+
+/**
+ * Normalize raw API announcement into a friendly shape.
+ * NOTE: URLs now go through withBackendOrigin so /uploads/... works in prod.
+ */
 const normalizeAnn = (x: any): AnnFull => ({
   _id: x?._id || x?.id || "",
   type: x?.type || "general",
@@ -111,24 +142,32 @@ const normalizeAnn = (x: any): AnnFull => ({
   priority: x?.priority || "normal",
   createdAt: x?.createdAt || x?.created_at || null,
   updatedAt: x?.updatedAt || x?.updated_at || null,
+
   images: ensureArr(x?.images).map((f: any) => ({
-    url: f?.url || "",
+    url: withBackendOrigin(f?.url || ""),
     originalname: f?.originalname || f?.name || "",
     filetype: f?.filetype || f?.mimetype || "",
     size: f?.size,
     caption: f?.caption,
   })),
+
   files: ensureArr(x?.files).map((f: any) => ({
-    url: f?.url || "",
+    url: withBackendOrigin(f?.url || ""),
     originalname: f?.originalname || f?.name || "",
     filetype: f?.filetype || f?.mimetype || "",
     size: f?.size,
     caption: f?.caption,
   })),
-  myState: x?.myState || { readAt: null, archived: !!x?.archived, archivedAt: x?.archivedAt || null },
+
+  myState:
+    x?.myState || {
+      readAt: null,
+      archived: !!x?.archived,
+      archivedAt: x?.archivedAt || null,
+    },
   contentHtml: x?.contentHtml || x?.content || "",
-  replyCount: Number(x?.replyCount ?? 0),        // NEW
-  newReplyCount: Number(x?.newReplyCount ?? 0),  // NEW
+  replyCount: Number(x?.replyCount ?? 0),
+  newReplyCount: Number(x?.newReplyCount ?? 0),
 });
 
 /* ===== Share helpers ===== */
@@ -202,10 +241,17 @@ export default function NotificationTeacher() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [folderCounts, setFolderCounts] = useState<FolderCounts>({
-    all: 0, drafts: 0, live: 0, archived: 0, inbox: 0,
+    all: 0,
+    drafts: 0,
+    live: 0,
+    archived: 0,
+    inbox: 0,
   });
 
-  const pages = useMemo(() => Math.max(1, Math.ceil((total || 0) / limit)), [total, limit]);
+  const pages = useMemo(
+    () => Math.max(1, Math.ceil((total || 0) / limit)),
+    [total, limit]
+  );
   const startIndex = (page - 1) * limit;
 
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -227,33 +273,35 @@ export default function NotificationTeacher() {
     };
   }, [menuFor]);
 
-  // refilter + repaginate when deps change
   useEffect(() => {
     const typed = type.trim().toLowerCase();
     const term = q.trim().toLowerCase();
 
     let base = allRows;
-    if (typed) base = base.filter(r => (r.type || "").toLowerCase() === typed);
+    if (typed) base = base.filter((r) => (r.type || "").toLowerCase() === typed);
     if (term) {
-      base = base.filter(r =>
-        (r.title || "").toLowerCase().includes(term) ||
-        (r.summary || "").toLowerCase().includes(term)
+      base = base.filter(
+        (r) =>
+          (r.title || "").toLowerCase().includes(term) ||
+          (r.summary || "").toLowerCase().includes(term)
       );
     }
 
-    const filtered = base.filter(r => matchesFolder(r, folder));
+    const filtered = base.filter((r) => matchesFolder(r, folder));
     const paged = paginate(filtered, page, limit);
     setRows(paged);
     setTotal(filtered.length);
 
-    if (selectedId && !filtered.some(r => r._id === selectedId)) {
+    if (selectedId && !filtered.some((r) => r._id === selectedId)) {
       setSelectedId(filtered[0]?._id || null);
     } else if (!selectedId && filtered[0]?._id) {
       setSelectedId(filtered[0]._id);
     }
   }, [allRows, folder, page, limit, q, type, selectedId]);
 
-  useEffect(() => { setPage(1); }, [folder, type, q]);
+  useEffect(() => {
+    setPage(1);
+  }, [folder, type, q]);
 
   useEffect(() => {
     fetchList();
@@ -265,7 +313,7 @@ export default function NotificationTeacher() {
   async function fetchList() {
     try {
       setLoading(true);
-      const qs = buildQS({ page: 1, limit: 100 }); // teacher view
+      const qs = buildQS({ page: 1, limit: 100 });
       const res = await fetch(`${EP.list}?${qs}`, {
         headers: { ...authHeaders(false) },
         cache: "no-store",
@@ -273,13 +321,17 @@ export default function NotificationTeacher() {
 
       const json = await res.json().catch(() => ({}));
       const items: any[] =
-        Array.isArray(json?.data) ? json.data :
-        Array.isArray(json?.items) ? json.items :
-        Array.isArray(json) ? json : [];
+        Array.isArray(json?.data)
+          ? json.data
+          : Array.isArray(json?.items)
+          ? json.items
+          : Array.isArray(json)
+          ? json
+          : [];
 
       const normalized = items.map(normalizeAnn);
       setAllRows(normalized);
-      setFolderCounts(computeCounts(normalized)); // local quick counts
+      setFolderCounts(computeCounts(normalized));
     } catch (e) {
       console.error("fetchList error", e);
       setAllRows([]);
@@ -319,7 +371,6 @@ export default function NotificationTeacher() {
       const data = await res.json();
       const d = data?.data || data;
 
-      // Map server counts to simplified model (ignore scheduled/expired)
       const serverCounts: Partial<FolderCounts> = {
         all: Number(d?.all ?? 0),
         drafts: Number(d?.drafts ?? 0),
@@ -344,12 +395,16 @@ export default function NotificationTeacher() {
   async function archive(id: string) {
     setMenuFor(null);
     const prev = allRows;
-    const next = allRows.map(a =>
+    const next = allRows.map((a) =>
       a._id === id
         ? {
             ...a,
             myState: {
-              ...(a.myState || { readAt: null, archived: false, archivedAt: null }),
+              ...(a.myState || {
+                readAt: null,
+                archived: false,
+                archivedAt: null,
+              }),
               archived: true,
               archivedAt: new Date().toISOString(),
             },
@@ -379,12 +434,16 @@ export default function NotificationTeacher() {
   async function unarchive(id: string) {
     setMenuFor(null);
     const prev = allRows;
-    const next = allRows.map(a =>
+    const next = allRows.map((a) =>
       a._id === id
         ? {
             ...a,
             myState: {
-              ...(a.myState || { readAt: null, archived: false, archivedAt: null }),
+              ...(a.myState || {
+                readAt: null,
+                archived: false,
+                archivedAt: null,
+              }),
               archived: false,
               archivedAt: null,
             },
@@ -438,22 +497,40 @@ export default function NotificationTeacher() {
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => { fetchList(); fetchFolderCounts(); }}
+                  onClick={() => {
+                    fetchList();
+                    fetchFolderCounts();
+                  }}
                   className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm font-medium"
                 >
-                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                  <RefreshCw
+                    className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
+                  />
                   Refresh
                 </button>
-                {/* (Teacher) — no Create button */}
               </div>
             </div>
 
             <div className="px-6 pb-4">
               <div className="flex gap-2 flex-wrap">
-                <StatChip label="Inbox" value={folderCounts.inbox} active={folder === "inbox"} onClick={() => setFolder("inbox")} />
-                {/* <StatChip label="Drafts" value={folderCounts.drafts} active={folder === "drafts"} onClick={() => setFolder("drafts")} /> */}
-                <StatChip label="Archived" value={folderCounts.archived} active={folder === "archived"} onClick={() => setFolder("archived")} />
-                <StatChip label="All" value={folderCounts.all} active={folder === "all"} onClick={() => setFolder("all")} />
+                <StatChip
+                  label="Inbox"
+                  value={folderCounts.inbox}
+                  active={folder === "inbox"}
+                  onClick={() => setFolder("inbox")}
+                />
+                <StatChip
+                  label="Archived"
+                  value={folderCounts.archived}
+                  active={folder === "archived"}
+                  onClick={() => setFolder("archived")}
+                />
+                <StatChip
+                  label="All"
+                  value={folderCounts.all}
+                  active={folder === "all"}
+                  onClick={() => setFolder("all")}
+                />
               </div>
             </div>
           </div>
@@ -470,10 +547,27 @@ export default function NotificationTeacher() {
                   </h2>
                 </div>
                 <nav className="p-3 space-y-1">
-                  <FolderBtn icon={<Inbox className="h-4 w-4" />} label="Inbox" count={folderCounts.inbox} active={folder === "inbox"} onClick={() => setFolder("inbox")} />
-                  {/* <FolderBtn icon={<Edit3Icon className="h-4 w-4" />} label="Drafts" count={folderCounts.drafts} active={folder === "drafts"} onClick={() => setFolder("drafts")} /> */}
-                  <FolderBtn icon={<Archive className="h-4 w-4" />} label="Archived" count={folderCounts.archived} active={folder === "archived"} onClick={() => setFolder("archived")} />
-                  <FolderBtn icon={<FileX2 className="h-4 w-4" />} label="All" count={folderCounts.all} active={folder === "all"} onClick={() => setFolder("all")} />
+                  <FolderBtn
+                    icon={<Inbox className="h-4 w-4" />}
+                    label="Inbox"
+                    count={folderCounts.inbox}
+                    active={folder === "inbox"}
+                    onClick={() => setFolder("inbox")}
+                  />
+                  <FolderBtn
+                    icon={<Archive className="h-4 w-4" />}
+                    label="Archived"
+                    count={folderCounts.archived}
+                    active={folder === "archived"}
+                    onClick={() => setFolder("archived")}
+                  />
+                  <FolderBtn
+                    icon={<FileX2 className="h-4 w-4" />}
+                    label="All"
+                    count={folderCounts.all}
+                    active={folder === "all"}
+                    onClick={() => setFolder("all")}
+                  />
                 </nav>
               </div>
             </div>
@@ -500,7 +594,13 @@ export default function NotificationTeacher() {
                         onKeyDown={(e) => e.key === "Enter" && setPage(1)}
                       />
                     </div>
-                    <select className="px-3 py-2 border rounded-lg text-sm" value={type} onChange={(e) => { setType(e.target.value); }}>
+                    <select
+                      className="px-3 py-2 border rounded-lg text-sm"
+                      value={type}
+                      onChange={(e) => {
+                        setType(e.target.value);
+                      }}
+                    >
                       <option value="">All</option>
                       <option value="general">📢 General</option>
                       <option value="event">🎉 Event</option>
@@ -512,10 +612,15 @@ export default function NotificationTeacher() {
                 </div>
 
                 <div className="flex-1 overflow-auto">
-                  {loading ? <SkeletonList /> : rows.length === 0 ? <EmptyList /> : (
+                  {loading ? (
+                    <SkeletonList />
+                  ) : rows.length === 0 ? (
+                    <EmptyList />
+                  ) : (
                     <div className="divide-y divide-gray-100">
                       {rows.map((r, idx) => {
-                        const unread = !r?.myState?.readAt && !r?.myState?.archived;
+                        const unread =
+                          !r?.myState?.readAt && !r?.myState?.archived;
                         const st = status(r);
                         const isSelected = selectedId === r._id;
                         const number = startIndex + idx + 1;
@@ -523,52 +628,88 @@ export default function NotificationTeacher() {
                         return (
                           <div
                             key={r._id}
-                            onClick={() => { setSelectedId(r._id); setMenuFor(null); }}
-                            className={`p-3 cursor-pointer hover:bg-blue-50 transition-colors ${isSelected ? "bg-blue-100 border-l-4 border-blue-500" : ""}`}
+                            onClick={() => {
+                              setSelectedId(r._id);
+                              setMenuFor(null);
+                            }}
+                            className={`p-3 cursor-pointer hover:bg-blue-50 transition-colors ${
+                              isSelected
+                                ? "bg-blue-100 border-l-4 border-blue-500"
+                                : ""
+                            }`}
                           >
                             <div className="flex items-start gap-2">
                               <div className="mt-1">
-                                {unread ? <div className="w-2 h-2 bg-blue-500 rounded-full" /> : <CheckCircle2 className="h-3 w-3 text-gray-300" />}
+                                {unread ? (
+                                  <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                                ) : (
+                                  <CheckCircle2 className="h-3 w-3 text-gray-300" />
+                                )}
                               </div>
 
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-1 mb-1">
-                                  <span className="text-xs text-gray-500 bg-gray-100 rounded px-1">#{number}</span>
-                                  {r.pinned && <Star className="h-3 w-3 text-amber-500"/>}
+                                  <span className="text-xs text-gray-500 bg-gray-100 rounded px-1">
+                                    #{number}
+                                  </span>
+                                  {r.pinned && (
+                                    <Star className="h-3 w-3 text-amber-500" />
+                                  )}
                                   {r.priority && r.priority !== "normal" && (
-                                    <span className="text-[10px] bg-red-500 text-white px-1 rounded">{r.priority.toUpperCase()}</span>
+                                    <span className="text-[10px] bg-red-500 text-white px-1 rounded">
+                                      {r.priority.toUpperCase()}
+                                    </span>
                                   )}
                                 </div>
 
-                                <h3 className="font-semibold text-sm mb-1 line-clamp-2">{r.title}</h3>
-                                {r.summary && <p className="text-xs text-gray-600 line-clamp-2 mb-1">{r.summary}</p>}
+                                <h3 className="font-semibold text-sm mb-1 line-clamp-2">
+                                  {r.title}
+                                </h3>
+                                {r.summary && (
+                                  <p className="text-xs text-gray-600 line-clamp-2 mb-1">
+                                    {r.summary}
+                                  </p>
+                                )}
 
                                 <div className="flex items-center gap-1 mb-1 flex-wrap">
                                   <AudiencePill audience={r.audience} />
                                   <StatusBadge status={st} />
                                   <TypeBadge type={r.type} />
 
-                                  {/* NEW: replies pill */}
                                   <span
                                     className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border
-                                      ${r.newReplyCount ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-gray-50 border-gray-200 text-gray-600"}`}
+                                      ${
+                                        r.newReplyCount
+                                          ? "bg-amber-50 border-amber-200 text-amber-700"
+                                          : "bg-gray-50 border-gray-200 text-gray-600"
+                                      }`}
                                     title="Replies • New since you last read"
                                   >
                                     <MessageSquare className="h-3 w-3" />
                                     {r.replyCount ?? 0}
                                     {(r.newReplyCount ?? 0) > 0 && (
-                                      <span className="ml-1 font-semibold">• {r.newReplyCount} new</span>
+                                      <span className="ml-1 font-semibold">
+                                        • {r.newReplyCount} new
+                                      </span>
                                     )}
                                   </span>
                                 </div>
 
-                                <div className="text-xs text-gray-500">{fmt(r.createdAt)}</div>
+                                <div className="text-xs text-gray-500">
+                                  {fmt(r.createdAt)}
+                                </div>
                               </div>
 
                               <RowMenu
-                                refCb={(el) => { rowRefs.current[r._id] = el; }}
+                                refCb={(el) => {
+                                  rowRefs.current[r._id] = el;
+                                }}
                                 open={menuFor === r._id}
-                                onToggle={() => setMenuFor(menuFor === r._id ? null : r._id)}
+                                onToggle={() =>
+                                  setMenuFor(
+                                    menuFor === r._id ? null : r._id
+                                  )
+                                }
                                 onShare={() => shareAnnouncement(r)}
                                 archived={!!r?.myState?.archived}
                                 onArchive={() => archive(r._id)}
@@ -631,21 +772,34 @@ export default function NotificationTeacher() {
                 </div>
 
                 <div className="flex-1 overflow-auto p-6">
-                  {selectedId ? <BeautifulPreview id={selectedId} onShare={shareAnnouncement} /> : <EmptyPreview />}
+                  {selectedId ? (
+                    <BeautifulPreview id={selectedId} onShare={shareAnnouncement} />
+                  ) : (
+                    <EmptyPreview />
+                  )}
                 </div>
 
                 {selectedOne && (
                   <div className="px-6 py-4 border-t bg-gray-50 rounded-b-2xl flex items-center justify-between">
                     <div className="text-sm text-gray-600">
-                      ID: <code className="bg-gray-200 px-2 py-1 rounded text-xs">{selectedOne._id.slice(-8)}</code>
+                      ID:{" "}
+                      <code className="bg-gray-200 px-2 py-1 rounded text-xs">
+                        {selectedOne._id.slice(-8)}
+                      </code>
                     </div>
                     <div className="flex items-center gap-3">
                       {!selectedOne?.myState?.archived ? (
-                        <button className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50" onClick={() => archive(selectedOne._id)}>
+                        <button
+                          className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
+                          onClick={() => archive(selectedOne._id)}
+                        >
                           Archive
                         </button>
                       ) : (
-                        <button className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50" onClick={() => unarchive(selectedOne._id)}>
+                        <button
+                          className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
+                          onClick={() => unarchive(selectedOne._id)}
+                        >
                           Unarchive
                         </button>
                       )}
@@ -676,23 +830,47 @@ function RowMenu({
 }) {
   return (
     <div className="relative" ref={refCb}>
-      <button onClick={(e) => { e.stopPropagation(); onToggle(); }} className="p-1 rounded hover:bg-gray-200">
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+        className="p-1 rounded hover:bg-gray-200"
+      >
         <MoreVertical className="h-3 w-3" />
       </button>
       {open && (
         <div className="absolute right-0 mt-1 w-44 bg-white border rounded-lg shadow-lg z-20">
           <button
             className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs"
-            onClick={(e) => { e.stopPropagation(); onShare(); onToggle(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onShare();
+              onToggle();
+            }}
           >
             <Share2 className="h-3 w-3" /> Share
           </button>
           {!archived ? (
-            <button className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs" onClick={(e) => { e.stopPropagation(); onArchive(); onToggle(); }}>
+            <button
+              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                onArchive();
+                onToggle();
+              }}
+            >
               <Archive className="h-3 w-3" /> Archive
             </button>
           ) : (
-            <button className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs" onClick={(e) => { e.stopPropagation(); onUnarchive(); onToggle(); }}>
+            <button
+              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                onUnarchive();
+                onToggle();
+              }}
+            >
               <Archive className="h-3 w-3" /> Unarchive
             </button>
           )}
@@ -702,33 +880,68 @@ function RowMenu({
   );
 }
 
-function StatChip({ label, value, active, onClick }: { label: string; value: number; active?: boolean; onClick: () => void }) {
+function StatChip({
+  label,
+  value,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  active?: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${active ? "bg-blue-100 border-blue-300 text-blue-700" : "bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200"
-        }`}
+      className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+        active
+          ? "bg-blue-100 border-blue-300 text-blue-700"
+          : "bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200"
+      }`}
     >
-      {label} <span className="bg-white/50 px-2 py-1 rounded-full text-xs">{value}</span>
+      {label}{" "}
+      <span className="bg-white/50 px-2 py-1 rounded-full text-xs">
+        {value}
+      </span>
     </button>
   );
 }
 
 function FolderBtn({
-  icon, label, active, onClick, count,
-}: { icon: React.ReactNode; label: string; active?: boolean; onClick: () => void; count?: number }) {
+  icon,
+  label,
+  active,
+  onClick,
+  count,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+  count?: number;
+}) {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left text-sm transition-colors ${active ? "bg-blue-100 text-blue-700 border border-blue-200" : "hover:bg-gray-100 text-gray-700"
-        }`}
+      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left text-sm transition-colors ${
+        active
+          ? "bg-blue-100 text-blue-700 border border-blue-200"
+          : "hover:bg-gray-100 text-gray-700"
+      }`}
     >
       <div className="flex items-center gap-2">
         {icon}
         <span className="font-medium">{label}</span>
       </div>
       {typeof count === "number" && (
-        <span className={`px-2 py-1 rounded text-xs ${active ? "bg-blue-200" : "bg-gray-200"}`}>{count}</span>
+        <span
+          className={`px-2 py-1 rounded text-xs ${
+            active ? "bg-blue-200" : "bg-gray-200"
+          }`}
+        >
+          {count}
+        </span>
       )}
     </button>
   );
@@ -764,7 +977,11 @@ function StatusBadge({ status }: { status: string }) {
     draft: <Edit3Icon className="h-2 w-2" />,
   };
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${colors[status] || colors.draft}`}>
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${
+        colors[status] || colors.draft
+      }`}
+    >
       {icons[status] || icons.draft}
       {status}
     </span>
@@ -772,7 +989,13 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function TypeBadge({ type }: { type: string }) {
-  const emojis: Record<string, string> = { general: "📢", event: "🎉", exam: "📝", result: "📊", cultural: "🎭" };
+  const emojis: Record<string, string> = {
+    general: "📢",
+    event: "🎉",
+    exam: "📝",
+    result: "📊",
+    cultural: "🎭",
+  };
   return (
     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-700">
       {emojis[type] || "📄"} {type || "General"}
@@ -822,7 +1045,9 @@ function EmptyPreview() {
           <Eye className="w-12 h-12 text-indigo-400" />
         </div>
         <div>
-          <h3 className="text-xl font-bold text-gray-900 mb-3">Select an announcement</h3>
+          <h3 className="text-xl font-bold text-gray-900 mb-3">
+            Select an announcement
+          </h3>
           <p className="text-gray-500 max-w-md mx-auto">
             Choose an announcement from the list to view its detailed content
           </p>
@@ -833,14 +1058,19 @@ function EmptyPreview() {
 }
 
 /* ========= Preview (fetches full details) ========= */
-function BeautifulPreview({ id, onShare }: {
+function BeautifulPreview({
+  id,
+  onShare,
+}: {
   id: string;
   onShare: (a: Pick<AnnFull, "_id" | "title" | "summary" | "contentHtml">) => void;
 }) {
   const [item, setItem] = useState<AnnFull | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [rc, setRc] = useState<{ replyCount: number; newReplyCount: number }>({ replyCount: 0, newReplyCount: 0 }); // NEW
+  const [rc, setRc] = useState<{ replyCount: number; newReplyCount: number }>(
+    { replyCount: 0, newReplyCount: 0 }
+  );
 
   useEffect(() => {
     let alive = true;
@@ -848,25 +1078,43 @@ function BeautifulPreview({ id, onShare }: {
       setLoading(true);
       setErr("");
       try {
-        let res = await fetch(EP.read(id), { headers: { ...authHeaders(false) }, cache: "no-store" });
-        if (res.status === 404) res = await fetch(EP.readFallback(id), { headers: { ...authHeaders(false) }, cache: "no-store" });
+        let res = await fetch(EP.read(id), {
+          headers: { ...authHeaders(false) },
+          cache: "no-store",
+        });
+        if (res.status === 404)
+          res = await fetch(EP.readFallback(id), {
+            headers: { ...authHeaders(false) },
+            cache: "no-store",
+          });
         if (!res.ok) throw new Error(`Failed to load (${res.status})`);
         const j = await res.json();
         const data = j?.data || j?.announcement || j;
         const norm = normalizeAnn(data);
         if (alive) {
           setItem(norm);
-          setRc({ replyCount: Number(norm.replyCount ?? 0), newReplyCount: Number(norm.newReplyCount ?? 0) });
+          setRc({
+            replyCount: Number(norm.replyCount ?? 0),
+            newReplyCount: Number(norm.newReplyCount ?? 0),
+          });
         }
 
-        // mark as read (so subsequent "new" counts reflect after this open)
-        fetch(EP.markRead(id), { method: "POST", headers: authHeaders(true), body: JSON.stringify({}) }).catch(() => {});
+        fetch(EP.markRead(id), {
+          method: "POST",
+          headers: authHeaders(true),
+          body: JSON.stringify({}),
+        }).catch(() => {});
 
-        // fetch fresh reply counts
-        const cRes = await fetch(EP.replyCounts(id), { headers: { ...authHeaders(false) }, cache: "no-store" });
+        const cRes = await fetch(EP.replyCounts(id), {
+          headers: { ...authHeaders(false) },
+          cache: "no-store",
+        });
         if (alive && cRes.ok) {
           const cj = await cRes.json().catch(() => ({}));
-          setRc({ replyCount: Number(cj?.replyCount ?? 0), newReplyCount: Number(cj?.newReplyCount ?? 0) });
+          setRc({
+            replyCount: Number(cj?.replyCount ?? 0),
+            newReplyCount: Number(cj?.newReplyCount ?? 0),
+          });
         }
       } catch (e) {
         console.error("preview load error", e);
@@ -875,7 +1123,9 @@ function BeautifulPreview({ id, onShare }: {
         if (alive) setLoading(false);
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [id]);
 
   if (loading) {
@@ -901,19 +1151,28 @@ function BeautifulPreview({ id, onShare }: {
           <TypeBadge type={item.type} />
           <AudiencePill audience={item.audience} />
 
-          {/* NEW: replies pill */}
           <span
             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border
-              ${rc.newReplyCount ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-gray-50 border-gray-200 text-gray-600"}`}
+              ${
+                rc.newReplyCount
+                  ? "bg-amber-50 border-amber-200 text-amber-700"
+                  : "bg-gray-50 border-gray-200 text-gray-600"
+              }`}
             title="Replies • New since you last read"
           >
             <MessageSquare className="h-4 w-4" />
             {rc.replyCount}
-            {rc.newReplyCount > 0 && <span className="ml-1 font-semibold">• {rc.newReplyCount} new</span>}
+            {rc.newReplyCount > 0 && (
+              <span className="ml-1 font-semibold">
+                • {rc.newReplyCount} new
+              </span>
+            )}
           </span>
         </div>
 
-        <h1 className="text-3xl font-bold leading-tight text-gray-900">{item.title}</h1>
+        <h1 className="text-3xl font-bold leading-tight text-gray-900">
+          {item.title}
+        </h1>
 
         {item.summary ? (
           <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 border-l-4 border-blue-500">
@@ -925,9 +1184,13 @@ function BeautifulPreview({ id, onShare }: {
           </div>
         ) : null}
 
-        {/* Metadata (created only) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <MetaCard icon={<Calendar className="h-5 w-5 text-green-600" />} title="Created" value={fmt(item.createdAt)} tone="green" />
+          <MetaCard
+            icon={<Calendar className="h-5 w-5 text-green-600" />}
+            title="Created"
+            value={fmt(item.createdAt)}
+            tone="green"
+          />
         </div>
       </div>
 
@@ -941,7 +1204,10 @@ function BeautifulPreview({ id, onShare }: {
         </div>
         <div className="p-6">
           {item.contentHtml ? (
-            <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: item.contentHtml }} />
+            <div
+              className="prose max-w-none"
+              dangerouslySetInnerHTML={{ __html: item.contentHtml }}
+            />
           ) : (
             <p className="text-gray-600">No content provided.</p>
           )}
@@ -981,7 +1247,13 @@ function BeautifulPreview({ id, onShare }: {
                     </a>
                   </div>
                 </div>
-                {img.originalname && <div className="mt-3"><h4 className="font-medium text-gray-800">{img.originalname}</h4></div>}
+                {img.originalname && (
+                  <div className="mt-3">
+                    <h4 className="font-medium text-gray-800">
+                      {img.originalname}
+                    </h4>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -1016,23 +1288,33 @@ function BeautifulPreview({ id, onShare }: {
         </button>
         <a
           className="flex items-center gap-2 px-6 py-3 border-2 border-gray-300 bg-white text-gray-700 rounded-xl hover:border-gray-400 hover:bg-gray-50 transition-all duration-200 font-medium shadow-md hover:shadow-lg"
-          href={`mailto:?subject=${encodeURIComponent(item.title)}&body=${encodeURIComponent((item.summary || "") + "\n\n" + getShareUrl(item._id))}`}
+          href={`mailto:?subject=${encodeURIComponent(
+            item.title
+          )}&body=${encodeURIComponent(
+            (item.summary || "") + "\n\n" + getShareUrl(item._id)
+          )}`}
         >
           <Copy className="h-5 w-5" />
           Mail
         </a>
         <a
           className="flex items-center gap-2 px-6 py-3 border-2 border-gray-300 bg-white text-gray-700 rounded-xl hover:border-gray-400 hover:bg-gray-50 transition-all duration-200 font-medium shadow-md hover:shadow-lg"
-          href={`https://wa.me/?text=${encodeURIComponent(item.title + "\n" + getShareUrl(item._id))}`}
-          target="_blank" rel="noreferrer noopener"
+          href={`https://wa.me/?text=${encodeURIComponent(
+            item.title + "\n" + getShareUrl(item._id)
+          )}`}
+          target="_blank"
+          rel="noreferrer noopener"
         >
           <Share2 className="h-5 w-5" />
           WhatsApp
         </a>
         <a
           className="flex items-center gap-2 px-6 py-3 border-2 border-gray-300 bg-white text-gray-700 rounded-xl hover:border-gray-400 hover:bg-gray-50 transition-all duration-200 font-medium shadow-md hover:shadow-lg"
-          href={`https://t.me/share/url?url=${encodeURIComponent(getShareUrl(item._id))}&text=${encodeURIComponent(item.title)}`}
-          target="_blank" rel="noreferrer noopener"
+          href={`https://t.me/share/url?url=${encodeURIComponent(
+            getShareUrl(item._id)
+          )}&text=${encodeURIComponent(item.title)}`}
+          target="_blank"
+          rel="noreferrer noopener"
         >
           <Share2 className="h-5 w-5" />
           Telegram
@@ -1046,7 +1328,8 @@ function BeautifulPreview({ id, onShare }: {
             <MessageSquare className="h-6 w-6" />
             Discussion
             <span className="ml-2 text-sm text-gray-600">
-              ({rc.replyCount} total{rc.newReplyCount > 0 ? ` • ${rc.newReplyCount} new` : ""})
+              ({rc.replyCount} total
+              {rc.newReplyCount > 0 ? ` • ${rc.newReplyCount} new` : ""})
             </span>
           </h3>
         </div>
@@ -1060,7 +1343,17 @@ function BeautifulPreview({ id, onShare }: {
 
 /* ========= Preview helpers ========= */
 type Tone = "green" | "blue" | "amber";
-function MetaCard({ icon, title, value, tone }: { icon: React.ReactNode; title: string; value: string; tone: Tone }) {
+function MetaCard({
+  icon,
+  title,
+  value,
+  tone,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  value: string;
+  tone: Tone;
+}) {
   const tones: Record<Tone, string> = {
     green: "from-green-50 to-emerald-50 border-green-200 text-green-700",
     blue: "from-blue-50 to-sky-50 border-blue-200 text-blue-700",
@@ -1081,7 +1374,9 @@ function FileRow({ f }: { f: FileObj }) {
   const url = f?.url || "#";
   const name = f?.originalname || url.split("/").pop() || "file";
   const mt = (f?.filetype || f?.mimetype || "").toLowerCase();
-  const officeUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(url)}`;
+  const officeUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(
+    url
+  )}`;
 
   const office =
     mt.includes("msword") ||
@@ -1141,10 +1436,13 @@ function getFileIcon(filename?: string, mimetype?: string) {
   const name = (filename || "").toLowerCase();
   const type = (mimetype || "").toLowerCase();
 
-  if (name.endsWith(".pdf") || type.includes("pdf")) return <FileText className="h-6 w-6 text-white" />;
+  if (name.endsWith(".pdf") || type.includes("pdf"))
+    return <FileText className="h-6 w-6 text-white" />;
   if (/\.(xlsx?|csv)$/.test(name) || type.includes("spreadsheet") || type.includes("excel"))
     return <FileSpreadsheet className="h-6 w-6 text-white" />;
-  if (/\.(pptx?|key)$/.test(name) || type.includes("presentation")) return <FileBarChart2 className="h-6 w-6 text-white" />;
-  if (name.match(/\.(jpg|jpeg|png|gif|webp|bmp|tiff?)$/i) || type.startsWith("image/")) return <ImageIcon className="h-6 w-6 text-white" />;
+  if (/\.(pptx?|key)$/.test(name) || type.includes("presentation"))
+    return <FileBarChart2 className="h-6 w-6 text-white" />;
+  if (name.match(/\.(jpg|jpeg|png|gif|webp|bmp|tiff?)$/i) || type.startsWith("image/"))
+    return <ImageIcon className="h-6 w-6 text-white" />;
   return <File className="h-6 w-6 text-white" />;
 }
