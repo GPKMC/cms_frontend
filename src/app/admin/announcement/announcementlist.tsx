@@ -12,7 +12,8 @@ import { useRouter } from "next/navigation";
 import AnnouncementReplies from "./new/reply";
 
 /* ========= API CONFIG ========= */
-const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000").replace(/\/$/, "");
+
 const EP = {
   list: `${BACKEND}/announcement`,
   read: (id: string) => `${BACKEND}/announcement/${id}/notification-details?adminView=true`,
@@ -23,7 +24,7 @@ const EP = {
   patch: (id: string) => `${BACKEND}/announcement/${id}`,
   del: (id: string) => `${BACKEND}/announcement/${id}`,
   folderCounts: `${BACKEND}/announcement/folder-counts`,
-  replyCounts: (id: string) => `${BACKEND}/announcement/${id}/reply-counts`, // <- NEW
+  replyCounts: (id: string) => `${BACKEND}/announcement/${id}/reply-counts`,
 };
 
 const getToken = (): string =>
@@ -71,8 +72,8 @@ type AnnLite = {
   images?: FileObj[];
   files?: FileObj[];
   myState?: MyState;
-  replyCount?: number;     // <- NEW
-  newReplyCount?: number;  // <- NEW
+  replyCount?: number;
+  newReplyCount?: number;
 };
 
 type AnnFull = AnnLite & { contentHtml?: string };
@@ -99,6 +100,15 @@ const formatBytes = (n?: number) => {
   let i = -1, size = n;
   do { size /= 1024; i++; } while (size >= 1024 && i < u.length - 1);
   return `${size.toFixed(size < 10 ? 1 : 0)} ${u[i]}`;
+};
+
+// 👇 helper: turn /uploads/... into http://backend/uploads/...
+const fileUrl = (u?: string | null): string => {
+  if (!u) return "";
+  const url = String(u);
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  const path = url.startsWith("/") ? url : `/${url}`;
+  return `${BACKEND}${path}`;
 };
 
 function status(a: AnnLite) {
@@ -142,8 +152,8 @@ const normalizeAnn = (x: any): AnnFull => ({
   })),
   myState: x?.myState || { readAt: null, archived: !!x?.archived, archivedAt: x?.archivedAt || null },
   contentHtml: x?.contentHtml || x?.content || "",
-  replyCount: Number(x?.replyCount ?? 0),         // <- NEW
-  newReplyCount: Number(x?.newReplyCount ?? 0),   // <- NEW
+  replyCount: Number(x?.replyCount ?? 0),
+  newReplyCount: Number(x?.newReplyCount ?? 0),
 });
 
 /* ===== Share helpers ===== */
@@ -964,6 +974,11 @@ function BeautifulPreview({ id, onShare, onEdit }: {
 
   const st = status(item);
 
+  // 👇 fix image src inside RTE content: /uploads/... -> full backend URL
+  const fixedContentHtml = (item.contentHtml || "")
+    .replace(/src="(\/uploads\/[^"]+)"/g, (_m, p1) => `src="${fileUrl(p1)}"`)
+    .replace(/src='(\/uploads\/[^']+)'/g, (_m, p1) => `src='${fileUrl(p1)}'`);
+
   return (
     <div className="space-y-6">
       {/* Header Section */}
@@ -1018,7 +1033,10 @@ function BeautifulPreview({ id, onShare, onEdit }: {
         </div>
         <div className="p-6">
           {item.contentHtml ? (
-            <div className="prose max-w-none announcement-content" dangerouslySetInnerHTML={{ __html: item.contentHtml }} />
+            <div
+              className="prose max-w-none announcement-content"
+              dangerouslySetInnerHTML={{ __html: fixedContentHtml }}
+            />
           ) : (
             <p className="text-gray-600">No content provided.</p>
           )}
@@ -1035,32 +1053,36 @@ function BeautifulPreview({ id, onShare, onEdit }: {
             </h3>
           </div>
           <div className="p-6 grid gap-4 grid-cols-1 lg:grid-cols-2">
-            {item.images.map((img, i) => (
-              <div key={i} className="group relative">
-                <div className="aspect-video rounded-xl overflow-hidden shadow-lg group-hover:shadow-xl transition-all duration-300 border border-gray-100">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={img.url}
-                    alt={img.originalname || `Image ${i + 1}`}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                </div>
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-xl transition-all duration-300 flex items-center justify-center">
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <a
-                      href={img.url}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="bg-white/90 backdrop-blur rounded-full p-3 shadow-lg hover:bg-white transition-all duration-200 inline-flex"
-                      title="Open"
-                    >
-                      <Eye className="h-5 w-5 text-gray-700" />
-                    </a>
+            {item.images.map((img, i) => {
+              const imgSrc = fileUrl(img.url);
+              return (
+                <div key={i} className="group relative">
+                  <div className="aspect-video rounded-xl overflow-hidden shadow-lg group-hover:shadow-xl transition-all duration-300 border border-gray-100">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={imgSrc}
+                      alt={img.originalname || `Image ${i + 1}`}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      loading="lazy"
+                    />
                   </div>
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-xl transition-all duration-300 flex items-center justify-center">
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <a
+                        href={imgSrc}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="bg-white/90 backdrop-blur rounded-full p-3 shadow-lg hover:bg-white transition-all duration-200 inline-flex"
+                        title="Open"
+                      >
+                        <Eye className="h-5 w-5 text-gray-700" />
+                      </a>
+                    </div>
+                  </div>
+                  {img.originalname && <div className="mt-3"><h4 className="font-medium text-gray-800">{img.originalname}</h4></div>}
                 </div>
-                {img.originalname && <div className="mt-3"><h4 className="font-medium text-gray-800">{img.originalname}</h4></div>}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ) : null}
@@ -1164,8 +1186,9 @@ function MetaCard({ icon, title, value, tone }: { icon: React.ReactNode; title: 
 }
 
 function FileRow({ f }: { f: FileObj }) {
-  const url = f?.url || "#";
-  const name = f?.originalname || url.split("/").pop() || "file";
+  const rawUrl = f?.url || "#";
+  const url = fileUrl(rawUrl); // 👈 use backend URL
+  const name = f?.originalname || rawUrl.split("/").pop() || "file";
   const mt = (f?.filetype || f?.mimetype || "").toLowerCase();
   const officeUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(url)}`;
 

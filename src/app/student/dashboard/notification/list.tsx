@@ -23,6 +23,7 @@ const useUserContext = () => useContext(UserContext);
 
 /* ========= API CONFIG (student) ========= */
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000").replace(/\/$/, "");
+
 const EP = {
   list: `${BACKEND}/announcement`,
   read: (id: string) => `${BACKEND}/announcement/${id}/notification-details`,
@@ -34,10 +35,22 @@ const EP = {
   replyCounts: (id: string) => `${BACKEND}/announcement/${id}/reply-counts`,
 };
 
+/**
+ * Ensure any `/uploads/...` or `uploads/...` path becomes a full backend URL.
+ */
+const withBackendOrigin = (url: string): string => {
+  if (!url) return "";
+
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+
+  const clean = url.startsWith("/") ? url : `/${url}`;
+  return `${BACKEND}${clean}`;
+};
+
 const getStudentToken = (ctx?: UserContextType | null): string => {
-  // 1) Prefer context if present
   if (ctx?.token) return ctx.token;
-  // 2) Fallback to storage
   if (typeof window !== "undefined") {
     return (
       localStorage.getItem("token_student") ||
@@ -112,12 +125,16 @@ const formatBytes = (n?: number) => {
   return `${size.toFixed(size < 10 ? 1 : 0)} ${u[i]}`;
 };
 
-// SIMPLIFIED: only draft vs live (no scheduled/expired)
+// SIMPLIFIED: only draft vs live
 function status(a: AnnLite) {
   return a?.published ? "live" : "draft";
 }
 
 const ensureArr = <T,>(v: T | T[] | null | undefined): T[] => (Array.isArray(v) ? v : v ? [v] : []);
+
+/**
+ * Normalize raw API announcement into a friendly shape.
+ */
 const normalizeAnn = (x: any): AnnFull => ({
   _id: x?._id || x?.id || "",
   type: x?.type || "general",
@@ -129,20 +146,23 @@ const normalizeAnn = (x: any): AnnFull => ({
   priority: x?.priority || "normal",
   createdAt: x?.createdAt || x?.created_at || null,
   updatedAt: x?.updatedAt || x?.updated_at || null,
+
   images: ensureArr(x?.images).map((f: any) => ({
-    url: f?.url || "",
+    url: withBackendOrigin(f?.url || ""),
     originalname: f?.originalname || f?.name || "",
     filetype: f?.filetype || f?.mimetype || "",
     size: f?.size,
     caption: f?.caption,
   })),
+
   files: ensureArr(x?.files).map((f: any) => ({
-    url: f?.url || "",
+    url: withBackendOrigin(f?.url || ""),
     originalname: f?.originalname || f?.name || "",
     filetype: f?.filetype || f?.mimetype || "",
     size: f?.size,
     caption: f?.caption,
   })),
+
   myState: x?.myState || { readAt: null, archived: !!x?.archived, archivedAt: x?.archivedAt || null },
   contentHtml: x?.contentHtml || x?.content || "",
   replyCount: Number(x?.replyCount ?? 0),
@@ -156,7 +176,6 @@ const stripHtml = (html?: string) =>
 const getShareUrl = (id: string) => {
   const base =
     (typeof window !== "undefined" ? window.location.origin : "") ||
-    process.env.NEXT_PUBLIC_SHARE_BASE ||
     process.env.NEXT_PUBLIC_BACKEND_URL ||
     "";
   return `${base}/announcement/${id}`;
@@ -340,7 +359,6 @@ export default function NotificationStudent() {
       const data = await res.json();
       const d = data?.data || data;
 
-      // Map server counts to simplified model (ignore scheduled/expired)
       const serverCounts: Partial<FolderCounts> = {
         all: Number(d?.all ?? 0),
         drafts: Number(d?.drafts ?? 0),
@@ -444,23 +462,23 @@ export default function NotificationStudent() {
         <div className="max-w-[1800px] mx-auto space-y-4">
           {/* Header */}
           <div className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-lg border border-white/40 overflow-hidden">
-            <div className="px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl grid place-items-center">
+            <div className="px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-4 min-w-0">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl grid place-items-center shrink-0">
                   <Inbox className="w-6 h-6 text-white" />
                 </div>
-                <div>
-                  <h1 className="text-2xl font-black bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent">
+                <div className="min-w-0">
+                  <h1 className="text-xl sm:text-2xl font-black bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent truncate">
                     Student Announcement Hub
                   </h1>
                   <p className="text-sm text-gray-600">See what’s new for you</p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                 <button
                   onClick={() => { fetchList(); fetchFolderCounts(); }}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm font-medium"
+                  className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm font-medium w-full sm:w-auto"
                 >
                   <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                   Refresh
@@ -468,7 +486,7 @@ export default function NotificationStudent() {
               </div>
             </div>
 
-            <div className="px-6 pb-4">
+            <div className="px-4 sm:px-6 pb-4">
               <div className="flex gap-2 flex-wrap">
                 <StatChip label="Inbox" value={folderCounts.inbox} active={folder === "inbox"} onClick={() => setFolder("inbox")} />
                 <StatChip label="Archived" value={folderCounts.archived} active={folder === "archived"} onClick={() => setFolder("archived")} />
@@ -477,11 +495,11 @@ export default function NotificationStudent() {
             </div>
           </div>
 
-          {/* Layout: 2 | 3 | 7 */}
-          <div className="grid grid-cols-12 gap-4 h-[calc(100vh-200px)]">
+          {/* Layout: stack on mobile, 2/3/7 on lg+ */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:h-[calc(100vh-200px)] h-auto">
             {/* Sidebar */}
-            <div className="col-span-2">
-              <div className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-lg border border-white/40 h-full">
+            <div className="col-span-12 lg:col-span-2">
+              <div className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-lg border border-white/40 lg:h-full h-auto">
                 <div className="bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-3 rounded-t-2xl">
                   <h2 className="text-white font-bold text-sm flex items-center gap-2">
                     <Archive className="h-4 w-4" />
@@ -497,8 +515,8 @@ export default function NotificationStudent() {
             </div>
 
             {/* List */}
-            <div className="col-span-3">
-              <div className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-lg border border-white/40 h-full flex flex-col">
+            <div className="col-span-12 lg:col-span-3">
+              <div className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-lg border border-white/40 lg:h-full h-auto flex flex-col mt-4 lg:mt-0">
                 <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-4 py-3 rounded-t-2xl">
                   <h2 className="text-white font-bold text-sm capitalize flex items-center gap-2">
                     <Layout className="h-4 w-4" />
@@ -507,7 +525,7 @@ export default function NotificationStudent() {
                 </div>
 
                 <div className="p-3 border-b">
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <div className="relative flex-1">
                       <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                       <input
@@ -518,7 +536,11 @@ export default function NotificationStudent() {
                         onKeyDown={(e) => e.key === "Enter" && setPage(1)}
                       />
                     </div>
-                    <select className="px-3 py-2 border rounded-lg text-sm" value={type} onChange={(e) => { setType(e.target.value); }}>
+                    <select
+                      className="px-3 py-2 border rounded-lg text-sm"
+                      value={type}
+                      onChange={(e) => { setType(e.target.value); }}
+                    >
                       <option value="">All</option>
                       <option value="general">📢 General</option>
                       <option value="event">🎉 Event</option>
@@ -600,7 +622,7 @@ export default function NotificationStudent() {
                   )}
                 </div>
 
-                <div className="px-3 py-2 border-t bg-gray-50 rounded-b-2xl flex items-center justify-between">
+                <div className="px-3 py-2 border-t bg-gray-50 rounded-b-2xl flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs text-gray-600">{total} items</span>
                   <div className="flex items-center gap-1">
                     <button
@@ -626,10 +648,10 @@ export default function NotificationStudent() {
             </div>
 
             {/* Preview */}
-            <div className="col-span-7">
-              <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-xl border border-white/40 h-full flex flex-col">
-                <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 px-6 py-4 rounded-t-2xl">
-                  <div className="flex items-center justify-between">
+            <div className="col-span-12 lg:col-span-7">
+              <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-xl border border-white/40 lg:h-full h-auto flex flex-col mt-4 lg:mt-0">
+                <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 px-4 sm:px-6 py-4 rounded-t-2xl">
+                  <div className="flex items-center justify-between gap-2">
                     <h2 className="text-white font-bold text-lg flex items-center gap-3">
                       <Eye className="h-5 w-5" />
                       Preview
@@ -648,22 +670,28 @@ export default function NotificationStudent() {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-auto p-6">
+                <div className="flex-1 overflow-auto p-4 sm:p-6">
                   {selectedId ? <BeautifulPreview id={selectedId} token={token} onShare={shareAnnouncement} /> : <EmptyPreview />}
                 </div>
 
                 {selectedOne && (
-                  <div className="px-6 py-4 border-t bg-gray-50 rounded-b-2xl flex items-center justify-between">
+                  <div className="px-4 sm:px-6 py-4 border-t bg-gray-50 rounded-b-2xl flex flex-wrap items-center justify-between gap-3">
                     <div className="text-sm text-gray-600">
-                      ID: <code className="bg-gray-200 px-2 py-1 rounded text-xs">{selectedOne._id.slice(-8)}</code>
+                      ID: <code className="bg-gray-200 px-2 py-1 rounded text-xs break-all">{selectedOne._id.slice(-8)}</code>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
                       {!selectedOne?.myState?.archived ? (
-                        <button className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50" onClick={() => archive(selectedOne._id)}>
+                        <button
+                          className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 w-full sm:w-auto"
+                          onClick={() => archive(selectedOne._id)}
+                        >
                           Archive
                         </button>
                       ) : (
-                        <button className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50" onClick={() => unarchive(selectedOne._id)}>
+                        <button
+                          className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 w-full sm:w-auto"
+                          onClick={() => unarchive(selectedOne._id)}
+                        >
                           Unarchive
                         </button>
                       )}
@@ -724,8 +752,11 @@ function StatChip({ label, value, active, onClick }: { label: string; value: num
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${active ? "bg-blue-100 border-blue-300 text-blue-700" : "bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200"
-        }`}
+      className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+        active
+          ? "bg-blue-100 border-blue-300 text-blue-700"
+          : "bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200"
+      }`}
     >
       {label} <span className="bg-white/50 px-2 py-1 rounded-full text-xs">{value}</span>
     </button>
@@ -738,8 +769,9 @@ function FolderBtn({
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left text-sm transition-colors ${active ? "bg-blue-100 text-blue-700 border border-blue-200" : "hover:bg-gray-100 text-gray-700"
-        }`}
+      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left text-sm transition-colors ${
+        active ? "bg-blue-100 text-blue-700 border border-blue-200" : "hover:bg-gray-100 text-gray-700"
+      }`}
     >
       <div className="flex items-center gap-2">
         {icon}
@@ -882,7 +914,7 @@ function BeautifulPreview({
           setRc({ replyCount: Number(norm.replyCount ?? 0), newReplyCount: Number(norm.newReplyCount ?? 0) });
         }
 
-        // mark as read (so subsequent "new" counts reflect after this open)
+        // mark as read
         fetch(EP.markRead(id), { method: "POST", headers: makeAuthHeaders(token, true), body: JSON.stringify({}) }).catch(() => {});
 
         // fetch fresh reply counts
@@ -936,7 +968,7 @@ function BeautifulPreview({
           </span>
         </div>
 
-        <h1 className="text-3xl font-bold leading-tight text-gray-900">{item.title}</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold leading-tight text-gray-900">{item.title}</h1>
 
         {item.summary ? (
           <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 border-l-4 border-blue-500">
@@ -948,7 +980,7 @@ function BeautifulPreview({
           </div>
         ) : null}
 
-        {/* Metadata (created only) */}
+        {/* Metadata */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <MetaCard icon={<Calendar className="h-5 w-5 text-green-600" />} title="Created" value={fmt(item.createdAt)} tone="green" />
         </div>
@@ -956,13 +988,13 @@ function BeautifulPreview({
 
       {/* Content */}
       <div className="bg-white rounded-xl border-2 border-gray-200 shadow-lg overflow-hidden">
-        <div className="bg-gradient-to-r from-gray-50 to-blue-50 px-6 py-4 border-b border-gray-200">
+        <div className="bg-gradient-to-r from-gray-50 to-blue-50 px-4 sm:px-6 py-4 border-b border-gray-200">
           <h3 className="font-bold text-xl text-gray-800 flex items-center gap-3">
             <FileText className="h-6 w-6" />
             Content
           </h3>
         </div>
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {item.contentHtml ? (
             <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: item.contentHtml }} />
           ) : (
@@ -974,13 +1006,13 @@ function BeautifulPreview({
       {/* Images */}
       {item.images?.length ? (
         <div className="bg-white rounded-xl border-2 border-gray-200 shadow-lg overflow-hidden">
-          <div className="bg-gradient-to-r from-purple-50 to-pink-50 px-6 py-4 border-b border-gray-200">
+          <div className="bg-gradient-to-r from-purple-50 to-pink-50 px-4 sm:px-6 py-4 border-b border-gray-200">
             <h3 className="font-bold text-xl text-gray-800 flex items-center gap-3">
               <ImageIcon className="h-6 w-6" />
               Images ({item.images.length})
             </h3>
           </div>
-          <div className="p-6 grid gap-4 grid-cols-1 lg:grid-cols-2">
+          <div className="p-4 sm:p-6 grid gap-4 grid-cols-1 lg:grid-cols-2">
             {item.images.map((img, i) => (
               <div key={i} className="group relative">
                 <div className="aspect-video rounded-xl overflow-hidden shadow-lg group-hover:shadow-xl transition-all duration-300 border border-gray-100">
@@ -1014,13 +1046,13 @@ function BeautifulPreview({
       {/* Files */}
       {item.files?.length ? (
         <div className="bg-white rounded-xl border-2 border-gray-200 shadow-lg overflow-hidden">
-          <div className="bg-gradient-to-r from-indigo-50 to-blue-50 px-6 py-4 border-b border-gray-200">
+          <div className="bg-gradient-to-r from-indigo-50 to-blue-50 px-4 sm:px-6 py-4 border-b border-gray-200">
             <h3 className="font-bold text-xl text-gray-800 flex items-center gap-3">
               <File className="h-6 w-6" />
               Files ({item.files.length})
             </h3>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">
             {item.files.map((file, i) => (
               <FileRow key={i} f={file} />
             ))}
@@ -1029,23 +1061,23 @@ function BeautifulPreview({
       ) : null}
 
       {/* Share row */}
-      <div className="flex items-center gap-4 pt-2">
+      <div className="flex items-center gap-4 pt-2 flex-wrap">
         <button
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl"
+          className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl w-full sm:w-auto"
           onClick={() => onShare(item)}
         >
           <Share2 className="h-5 w-5" />
           Share
         </button>
         <a
-          className="flex items-center gap-2 px-6 py-3 border-2 border-gray-300 bg-white text-gray-700 rounded-xl hover:border-gray-400 hover:bg-gray-50 transition-all duration-200 font-medium shadow-md hover:shadow-lg"
+          className="flex items-center justify-center gap-2 px-6 py-3 border-2 border-gray-300 bg-white text-gray-700 rounded-xl hover:border-gray-400 hover:bg-gray-50 transition-all duration-200 font-medium shadow-md hover:shadow-lg w-full sm:w-auto"
           href={`mailto:?subject=${encodeURIComponent(item.title)}&body=${encodeURIComponent((item.summary || "") + "\n\n" + getShareUrl(item._id))}`}
         >
           <Copy className="h-5 w-5" />
           Mail
         </a>
         <a
-          className="flex items-center gap-2 px-6 py-3 border-2 border-gray-300 bg-white text-gray-700 rounded-xl hover:border-gray-400 hover:bg-gray-50 transition-all duration-200 font-medium shadow-md hover:shadow-lg"
+          className="flex items-center justify-center gap-2 px-6 py-3 border-2 border-gray-300 bg-white text-gray-700 rounded-xl hover:border-gray-400 hover:bg-gray-50 transition-all duration-200 font-medium shadow-md hover:shadow-lg w-full sm:w-auto"
           href={`https://wa.me/?text=${encodeURIComponent(item.title + "\n" + getShareUrl(item._id))}`}
           target="_blank" rel="noreferrer noopener"
         >
@@ -1053,7 +1085,7 @@ function BeautifulPreview({
           WhatsApp
         </a>
         <a
-          className="flex items-center gap-2 px-6 py-3 border-2 border-gray-300 bg-white text-gray-700 rounded-xl hover:border-gray-400 hover:bg-gray-50 transition-all duration-200 font-medium shadow-md hover:shadow-lg"
+          className="flex items-center justify-center gap-2 px-6 py-3 border-2 border-gray-300 bg-white text-gray-700 rounded-xl hover:border-gray-400 hover:bg-gray-50 transition-all duration-200 font-medium shadow-md hover:shadow-lg w-full sm:w-auto"
           href={`https://t.me/share/url?url=${encodeURIComponent(getShareUrl(item._id))}&text=${encodeURIComponent(item.title)}`}
           target="_blank" rel="noreferrer noopener"
         >
@@ -1064,7 +1096,7 @@ function BeautifulPreview({
 
       {/* Discussion */}
       <div className="bg-white rounded-xl border-2 border-gray-200 shadow-lg overflow-hidden">
-        <div className="bg-gradient-to-r from-fuchsia-50 to-violet-50 px-6 py-4 border-b border-gray-200">
+        <div className="bg-gradient-to-r from-fuchsia-50 to-violet-50 px-4 sm:px-6 py-4 border-b border-gray-200">
           <h3 className="font-bold text-xl text-gray-800 flex items-center gap-3">
             <MessageSquare className="h-6 w-6" />
             Discussion
@@ -1073,7 +1105,7 @@ function BeautifulPreview({
             </span>
           </h3>
         </div>
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <AnnouncementReplies announcementId={id} />
         </div>
       </div>
@@ -1095,7 +1127,7 @@ function MetaCard({ icon, title, value, tone }: { icon: React.ReactNode; title: 
         {icon}
         <h4 className="font-semibold text-sm">{title}</h4>
       </div>
-      <p className="font-medium">{value}</p>
+      <p className="font-medium break-words">{value}</p>
     </div>
   );
 }
@@ -1114,16 +1146,16 @@ function FileRow({ f }: { f: FileObj }) {
     /\.(docx?|xlsx?|pptx?)$/i.test(name || "");
 
   return (
-    <div className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border border-gray-200 hover:border-blue-300 transition-all duration-200 group">
+    <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-4 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border border-gray-200 hover:border-blue-300 transition-all duration-200 group">
       <div className="flex items-center gap-4 flex-1 min-w-0">
-        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-md group-hover:scale-105 transition-transform duration-200">
+        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-md group-hover:scale-105 transition-transform duration-200 shrink-0">
           {getFileIcon(name, mt)}
         </div>
         <div className="flex-1 min-w-0">
           <h4 className="font-bold text-gray-800 truncate" title={name}>
             {name}
           </h4>
-          <div className="flex items-center gap-3 text-sm">
+          <div className="flex items-center gap-3 text-sm flex-wrap">
             <span className="text-gray-600">{mt || "file"}</span>
             {f?.size ? (
               <>
@@ -1134,7 +1166,7 @@ function FileRow({ f }: { f: FileObj }) {
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 justify-end">
         {office && (
           <a
             href={officeUrl}
