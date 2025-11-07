@@ -169,7 +169,7 @@ export default function Sidebar() {
 
   const handleLogout = () => {
     if (typeof window !== "undefined") {
-      localStorage.removeItem("token");
+      localStorage.removeItem("token_admin");
     }
     router.push("/admin_login");
   };
