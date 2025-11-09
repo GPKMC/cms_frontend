@@ -26,7 +26,8 @@ import {
 } from "lucide-react";
 import { useUser } from "../teacherContext";
 
-type ItemType = "assignment" | "groupAssignment" | "question" | "quiz";
+// type ItemType = "assignment" | "groupAssignment" | "question" | "quiz";
+type ItemType = "assignment" | "question" | "quiz";
 
 type ItemRow = {
   id: string;
@@ -39,8 +40,8 @@ type ItemRow = {
   assignedCount: number;
   submittedCount: number;
   gradedCount?: number;
-  gradedGroupCount?: number;
-  submittedGroupCount?: number;
+  // gradedGroupCount?: number;
+  // submittedGroupCount?: number;
   submissionRate: number;
 };
 
@@ -93,7 +94,7 @@ function StarRating({ percent }: { percent: number }) {
 
 const TYPE_LABEL: Record<ItemType, string> = {
   assignment: "Assignment",
-  groupAssignment: "Group Assignment",
+  // groupAssignment: "Group Assignment",
   question: "Question",
   quiz: "Quiz",
 };
@@ -113,12 +114,12 @@ const TYPE_CONFIG: Record<
     lightBg: "bg-blue-50",
     darkText: "text-blue-700",
   },
-  groupAssignment: {
-    gradient: "from-purple-500 to-pink-600",
-    icon: Users,
-    lightBg: "bg-purple-50",
-    darkText: "text-purple-700",
-  },
+  // groupAssignment: {
+  //   gradient: "from-purple-500 to-pink-600",
+  //   icon: Users,
+  //   lightBg: "bg-purple-50",
+  //   darkText: "text-purple-700",
+  // },
   question: {
     gradient: "from-emerald-500 to-green-600",
     icon: ListChecks,
@@ -162,7 +163,6 @@ const getItemUrl = (
   id: string,
   courseInstanceId?: string | null
 ) => {
-  // Adjust this base to match your file-system routes exactly
   const ci = courseInstanceId ? encodeURIComponent(courseInstanceId) : null;
   const base = ci
     ? `/teacher/dashboard/class/${ci}/Details`
@@ -170,8 +170,8 @@ const getItemUrl = (
 
   const map: Record<ItemType, string> = {
     assignment: "Assignment",
-    groupAssignment: "groupAssignment",
-    question: "question",
+    // groupAssignment: "groupAssignment",
+    question: "Question",
     quiz: "quiz",
   };
 
@@ -196,7 +196,7 @@ export default function TeacherItemsPage() {
 
   const [typeFilters, setTypeFilters] = useState<Record<ItemType, boolean>>({
     assignment: true,
-    groupAssignment: true,
+    // groupAssignment: true,
     question: true,
     quiz: true,
   });
@@ -205,7 +205,7 @@ export default function TeacherItemsPage() {
 
   const typesParam = useMemo(() => {
     const active = (Object.keys(typeFilters) as ItemType[]).filter((t) => typeFilters[t]);
-    return active.length ? active.join(",") : "assignment,groupAssignment,question,quiz";
+    return active.length ? active.join(",") : "assignment,question,quiz";
   }, [typeFilters]);
 
   const getToken = () =>
@@ -227,7 +227,6 @@ export default function TeacherItemsPage() {
     const token = getToken();
 
     try {
-      // Adjust this path if your server mounts the router elsewhere
       const url = `${API}/overallAssignment/teacher/${encodeURIComponent(
         teacherId as string
       )}/items?types=${encodeURIComponent(typesParam)}`;
@@ -303,7 +302,7 @@ export default function TeacherItemsPage() {
       "MaxPoints",
       "Assigned",
       "Submitted",
-      "Graded/GradedGroups",
+      "Graded",
       "SubmissionRate(%)",
     ];
     const rows = filtered.map((r) => [
@@ -315,7 +314,7 @@ export default function TeacherItemsPage() {
       String(r.maxPoints ?? 0),
       String(r.assignedCount ?? 0),
       String(r.submittedCount ?? 0),
-      r.type === "groupAssignment" ? String(r.gradedGroupCount ?? 0) : String(r.gradedCount ?? 0),
+      String(r.gradedCount ?? 0),
       ((r.submissionRate || 0) * 100).toFixed(1),
     ]);
     const csv =
@@ -325,7 +324,7 @@ export default function TeacherItemsPage() {
             .map((v) => {
               const s = String(v ?? "");
               return s.includes(",") || s.includes('"') || s.includes("\n")
-                ? `"${s.replace(/"/g, '""')}"` // escape
+                ? `"${s.replace(/"/g, '""')}"`
                 : s;
             })
             .join(",")
@@ -427,7 +426,8 @@ export default function TeacherItemsPage() {
                       Course Dashboard
                     </h1>
                     <p className="text-gray-600 text-lg mt-2">
-                      Managing {courseInstances.length} course instance{courseInstances.length === 1 ? "" : "s"}
+                      Managing {courseInstances.length} course instance
+                      {courseInstances.length === 1 ? "" : "s"}
                     </p>
                   </div>
                 </div>
@@ -576,7 +576,8 @@ export default function TeacherItemsPage() {
                   <option value="all">All Course Instances</option>
                   {courseInstances.map((cid) => (
                     <option key={cid} value={cid}>
-                      {displayCourse(cid)} {rosterSizeByCI[cid] ? `· ${rosterSizeByCI[cid]} students` : ""}
+                      {displayCourse(cid)}{" "}
+                      {rosterSizeByCI[cid] ? `· ${rosterSizeByCI[cid]} students` : ""}
                     </option>
                   ))}
                 </select>
@@ -593,19 +594,33 @@ export default function TeacherItemsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gradient-to-r from-slate-100/80 to-blue-100/80 backdrop-blur-sm">
-                    <th className="text-left px-6 py-4 font-bold text-gray-800 border-b border-white/30">Title</th>
-                    <th className="text-left px-6 py-4 font-bold text-gray-800 border-b border-white/30">Type</th>
-                    <th className="text-left px-6 py-4 font-bold text-gray-800 border-b border-white/30">Course</th>
+                    <th className="text-left px-6 py-4 font-bold text-gray-800 border-b border-white/30">
+                      Title
+                    </th>
+                    <th className="text-left px-6 py-4 font-bold text-gray-800 border-b border-white/30">
+                      Type
+                    </th>
+                    <th className="text-left px-6 py-4 font-bold text-gray-800 border-b border-white/30">
+                      Course
+                    </th>
                     <th className="text-left px-6 py-4 font-bold text-gray-800 border-b border-white/30">
                       <div className="inline-flex items-center gap-2">
                         <Calendar className="w-4 h-4" />
                         Due Date
                       </div>
                     </th>
-                    <th className="text-center px-6 py-4 font-bold text-gray-800 border-b border-white/30">Points</th>
-                    <th className="text-center px-6 py-4 font-bold text-gray-800 border-b border-white/30">Assigned</th>
-                    <th className="text-center px-6 py-4 font-bold text-gray-800 border-b border-white/30">Submitted</th>
-                    <th className="text-center px-6 py-4 font-bold text-gray-800 border-b border-white/30">Graded</th>
+                    <th className="text-center px-6 py-4 font-bold text-gray-800 border-b border-white/30">
+                      Points
+                    </th>
+                    <th className="text-center px-6 py-4 font-bold text-gray-800 border-b border-white/30">
+                      Assigned
+                    </th>
+                    <th className="text-center px-6 py-4 font-bold text-gray-800 border-b border-white/30">
+                      Submitted
+                    </th>
+                    <th className="text-center px-6 py-4 font-bold text-gray-800 border-b border-white/30">
+                      Graded
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -617,8 +632,12 @@ export default function TeacherItemsPage() {
                             <Search className="w-8 h-8 text-gray-400" />
                           </div>
                           <div>
-                            <h3 className="text-lg font-semibold text-gray-900 mb-2">No items found</h3>
-                            <p className="text-gray-600">Try adjusting your filters or search terms.</p>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                              No items found
+                            </h3>
+                            <p className="text-gray-600">
+                              Try adjusting your filters or search terms.
+                            </p>
                           </div>
                         </div>
                       </td>
@@ -627,8 +646,7 @@ export default function TeacherItemsPage() {
                     filtered.map((r, index) => {
                       const config = TYPE_CONFIG[r.type];
                       const IconComponent = config.icon;
-                      const graded =
-                        r.type === "groupAssignment" ? r.gradedGroupCount ?? 0 : r.gradedCount ?? 0;
+                      const graded = r.gradedCount ?? 0;
                       const dueDate = r.dueAt ? new Date(r.dueAt) : null;
                       const isOverdue = dueDate && dueDate < new Date();
                       const rowUrl = getItemUrl(r.type, r.id, r.courseInstanceId);
@@ -644,7 +662,7 @@ export default function TeacherItemsPage() {
                           }`}
                           title="Open details"
                         >
-                          {/* Title (also a direct link for accessibility) */}
+                          {/* Title */}
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               <div
@@ -685,13 +703,18 @@ export default function TeacherItemsPage() {
                           {/* Course */}
                           <td className="px-6 py-4">
                             <div className="space-y-1">
-                              <div className="font-semibold text-gray-900">{displayCourse(r.courseInstanceId)}</div>
-                              {r.courseInstanceId && rosterSizeByCI[r.courseInstanceId] != null && (
-                                <div className="flex items-center gap-1 text-sm text-gray-600">
-                                  <Users className="w-3.5 h-3.5" />
-                                  <span>{rosterSizeByCI[r.courseInstanceId]} students</span>
-                                </div>
-                              )}
+                              <div className="font-semibold text-gray-900">
+                                {displayCourse(r.courseInstanceId)}
+                              </div>
+                              {r.courseInstanceId &&
+                                rosterSizeByCI[r.courseInstanceId] != null && (
+                                  <div className="flex items-center gap-1 text-sm text-gray-600">
+                                    <Users className="w-3.5 h-3.5" />
+                                    <span>
+                                      {rosterSizeByCI[r.courseInstanceId]} students
+                                    </span>
+                                  </div>
+                                )}
                             </div>
                           </td>
 
@@ -707,9 +730,14 @@ export default function TeacherItemsPage() {
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <div>
-                                  <div className="font-bold">{dueDate.toLocaleDateString()}</div>
+                                  <div className="font-bold">
+                                    {dueDate.toLocaleDateString()}
+                                  </div>
                                   <div className="text-xs">
-                                    {dueDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                    {dueDate.toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
                                   </div>
                                 </div>
                               </div>
@@ -741,7 +769,10 @@ export default function TeacherItemsPage() {
 
                           {/* Submitted */}
                           <td className="px-6 py-4 text-center">
-                            <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                            <div
+                              className="space-y-2"
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-2xl shadow-lg font-bold text-lg">
                                 {r.submittedCount ?? 0}
                               </div>
@@ -750,7 +781,12 @@ export default function TeacherItemsPage() {
                                   className={`h-2 rounded-full bg-gradient-to-r ${getSubmissionRateColor(
                                     r.submissionRate
                                   )} transition-all duration-500`}
-                                  style={{ width: `${Math.min((r.submissionRate || 0) * 100, 100)}%` }}
+                                  style={{
+                                    width: `${Math.min(
+                                      (r.submissionRate || 0) * 100,
+                                      100
+                                    )}%`,
+                                  }}
                                 ></div>
                               </div>
                             </div>
@@ -781,8 +817,8 @@ export default function TeacherItemsPage() {
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <BarChart3 className="w-4 h-4" />
                     <span className="font-medium">
-                      <strong>Graded</strong> shows individual submissions for assignments/questions, and group
-                      submissions for group assignments.
+                      <strong>Graded</strong> shows individual submissions for
+                      assignments and questions.
                     </span>
                   </div>
                   <div className="flex items-center gap-4 text-sm text-gray-600">
@@ -815,12 +851,16 @@ export default function TeacherItemsPage() {
                   <TrendingUp className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-900 text-lg">Average Completion</h3>
+                  <h3 className="font-bold text-gray-900 text-lg">
+                    Average Completion
+                  </h3>
                   <p className="text-3xl font-bold text-blue-600">
                     {filtered.length > 0
                       ? `${(
-                          (filtered.reduce((sum, item) => sum + (item.submissionRate || 0), 0) /
-                            filtered.length) *
+                          (filtered.reduce(
+                            (sum, item) => sum + (item.submissionRate || 0),
+                            0
+                          ) / filtered.length) *
                           100
                         ).toFixed(1)}%`
                       : "0%"}
@@ -840,7 +880,10 @@ export default function TeacherItemsPage() {
                 <div>
                   <h3 className="font-bold text-gray-900 text-lg">Total Students</h3>
                   <p className="text-3xl font-bold text-purple-600">
-                    {Object.values(rosterSizeByCI).reduce((sum, size) => sum + size, 0)}
+                    {Object.values(rosterSizeByCI).reduce(
+                      (sum, size) => sum + size,
+                      0
+                    )}
                   </p>
                 </div>
               </div>
@@ -857,9 +900,12 @@ export default function TeacherItemsPage() {
                 <div>
                   <h3 className="font-bold text-gray-900 text-lg">High Performers</h3>
                   <p className="text-3xl font-bold text-emerald-600">
-                    {filtered.filter((item) => (item.submissionRate || 0) >= 0.9).length}
+                    {filtered.filter((item) => (item.submissionRate || 0) >= 0.9)
+                      .length}
                   </p>
-                  <p className="text-sm text-gray-600">Items with 90%+ completion</p>
+                  <p className="text-sm text-gray-600">
+                    Items with 90%+ completion
+                  </p>
                 </div>
               </div>
             </div>
