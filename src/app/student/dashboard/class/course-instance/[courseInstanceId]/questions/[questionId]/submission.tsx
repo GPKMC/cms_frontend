@@ -16,6 +16,7 @@ interface Submission {
   feedback?: string;
   grade?: number;
 }
+
 interface Props {
   submission: Submission | null;
   submitting: boolean;
@@ -24,47 +25,74 @@ interface Props {
   questionId: string;
   refreshSubmission: () => void;
   onPlagiarismCheck?: (result: any) => void;
+
+  // 🔹 NEW: tell the panel if this question is open or closed
+  acceptingSubmissions?: boolean;
 }
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 
 export default function QuestionSubmissionPanel({
-  submission, submitting, error, setError,
-  questionId, refreshSubmission, onPlagiarismCheck,
+  submission,
+  submitting,
+  error,
+  setError,
+  questionId,
+  refreshSubmission,
+  onPlagiarismCheck,
+  acceptingSubmissions, // 🔹 get it from parent
 }: Props) {
   const { user } = useUser();
   const [content, setContent] = useState(submission?.content || "");
   const [plagiarismResult, setPlagiarismResult] = useState<any>(null);
   const [undoing, setUndoing] = useState(false);
-console.log("submission panel props", submission);
+
+  // 🔹 derived flag: closed when explicitly false
+  const isClosed = acceptingSubmissions === false;
+
+  console.log("submission panel props", submission, { acceptingSubmissions });
+
+  // keep editor in sync when submission changes
+  useEffect(() => {
+    setContent(submission?.content || "");
+  }, [submission]);
 
   // --- SUBMIT HANDLER ---
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!questionId) return;
     setError(null);
+
+    // 🔹 Block if question is closed
+    if (isClosed) {
+      const msg = "Submissions are currently closed for this question.";
+      setError(msg);
+      toast.error(msg);
+      return;
+    }
+
     if (!content.trim() || content === "<p></p>") {
       setError("Submission content cannot be empty.");
       return;
     }
-    fetch(
-      `${BACKEND_URL}/questionsubmission/`, // backend route for question submission
-      {
-        method: "POST",
-        headers: {
-          Authorization:
-            "Bearer " +
-            (localStorage.getItem("token_student") ||
-              sessionStorage.getItem("token_student") ||
-              ""),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          question: questionId,              // match backend key `question`
-          student: user?._id || user?.id,   // match backend key `student`
-          answerText: content,               // match backend key `answerText`
-        }),
-      }
-    )
+
+    fetch(`${BACKEND_URL}/questionsubmission/`, {
+      method: "POST",
+      headers: {
+        Authorization:
+          "Bearer " +
+          (localStorage.getItem("token_student") ||
+            sessionStorage.getItem("token_student") ||
+            ""),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        question: questionId,              // match backend key `question`
+        student: user?._id || user?.id,    // match backend key `student`
+        answerText: content,               // match backend key `answerText`
+      }),
+    })
       .then(async (res) => {
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
@@ -84,9 +112,6 @@ console.log("submission panel props", submission);
         toast.error(err.message);
       });
   }
-useEffect(() => {
-  setContent(submission?.content || "");
-}, [submission]);
 
   // --- UNDO SUBMISSION HANDLER ---
   async function handleUndoSubmission() {
@@ -135,7 +160,9 @@ useEffect(() => {
             <Sparkles className="w-5 h-5" />
           </div>
           <h2 className="text-2xl font-bold">Your Submission</h2>
-          <p className="text-indigo-100 text-sm mt-1">Write and submit your work below</p>
+          <p className="text-indigo-100 text-sm mt-1">
+            Write and submit your work below
+          </p>
         </div>
       </div>
 
@@ -147,9 +174,12 @@ useEffect(() => {
               <div className="p-4 bg-emerald-500 rounded-full w-fit mx-auto mb-4">
                 <Trophy className="w-8 h-8 text-white" />
               </div>
-              <h3 className="text-xl font-bold text-emerald-800 mb-2">Successfully Submitted!</h3>
+              <h3 className="text-xl font-bold text-emerald-800 mb-2">
+                Successfully Submitted!
+              </h3>
               <p className="text-emerald-600 text-sm">
-                {submission.submittedAt && new Date(submission.submittedAt).toLocaleString()}
+                {submission.submittedAt &&
+                  new Date(submission.submittedAt).toLocaleString()}
               </p>
             </div>
 
@@ -162,8 +192,12 @@ useEffect(() => {
                       <Star className="w-5 h-5" />
                     </div>
                     <div>
-                      <div className="font-bold text-blue-800 text-lg">Grade: {submission.grade}</div>
-                      <div className="text-blue-600 text-sm">Your performance score</div>
+                      <div className="font-bold text-blue-800 text-lg">
+                        Grade: {submission.grade}
+                      </div>
+                      <div className="text-blue-600 text-sm">
+                        Your performance score
+                      </div>
                     </div>
                   </div>
                 )}
@@ -173,8 +207,12 @@ useEffect(() => {
                       <MessageSquare className="w-5 h-5" />
                     </div>
                     <div className="flex-1">
-                      <div className="font-semibold text-blue-800 mb-2">Instructor Feedback:</div>
-                      <div className="text-blue-700 bg-white/60 p-4 rounded-xl">{submission.feedback}</div>
+                      <div className="font-semibold text-blue-800 mb-2">
+                        Instructor Feedback:
+                      </div>
+                      <div className="text-blue-700 bg-white/60 p-4 rounded-xl">
+                        {submission.feedback}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -193,7 +231,7 @@ useEffect(() => {
                   style={{
                     minHeight: "80px",
                     fontSize: "1.1rem",
-                    fontFamily: "inherit"
+                    fontFamily: "inherit",
                   }}
                   dangerouslySetInnerHTML={{ __html: submission.content }}
                 />
@@ -221,10 +259,28 @@ useEffect(() => {
             </button>
           </div>
         ) : (
-          // Submission form
+          // Submission form (when not yet submitted)
           <form onSubmit={handleSubmit} className="space-y-8">
+            {/* 🔹 Show banner if closed */}
+            {isClosed && (
+              <div className="mb-4 p-4 rounded-2xl bg-red-50 border border-red-200 flex gap-3 items-start">
+                <div className="p-2 rounded-xl bg-red-500 text-white">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="font-semibold text-red-800">
+                    Submissions are closed
+                  </div>
+                  <div className="text-sm text-red-700">
+                    Your teacher has closed submissions for this question. You
+                    can still edit your work locally, but you cannot submit it.
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div>
-              <label className="block text-lg font-bold text-gray-800 mb-2  items-center gap-2">
+              <label className="block text-lg font-bold text-gray-800 mb-2 items-center gap-2">
                 <Sparkles className="w-5 h-5 text-indigo-600" />
                 Assignment Content
               </label>
@@ -235,14 +291,24 @@ useEffect(() => {
                 className="bg-white"
               />
             </div>
+
             <div className="space-y-4 pt-6 border-t border-gray-200">
               <button
                 type="submit"
-                className={`w-full inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-bold text-lg transition-all duration-300 transform shadow-lg ${submitting || !content.trim() || content === "<p></p>"
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 hover:scale-105 hover:shadow-xl'
-                  }`}
-                disabled={submitting || !content.trim() || content === "<p></p>"}
+                className={`w-full inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-bold text-lg transition-all duration-300 transform shadow-lg ${
+                  submitting ||
+                  !content.trim() ||
+                  content === "<p></p>" ||
+                  isClosed
+                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    : "bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 hover:scale-105 hover:shadow-xl"
+                }`}
+                disabled={
+                  submitting ||
+                  !content.trim() ||
+                  content === "<p></p>" ||
+                  isClosed
+                }
               >
                 {submitting ? (
                   <>
@@ -260,6 +326,7 @@ useEffect(() => {
             </div>
           </form>
         )}
+
         {error && (
           <div className="mt-6 p-6 bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 rounded-2xl">
             <div className="flex items-center gap-3">
@@ -273,14 +340,16 @@ useEffect(() => {
             </div>
           </div>
         )}
-        {/* Show plagiarismResult UI if you want */}
+
         {plagiarismResult && (
-          <div className="mb-6 p-6 bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-2xl shadow space-y-2">
+          <div className="mb-6 mt-4 p-6 bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-2xl shadow space-y-2">
             <div className="flex items-center gap-3 mb-2">
               <Sparkles className="w-6 h-6 text-yellow-500" />
-              <span className="font-bold text-yellow-800 text-lg">Plagiarism Check Result</span>
+              <span className="font-bold text-yellow-800 text-lg">
+                Plagiarism Check Result
+              </span>
             </div>
-            {/* ...your existing plagiarism display here... */}
+            {/* ...your existing plagiarism display... */}
           </div>
         )}
       </div>

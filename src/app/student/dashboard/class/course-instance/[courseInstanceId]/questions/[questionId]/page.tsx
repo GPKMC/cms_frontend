@@ -550,6 +550,8 @@ function refreshSubmission() {
   questionId={questionId}
   refreshSubmission={refreshSubmission}
   onPlagiarismCheck={handlePlagiarismCheck}
+    acceptingSubmissions={question.acceptingSubmissions}  // 🔹 add this
+
 />
 {showPlagiarismModal && plagiarismResult && (
   <PlagiarismModal

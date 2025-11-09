@@ -996,20 +996,36 @@ export default function TeacherStudentWork({
     </>
   );
 
-  async function toggleAccepting(v: boolean) {
-    if (!stats) return;
-    try {
-      const r = await fetch(TOGGLE_ACCEPTING_URL(stats.questionId), {
-        method: "PATCH",
-        headers: buildHeaders(token),
-        body: JSON.stringify({ accepting: v }),
-      });
-      if (!r.ok) throw new Error(await r.text());
-      setStats({ ...stats, acceptingSubmissions: v });
-      toast.success(v ? "Submissions opened" : "Submissions closed");
-    } catch (e: any) {
-      console.error(e);
-      toast.error("Failed to update accepting state");
-    }
+ async function toggleAccepting(v: boolean) {
+  if (!stats) return;
+  try {
+    const r = await fetch(TOGGLE_ACCEPTING_URL(stats.questionId), {
+      method: "PATCH",
+      headers: buildHeaders(token),
+      // 🔴 old: { accepting: v }
+      // ✅ new: must match backend: acceptingSubmissions
+      body: JSON.stringify({ acceptingSubmissions: v }),
+    });
+
+    if (!r.ok) throw new Error(await r.text());
+    const data = await r.json();
+
+    // update local state from server response (preferred)
+    setStats(prev =>
+      prev
+        ? {
+            ...prev,
+            acceptingSubmissions:
+              data?.question?.acceptingSubmissions ?? v,
+          }
+        : prev
+    );
+
+    toast.success(v ? "Submissions opened" : "Submissions closed");
+  } catch (e: any) {
+    console.error(e);
+    toast.error("Failed to update accepting state");
   }
+}
+
 }
