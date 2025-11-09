@@ -68,7 +68,7 @@ export default function FeedItemFooter({ type, id, isExpanded }: Props) {
             className={primary}
             onClick={(e) => {
               e.stopPropagation();
-              router.push(`/assignments/${id}/submissions`);
+             router.push(`/teacher/dashboard/class/${classid}/Details/Assignment/${id}?tab=answer`);
             }}
           >
             View Submissions
