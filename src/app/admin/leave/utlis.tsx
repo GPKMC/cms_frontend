@@ -39,13 +39,8 @@ export function getApiBase(backendBase: string): string {
 
 export function getAuthToken(): string | null {
   const candidates = [
-    "token",
-    "authToken",
-    "admin_token",
-    "teacher_token",
+    
     "token_admin",
-    "CMS_token",
-    "token_student",
   ];
   for (const k of candidates) {
     const v = typeof window !== "undefined" ? localStorage.getItem(k) : null;

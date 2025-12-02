@@ -36,7 +36,7 @@ export default function CourseInstanceViewModal({ instanceId, onClose }: CourseI
   const [loading, setLoading] = useState(true);
   const [instance, setInstance] = useState<CourseInstanceDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
-const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+  const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
 
   useEffect(() => {
     async function fetchInstance() {
@@ -80,8 +80,8 @@ const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
               {instance.course.semesterOrYear.semesterNumber
                 ? `(${instance.course.semesterOrYear.semesterNumber} Semester)`
                 : instance.course.semesterOrYear.yearNumber
-                ? `(${instance.course.semesterOrYear.yearNumber} Year)`
-                : ""}
+                  ? `(${instance.course.semesterOrYear.yearNumber} Year)`
+                  : ""}
               {" - "}
               {instance.course.semesterOrYear.faculty.code} ({instance.course.semesterOrYear.faculty.name})
             </p>
@@ -90,10 +90,11 @@ const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
             <p><strong>Created At:</strong> {new Date(instance.createdAt).toLocaleString()}</p>
             <p><strong>Updated At:</strong> {new Date(instance.updatedAt).toLocaleString()}</p>
 
-            <p><strong>Assignments:</strong> {instance.assignments.length}</p>
-            <p><strong>Materials:</strong> {instance.materials.length}</p>
-            <p><strong>Attendance Records:</strong> {instance.attendanceRecords.length}</p>
-            <p><strong>Grades:</strong> {instance.grades.length}</p>
+            <p><strong>Assignments:</strong> {instance.assignments?.length ?? 0}</p>
+            <p><strong>Materials:</strong> {instance.materials?.length ?? 0}</p>
+            <p><strong>Attendance Records:</strong> {instance.attendanceRecords?.length ?? 0}</p>
+            <p><strong>Grades:</strong> {instance.grades?.length ?? 0}</p>
+
           </div>
         )}
 
