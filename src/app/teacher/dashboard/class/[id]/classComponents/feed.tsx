@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef, JSX } from "react";
+import { useEffect, useState, useRef, JSX, useCallback } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   AlertCircle,
@@ -26,6 +26,9 @@ import {
 import { FaFilePowerpoint } from "react-icons/fa";
 import Image from "next/image";
 import { useUser } from "../../../teacherContext";
+
+// NEW: import EditAnnouncementModal (expected to be in same folder — adjust path if different)
+import EditAnnouncementModal from "../announcementeditform";
 
 function timeAgo(dateString: string) {
   const date = new Date(dateString);
@@ -199,6 +202,14 @@ export default function CourseFeed({ courseInstanceId }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // UI state for per-announcement menu, edit modal and delete modal
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [announcementToEdit, setAnnouncementToEdit] = useState<string | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [announcementToDelete, setAnnouncementToDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   // Preview modal state (single modal outside list)
   const [previewDoc, setPreviewDoc] = useState<{ url: string; type: string } | null>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -260,45 +271,46 @@ export default function CourseFeed({ courseInstanceId }: Props) {
     return [];
   }
 
-  useEffect(() => {
+  // Extracted fetch so it can be reused after edit/delete
+  const fetchFeed = useCallback(async () => {
     if (!courseInstanceId) return;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const base = process.env.NEXT_PUBLIC_BACKEND_URL;
-        if (!base) throw new Error("NEXT_PUBLIC_BACKEND_URL is not set");
+    setLoading(true);
+    setError(null);
+    try {
+      const base = process.env.NEXT_PUBLIC_BACKEND_URL;
+      if (!base) throw new Error("NEXT_PUBLIC_BACKEND_URL is not set");
 
-        const teacherTok =
-          localStorage.getItem("token_teacher") ||
-          sessionStorage.getItem("token_teacher");
-        const studentTok =
-          localStorage.getItem("token_student") ||
-          sessionStorage.getItem("token_student");
-        const token =
-          (role === "teacher" ? teacherTok : studentTok) ||
-          teacherTok ||
-          studentTok;
-        if (!token) throw new Error("Auth token missing");
+      const teacherTok =
+        localStorage.getItem("token_teacher") ||
+        sessionStorage.getItem("token_teacher");
+      const studentTok =
+        localStorage.getItem("token_student") ||
+        sessionStorage.getItem("token_student");
+      const token =
+        (role === "teacher" ? teacherTok : studentTok) || teacherTok || studentTok;
+      if (!token) throw new Error("Auth token missing");
 
-        const url = `${base}/student/course-instance/${courseInstanceId}/feed`;
-        const res = await fetch(url, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
-        if (!res.ok) throw new Error(`Failed to fetch feed: ${res.status}`);
-        const raw = await res.json();
+      const url = `${base}/student/course-instance/${courseInstanceId}/feed`;
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      if (!res.ok) throw new Error(`Failed to fetch feed: ${res.status}`);
+      const raw = await res.json();
 
-        setFeed(normalizePayloadToFeed(raw));
-      } catch (e: any) {
-        setError(e?.message || "Unknown error");
-      } finally {
-        setLoading(false);
-      }
-    })();
+      setFeed(normalizePayloadToFeed(raw));
+    } catch (e: any) {
+      setError(e?.message || "Unknown error");
+    } finally {
+      setLoading(false);
+    }
   }, [courseInstanceId, role]);
+
+  useEffect(() => {
+    fetchFeed();
+  }, [fetchFeed]);
 
   // Teacher sees ALL group assignments; students only those where they’re a member
   const userId = (user?._id || (user as any)?.id || "").toString();
@@ -393,7 +405,7 @@ export default function CourseFeed({ courseInstanceId }: Props) {
                 }`}
                 title="Announcement"
               >
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-2 relative">
                   <div className="flex items-center gap-2 text-sm text-indigo-700 font-medium">
                     {icon}
                     <span className="capitalize">Announcement</span>
@@ -403,9 +415,60 @@ export default function CourseFeed({ courseInstanceId }: Props) {
                       </span>
                     )}
                   </div>
-                  <span className="text-xs text-gray-500">
-                    {timeAgo(item.updatedAt || item.createdAt)}
-                  </span>
+
+                  {/* Right side: timestamp and optional author-only menu */}
+                  <div className="flex items-center gap-2 relative">
+                    <span className="text-xs text-gray-500">
+                      {timeAgo(item.updatedAt || item.createdAt)}
+                    </span>
+
+                    {/* Show three-dots menu only to the author of the announcement */}
+                    {item.postedBy && item.postedBy._id && item.postedBy._id.toString() === userId && (
+                      <div className="relative">
+                        <button
+                          type="button"
+                          className="ml-2 px-2 py-1 rounded hover:bg-gray-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuOpenId(menuOpenId === item._id ? null : item._id);
+                          }}
+                          aria-haspopup="true"
+                          aria-expanded={menuOpenId === item._id}
+                          title="Actions"
+                        >
+                          ⋮
+                        </button>
+
+                        {menuOpenId === item._id && (
+                          <div
+                            className="absolute right-0 mt-2 w-36 bg-white border rounded shadow-md z-50"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              className="w-full text-left px-3 py-2 hover:bg-gray-100"
+                              onClick={() => {
+                                setAnnouncementToEdit(item._id);
+                                setEditModalOpen(true);
+                                setMenuOpenId(null);
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="w-full text-left px-3 py-2 text-red-600 hover:bg-gray-100"
+                              onClick={() => {
+                                setAnnouncementToDelete(item._id);
+                                setDeleteModalOpen(true);
+                                setMenuOpenId(null);
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <h3 className="text-gray-900 font-semibold mb-1 text-base">
@@ -612,6 +675,91 @@ export default function CourseFeed({ courseInstanceId }: Props) {
           );
         })}
       </div>
+
+      {/* Edit modal (external component) */}
+      {editModalOpen && announcementToEdit && (
+        <EditAnnouncementModal
+          isOpen={editModalOpen}
+          onClose={() => {
+            setEditModalOpen(false);
+            setAnnouncementToEdit(null);
+          }}
+          announcementId={announcementToEdit}
+          courseInstanceId={courseInstanceId}
+          onSuccess={() => {
+            setEditModalOpen(false);
+            setAnnouncementToEdit(null);
+            fetchFeed();
+          }}
+        />
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteModalOpen && announcementToDelete && (
+        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-2">Confirm delete</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Are you sure you want to delete this announcement? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                className="px-3 py-2 rounded bg-gray-100"
+                onClick={() => {
+                  setDeleteModalOpen(false);
+                  setAnnouncementToDelete(null);
+                }}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-3 py-2 rounded bg-red-600 text-white"
+                onClick={async () => {
+                  setDeleting(true);
+                  try {
+                    const base = process.env.NEXT_PUBLIC_BACKEND_URL;
+                    if (!base) throw new Error("NEXT_PUBLIC_BACKEND_URL is not set");
+
+                    const teacherTok =
+                      localStorage.getItem("token_teacher") ||
+                      sessionStorage.getItem("token_teacher");
+                    const studentTok =
+                      localStorage.getItem("token_student") ||
+                      sessionStorage.getItem("token_student");
+                    const token =
+                      (role === "teacher" ? teacherTok : studentTok) || teacherTok || studentTok;
+                    if (!token) throw new Error("Auth token missing");
+
+                    // NOTE: adjust endpoint if your backend uses a different route for deleting announcements
+                    const url = `${base}/announcement-routes/${announcementToDelete}`;
+                    const res = await fetch(url, {
+                      method: "DELETE",
+                      headers: {
+                        Authorization: `Bearer ${token}`,
+                        "Content-Type": "application/json",
+                      },
+                    });
+                    if (!res.ok) throw new Error(`Failed to delete: ${res.status}`);
+
+                    setFeed((prev) => prev.filter((f) => f._id !== announcementToDelete));
+                    setDeleteModalOpen(false);
+                    setAnnouncementToDelete(null);
+                  } catch (err: any) {
+                    // minimal error UI
+                    alert(err?.message || "Delete failed");
+                  } finally {
+                    setDeleting(false);
+                  }
+                }}
+                disabled={deleting}
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Single preview modal */}
       {previewDoc && (
