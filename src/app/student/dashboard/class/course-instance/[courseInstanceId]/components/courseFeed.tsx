@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef, JSX } from "react";
+import { useEffect, useState, useRef, JSX, useCallback } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   AlertCircle, Loader2, Megaphone, FileText, BookOpenCheck, HelpCircle, ListChecks, User,
@@ -10,6 +10,8 @@ import {
 import { FaFilePowerpoint } from "react-icons/fa";
 import Image from "next/image";
 import { useUser } from "@/app/student/dashboard/studentContext";
+// import Edit modal (adjust path if your modal lives elsewhere)
+import EditAnnouncementModal from "./editAnnouncement";
 
 function timeAgo(dateString: string) {
   const date = new Date(dateString);
@@ -134,6 +136,13 @@ export default function CourseFeed({ courseInstanceId }: Props) {
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // UI state for per-announcement menu, edit modal and delete modal
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [announcementToEdit, setAnnouncementToEdit] = useState<string | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [announcementToDelete, setAnnouncementToDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Preview modal state
   const [previewDoc, setPreviewDoc] = useState<{ url: string; type: string } | null>(null);
@@ -150,39 +159,39 @@ export default function CourseFeed({ courseInstanceId }: Props) {
   const didAutoScrollRef = useRef(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
-  useEffect(() => {
+  // Extracted fetch so we can refresh after edit/delete
+  const fetchFeed = useCallback(async () => {
     if (!courseInstanceId) return;
     setLoading(true);
     setError(null);
+    try {
+      const token =
+        localStorage.getItem("token_student") ||
+        sessionStorage.getItem("token_student") ||
+        localStorage.getItem("token_teacher") ||
+        sessionStorage.getItem("token_teacher");
+      if (!token) throw new Error("Token missing");
 
-    const fetchFeed = async () => {
-      try {
-        const token =
-          localStorage.getItem("token_student") ||
-          sessionStorage.getItem("token_student");
-        if (!token) throw new Error("Token missing");
-
-        const base = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-        const res = await fetch(
-          `${base}/student/course-instance/${courseInstanceId}/feed`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json"
-            }
-          }
-        );
-        if (!res.ok) throw new Error(`Failed to fetch feed: ${res.status}`);
-        const result = await res.json();
-        setFeed(result.feed || []);
-      } catch (err) {
-        setError((err as Error).message || "Unknown error");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchFeed();
+      const base = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+      const res = await fetch(`${base}/student/course-instance/${courseInstanceId}/feed`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      if (!res.ok) throw new Error(`Failed to fetch feed: ${res.status}`);
+      const result = await res.json();
+      setFeed(result.feed || []);
+    } catch (err) {
+      setError((err as Error).message || "Unknown error");
+    } finally {
+      setLoading(false);
+    }
   }, [courseInstanceId]);
+
+  useEffect(() => {
+    fetchFeed();
+  }, [fetchFeed]);
 
   useEffect(() => {
     if (!previewDoc) return;
@@ -207,6 +216,8 @@ export default function CourseFeed({ courseInstanceId }: Props) {
     }
     return true;
   });
+  // current user's id for author checks
+  const userId = (user?._id || (user as any)?.id || "").toString();
 
   // 🔗 Deep-link: scroll once to an announcement & highlight, then remove effect
   useEffect(() => {
@@ -279,7 +290,7 @@ export default function CourseFeed({ courseInstanceId }: Props) {
               }
               title="Announcement"
             >
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-2 relative">
                 <div className="flex items-center gap-2 text-sm text-indigo-700 font-medium">
                   {icon}
                   <span className="capitalize">Announcement</span>
@@ -289,9 +300,58 @@ export default function CourseFeed({ courseInstanceId }: Props) {
                     </span>
                   )}
                 </div>
-                <span className="text-xs text-gray-500">
-                  {timeAgo(item.updatedAt || item.createdAt)}
-                </span>
+
+                <div className="flex items-center gap-2 relative">
+                  <span className="text-xs text-gray-500">
+                    {timeAgo(item.updatedAt || item.createdAt)}
+                  </span>
+                  {/* three-dots menu visible only to announcement author */}
+                  {item.postedBy && item.postedBy._id && item.postedBy._id.toString() === userId && (
+                    <div className="relative">
+                      <button
+                        type="button"
+                        className="ml-2 px-2 py-1 rounded hover:bg-gray-100"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuOpenId(menuOpenId === item._id ? null : item._id);
+                        }}
+                        aria-haspopup="true"
+                        aria-expanded={menuOpenId === item._id}
+                        title="Actions"
+                      >
+                        ⋮
+                      </button>
+
+                      {menuOpenId === item._id && (
+                        <div
+                          className="absolute right-0 mt-2 w-36 bg-white border rounded shadow-md z-50"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            className="w-full text-left px-3 py-2 hover:bg-gray-100"
+                            onClick={() => {
+                              setAnnouncementToEdit(item._id);
+                              setEditModalOpen(true);
+                              setMenuOpenId(null);
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="w-full text-left px-3 py-2 text-red-600 hover:bg-gray-100"
+                            onClick={() => {
+                              setAnnouncementToDelete(item._id);
+                              setDeleteModalOpen(true);
+                              setMenuOpenId(null);
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
               <h3 className="text-gray-900 font-semibold mb-1 text-base">{item.title}</h3>
               {item.content && (
@@ -530,6 +590,88 @@ export default function CourseFeed({ courseInstanceId }: Props) {
           </div>
         );
       })}
+
+      {/* Edit modal (external component) */
+      editModalOpen && announcementToEdit && (
+        <EditAnnouncementModal
+          isOpen={editModalOpen}
+          onClose={() => {
+            setEditModalOpen(false);
+            setAnnouncementToEdit(null);
+          }}
+          announcementId={announcementToEdit}
+          courseInstanceId={courseInstanceId}
+          onSuccess={() => {
+            setEditModalOpen(false);
+            setAnnouncementToEdit(null);
+            fetchFeed();
+          }}
+        />
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteModalOpen && announcementToDelete && (
+        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-2">Confirm delete</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Are you sure you want to delete this announcement? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                className="px-3 py-2 rounded bg-gray-100"
+                onClick={() => {
+                  setDeleteModalOpen(false);
+                  setAnnouncementToDelete(null);
+                }}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-3 py-2 rounded bg-red-600 text-white"
+                onClick={async () => {
+                  setDeleting(true);
+                  try {
+                    const base = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+                    if (!base) throw new Error("NEXT_PUBLIC_BACKEND_URL is not set");
+
+                    const teacherTok =
+                      localStorage.getItem("token_teacher") ||
+                      sessionStorage.getItem("token_teacher");
+                    const studentTok =
+                      localStorage.getItem("token_student") ||
+                      sessionStorage.getItem("token_student");
+                    const token = teacherTok || studentTok;
+                    if (!token) throw new Error("Auth token missing");
+
+                    const url = `${base}/announcement-routes/${announcementToDelete}`;
+                    const res = await fetch(url, {
+                      method: "DELETE",
+                      headers: {
+                        Authorization: `Bearer ${token}`,
+                        "Content-Type": "application/json",
+                      },
+                    });
+                    if (!res.ok) throw new Error(`Failed to delete: ${res.status}`);
+
+                    setFeed((prev) => prev.filter((f) => f._id !== announcementToDelete));
+                    setDeleteModalOpen(false);
+                    setAnnouncementToDelete(null);
+                  } catch (err: any) {
+                    alert(err?.message || "Delete failed");
+                  } finally {
+                    setDeleting(false);
+                  }
+                }}
+                disabled={deleting}
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
